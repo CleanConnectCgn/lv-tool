@@ -3,6 +3,7 @@ import Header from './components/Header.jsx';
 import LVEditor from './components/LVEditor.jsx';
 import PrintView from './components/PrintView.jsx';
 import SevDeskModal from './components/SevDeskModal.jsx';
+import InspectionMode from './components/InspectionMode.jsx';
 import { templates, cloneTemplate, cloneOptionalSection, newSection } from './templates/templates.js';
 
 function todayISO() {
@@ -16,6 +17,7 @@ export default function App() {
   const [intervallInfo, setIntervallInfo] = useState('');
   const [sections, setSections] = useState(() => cloneTemplate('buero'));
   const [showSevDesk, setShowSevDesk] = useState(false);
+  const [showInspection, setShowInspection] = useState(false);
 
   const templateOptions = useMemo(
     () => Object.entries(templates).map(([key, t]) => ({ key, label: t.label })),
@@ -94,6 +96,7 @@ export default function App() {
             Als PDF exportieren
           </button>
           <button onClick={() => setShowSevDesk(true)}>An sevDesk senden</button>
+          <button onClick={() => setShowInspection(true)}>Besichtigungsmodus</button>
         </div>
       </div>
 
@@ -117,6 +120,14 @@ export default function App() {
           objekt={objekt}
           datum={datum}
           sections={sections}
+        />
+      )}
+
+      {showInspection && (
+        <InspectionMode
+          sections={sections}
+          setSections={setSections}
+          onClose={() => setShowInspection(false)}
         />
       )}
     </div>

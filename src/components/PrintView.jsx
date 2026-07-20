@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { CLEAN_CONNECT_LOGO_BASE64 } from '../assets/logo.js';
 
 function formatDatum(iso) {
   if (!iso) return '';
@@ -12,13 +13,25 @@ function Check({ on }) {
 }
 
 export default function PrintView({ objekt, datum, intervallInfo, sections }) {
+  const [logoFailed, setLogoFailed] = useState(false);
   return (
     <div className="print-view" id="lv-print-view">
       <div className="pv-header">
         <div className="pv-titles">
           <h1>Leistungsverzeichnis Unterhaltsreinigung</h1>
         </div>
-        <div className="pv-logo">Clean Connect</div>
+        <div className="pv-logo">
+          {CLEAN_CONNECT_LOGO_BASE64 && !logoFailed ? (
+            <img
+              src={CLEAN_CONNECT_LOGO_BASE64}
+              alt="Clean Connect"
+              className="pv-logo-img"
+              onError={() => setLogoFailed(true)}
+            />
+          ) : (
+            'CLEAN CONNECT'
+          )}
+        </div>
       </div>
       <div className="pv-meta-bar">
         <div className="pv-meta-field">

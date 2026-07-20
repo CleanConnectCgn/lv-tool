@@ -37,6 +37,17 @@ export default function SevDeskModal({ onClose, objekt, datum, sections }) {
     if (token) localStorage.setItem(TOKEN_KEY, token);
   }, [token]);
 
+  useEffect(() => {
+    if (token) return;
+    fetch('/api/sevdesk/token')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.token) setToken(data.token);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleKundeChange(value) {
     setKunde(value);
     setSelectedContact(null);

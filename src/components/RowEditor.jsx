@@ -13,7 +13,7 @@ function buildIntervalOptions() {
   const opts = [{ value: '', label: '—' }];
   INTERVAL_COLUMNS.forEach((col) => {
     INTERVAL_VALUES.forEach((val) => {
-      opts.push({ value: `${col}:${val}`, label: `${COLUMN_LABELS[col]} – ${val}` });
+      opts.push({ value: `${col}:${val}`, label: `${COLUMN_LABELS[col]} ${val}` });
     });
   });
   return opts;
