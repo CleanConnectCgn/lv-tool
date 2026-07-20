@@ -9,47 +9,43 @@ function formatDatum(iso) {
 }
 
 function Check({ on }) {
-  return <span className={`pv-check${on ? ' on' : ''}`}>{on ? '✓' : ''}</span>;
+  return <span className={`pv-check${on ? ' on' : ''}`}>{on ? '☑' : '☐'}</span>;
 }
 
-export default function PrintView({ objekt, datum, intervallInfo, sections }) {
+export default function PrintView({ lvTitle, objekt, datum, intervallInfo, sections }) {
   const [logoFailed, setLogoFailed] = useState(false);
   return (
     <div className="print-view" id="lv-print-view">
-      <div className="pv-header">
-        <div className="pv-titles">
-          <h1>Leistungsverzeichnis Unterhaltsreinigung</h1>
-        </div>
-        <div className="pv-logo">
-          {CLEAN_CONNECT_LOGO_BASE64 && !logoFailed ? (
-            <img
-              src={CLEAN_CONNECT_LOGO_BASE64}
-              alt="Clean Connect"
-              className="pv-logo-img"
-              onError={() => setLogoFailed(true)}
-            />
-          ) : (
-            'CLEAN CONNECT'
-          )}
-        </div>
-      </div>
-      <div className="pv-meta-bar">
-        <div className="pv-meta-field">
-          <span className="pv-meta-label">Objekt</span>
-          <span className="pv-meta-value">{objekt || '—'}</span>
-        </div>
-        <div className="pv-meta-field">
-          <span className="pv-meta-label">Reinigung Intervalle</span>
-          <span className="pv-meta-value">{intervallInfo || '—'}</span>
-        </div>
-        <div className="pv-meta-field">
-          <span className="pv-meta-label">Stand</span>
-          <span className="pv-meta-value">{formatDatum(datum)}</span>
-        </div>
-      </div>
-
       <table className="pv-table">
         <thead>
+          <tr className="pv-title-row">
+            <th className="pv-title-cell" colSpan={5}>
+              {lvTitle}
+            </th>
+            <th className="pv-logo-cell" rowSpan={2}>
+              {CLEAN_CONNECT_LOGO_BASE64 && !logoFailed ? (
+                <img
+                  src={CLEAN_CONNECT_LOGO_BASE64}
+                  alt="Clean Connect"
+                  className="pv-logo-img"
+                  onError={() => setLogoFailed(true)}
+                />
+              ) : (
+                'CLEAN CONNECT'
+              )}
+            </th>
+          </tr>
+          <tr className="pv-meta-row">
+            <td className="pv-meta-cell pv-meta-left" colSpan={2}>
+              Objekt: {objekt || '—'}
+            </td>
+            <td className="pv-meta-cell pv-meta-center" colSpan={1}>
+              Reinigung Intervalle{intervallInfo ? `: ${intervallInfo}` : ''}
+            </td>
+            <td className="pv-meta-cell pv-meta-right" colSpan={2}>
+              Stand: {formatDatum(datum)}
+            </td>
+          </tr>
           <tr>
             <th className="pv-col-desc">Einzelleistungen Reinigung</th>
             <th className="pv-col-check">Bei Bedarf</th>

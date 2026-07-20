@@ -18,14 +18,17 @@ function addWeeks(dateStr, weeks) {
 
 const COLUMN_LABELS = { woechentlich: 'Wöchentlich', monatlich: 'Monatlich', jaehrlich: 'Jährlich' };
 
-export default function SevDeskModal({ onClose, objekt, datum, sections }) {
+export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeLabel }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
+  const [tokenFromServer, setTokenFromServer] = useState(false);
   const [kunde, setKunde] = useState('');
   const [contactSuggestions, setContactSuggestions] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const angebotRef = useRef(nextAngebotsnummer());
   const [nettobetrag, setNettobetrag] = useState('');
+  const [ansprechpartner, setAnsprechpartner] = useState('Julian Mühlhoff');
+  const [leistungsbeginn, setLeistungsbeginn] = useState(() => new Date().toISOString().slice(0, 10));
   const [gueltigBis, setGueltigBis] = useState(() => addWeeks(new Date().toISOString().slice(0, 10), 6));
   const [zahlungsziel, setZahlungsziel] = useState('14');
   const [status, setStatus] = useState('idle');
@@ -34,15 +37,18 @@ export default function SevDeskModal({ onClose, objekt, datum, sections }) {
   const searchTimer = useRef(null);
 
   useEffect(() => {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-  }, [token]);
+    if (token && !tokenFromServer) localStorage.setItem(TOKEN_KEY, token);
+  }, [token, tokenFromServer]);
 
   useEffect(() => {
     if (token) return;
     fetch('/api/sevdesk/token')
       .then((r) => r.json())
       .then((data) => {
-        if (data?.token) setToken(data.token);
+        if (data?.token) {
+          setToken(data.token);
+          setTokenFromServer(true);
+        }
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -95,8 +101,8 @@ export default function SevDeskModal({ onClose, objekt, datum, sections }) {
       if (!contactId) throw new Error('Kunde konnte nicht ermittelt/erstellt werden.');
 
       const { display: offerNumber } = angebotRef.current;
-      const header = `Angebot Leistungsverzeichnis – ${objekt || 'Objekt'}`;
-      const headText = `Sehr geehrte Damen und Herren,\n\nwir bieten Ihnen die Reinigungsleistungen gemäß beiliegendem Leistungsverzeichnis für "${objekt || 'Objekt'}" an.\n\nGültig bis: ${gueltigBis}\nZahlungsziel: ${zahlungsziel} Tage`;
+      const header = `Angebot ${offerNumber} – Leistungsverzeichnis ${lvTypeLabel || ''} für ${objekt || 'Objekt'}`;
+      const headText = `Sehr geehrte Damen und Herren,\n\nwir bieten Ihnen die Reinigungsleistungen gemäß beiliegendem Leistungsverzeichnis für "${objekt || 'Objekt'}" an.\n\nAnsprechpartner: ${ansprechpartner}\nLeistungsbeginn: ${leistungsbeginn}\nGültig bis: ${gueltigBis}\nZahlungsziel: ${zahlungsziel} Tage`;
       const footText = 'Wir freuen uns auf Ihre Beauftragung.\n\nClean Connect Gebäudereinigung';
 
       const offer = await createOffer(token, { contactId, header, headText, footText, offerNumber });
@@ -158,11 +164,35 @@ export default function SevDeskModal({ onClose, objekt, datum, sections }) {
 
         <label className="modal-field">
           sevDesk API-Token
+          {tokenFromServer ? (
+            <div className="token-badge">
+              ✓ Server-Token aktiv
+              <button
+                type="button"
+                onClick={() => {
+                  setTokenFromServer(false);
+                  setToken('');
+                }}
+              >
+                Anderen Token verwenden
+              </button>
+            </div>
+          ) : (
+            <input
+              type="password"
+              value={token}
+              onChange={(e) => setToken(e.target.value)}
+              placeholder="API-Token einfügen"
+            />
+          )}
+        </label>
+
+        <label className="modal-field">
+          Ansprechpartner
           <input
-            type="password"
-            value={token}
-            onChange={(e) => setToken(e.target.value)}
-            placeholder="API-Token einfügen"
+            type="text"
+            value={ansprechpartner}
+            onChange={(e) => setAnsprechpartner(e.target.value)}
           />
         </label>
 
@@ -204,9 +234,19 @@ export default function SevDeskModal({ onClose, objekt, datum, sections }) {
 
         <div className="modal-field-row">
           <label className="modal-field">
+            Leistungsbeginn
+            <input
+              type="date"
+              value={leistungsbeginn}
+              onChange={(e) => setLeistungsbeginn(e.target.value)}
+            />
+          </label>
+          <label className="modal-field">
             Gültig bis
             <input type="date" value={gueltigBis} onChange={(e) => setGueltigBis(e.target.value)} />
           </label>
+        </div>
+        <div className="modal-field-row">
           <label className="modal-field">
             Zahlungsziel (Tage)
             <input

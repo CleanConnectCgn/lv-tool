@@ -12,6 +12,7 @@ function todayISO() {
 
 export default function App() {
   const [lvType, setLvType] = useState('buero');
+  const [lvTitle, setLvTitle] = useState('Leistungsverzeichnis Unterhaltsreinigung');
   const [objekt, setObjekt] = useState('');
   const [datum, setDatum] = useState(todayISO());
   const [intervallInfo, setIntervallInfo] = useState('');
@@ -102,6 +103,8 @@ export default function App() {
 
       <div className="lv-document" id="lv-document">
         <Header
+          lvTitle={lvTitle}
+          setLvTitle={setLvTitle}
           objekt={objekt}
           setObjekt={setObjekt}
           datum={datum}
@@ -112,7 +115,13 @@ export default function App() {
         <LVEditor sections={sections} setSections={setSections} />
       </div>
 
-      <PrintView objekt={objekt} datum={datum} intervallInfo={intervallInfo} sections={sections} />
+      <PrintView
+        lvTitle={lvTitle}
+        objekt={objekt}
+        datum={datum}
+        intervallInfo={intervallInfo}
+        sections={sections}
+      />
 
       {showSevDesk && (
         <SevDeskModal
@@ -120,6 +129,7 @@ export default function App() {
           objekt={objekt}
           datum={datum}
           sections={sections}
+          lvTypeLabel={templates[lvType]?.label || ''}
         />
       )}
 
