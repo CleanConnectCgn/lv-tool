@@ -1,0 +1,361 @@
+:root {
+  --cc-blue: #1c4f7c;
+  --cc-blue-dark: #123452;
+  --cc-border: #c9d3dc;
+  --cc-bg: #f4f6f8;
+  font-family: 'Segoe UI', Arial, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--cc-bg);
+  color: #1a1a1a;
+}
+
+.app-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #fff;
+  border: 1px solid var(--cc-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toolbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.toolbar select {
+  padding: 4px 6px;
+}
+
+button {
+  background: var(--cc-blue);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: var(--cc-blue-dark);
+}
+
+button.icon-btn {
+  background: transparent;
+  color: #b13a3a;
+  padding: 2px 6px;
+  font-size: 13px;
+}
+
+button.icon-btn:hover {
+  background: #fdeaea;
+}
+
+.add-row-btn {
+  margin: 6px 0 14px 4px;
+  background: #fff;
+  color: var(--cc-blue);
+  border: 1px dashed var(--cc-blue);
+}
+
+.add-row-btn:hover {
+  background: #eaf1f8;
+}
+
+.lv-document {
+  background: #fff;
+  border: 1px solid var(--cc-border);
+  border-radius: 8px;
+  padding: 24px 28px;
+}
+
+.lv-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 3px solid var(--cc-blue);
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+}
+
+.lv-header-titles h1 {
+  margin: 0;
+  font-size: 24px;
+  color: var(--cc-blue-dark);
+}
+
+.lv-subtitle {
+  color: #555;
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.lv-logo-box {
+  border: 2px solid var(--cc-blue);
+  color: var(--cc-blue);
+  font-weight: 700;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}
+
+.lv-header-bar {
+  display: flex;
+  gap: 24px;
+  background: var(--cc-blue);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.lv-header-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 160px;
+}
+
+.lv-header-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.85;
+}
+
+.lv-header-field input {
+  border: none;
+  border-radius: 4px;
+  padding: 5px 7px;
+  font-size: 13px;
+}
+
+.lv-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 4px;
+}
+
+.lv-table th {
+  background: var(--cc-blue);
+  color: #fff;
+  font-size: 12px;
+  padding: 8px 6px;
+  text-align: left;
+}
+
+.lv-table td {
+  border-bottom: 1px solid var(--cc-border);
+  padding: 4px 6px;
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.col-desc {
+  width: 34%;
+}
+
+.col-check {
+  width: 8%;
+  text-align: center;
+}
+
+.col-interval {
+  width: 11%;
+  text-align: center;
+}
+
+.col-remarks {
+  width: 22%;
+}
+
+.col-actions {
+  width: 30px;
+  text-align: center;
+}
+
+.lv-table input[type='text'] {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 4px;
+  font-size: 13px;
+}
+
+.lv-table input[type='text']:hover,
+.lv-table input[type='text']:focus {
+  border-color: var(--cc-border);
+  background: #fbfcfd;
+}
+
+.lv-table select {
+  width: 100%;
+  padding: 3px;
+  font-size: 12px;
+}
+
+.lv-section {
+  margin-top: 18px;
+  padding-top: 6px;
+  border-top: 1px solid var(--cc-border);
+}
+
+.lv-section.drag-over {
+  outline: 2px dashed var(--cc-blue);
+}
+
+.lv-section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.lv-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cc-blue-dark);
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 3px 6px;
+  flex: 1;
+}
+
+.lv-section-title:hover,
+.lv-section-title:focus {
+  border-color: var(--cc-border);
+  background: #fbfcfd;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #99a3ad;
+  font-size: 14px;
+}
+
+tr.drag-over td {
+  outline: 2px dashed var(--cc-blue);
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px 24px;
+  width: 380px;
+  max-width: 90vw;
+}
+
+.modal h2 {
+  margin-top: 0;
+  font-size: 17px;
+  color: var(--cc-blue-dark);
+}
+
+.modal-hint {
+  font-size: 13px;
+  color: #555;
+}
+
+.modal-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.modal-field input {
+  padding: 7px;
+  border: 1px solid var(--cc-border);
+  border-radius: 4px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-actions button:first-child {
+  background: #e5e9ed;
+  color: #333;
+}
+
+.modal-message {
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin-bottom: 10px;
+}
+
+.modal-message.success {
+  background: #e5f6ea;
+  color: #1c7a34;
+}
+
+.modal-message.error {
+  background: #fdeaea;
+  color: #b13a3a;
+}
+
+@media print {
+  body {
+    background: #fff;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .app-shell {
+    padding: 0;
+    max-width: none;
+  }
+  .lv-document {
+    border: none;
+    padding: 0;
+  }
+  input,
+  select {
+    border: none !important;
+    background: transparent !important;
+  }
+}
