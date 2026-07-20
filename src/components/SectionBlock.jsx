@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import RowEditor from './RowEditor.jsx';
 import { newEmptyRow } from '../templates/templates.js';
 
-export default function SectionBlock({ section, index, totalSections, onChange, onRemove, onMove }) {
+export default function SectionBlock({ section, index, onChange, onRemove, onMove }) {
   const [dragOver, setDragOver] = useState(false);
 
   function setRows(rows) {
@@ -33,54 +33,56 @@ export default function SectionBlock({ section, index, totalSections, onChange, 
   }
 
   return (
-    <div
-      className={`lv-section${dragOver ? ' drag-over' : ''}`}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/section-index', String(index));
-      }}
-      onDragOver={(e) => {
-        e.preventDefault();
-        setDragOver(true);
-      }}
-      onDragLeave={() => setDragOver(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setDragOver(false);
-        const from = Number(e.dataTransfer.getData('text/section-index'));
-        if (!Number.isNaN(from) && from !== index) onMove(from, index);
-      }}
-    >
-      <div className="lv-section-title-row">
-        <span className="drag-handle no-print" title="Bereich verschieben">
-          ⠿
-        </span>
-        <input
-          className="lv-section-title"
-          value={section.title}
-          onChange={(e) => renameTitle(e.target.value)}
+    <>
+      <tr
+        className={`lv-section-header-row${dragOver ? ' drag-over' : ''}`}
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData('text/section-index', String(index));
+        }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOver(true);
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const from = Number(e.dataTransfer.getData('text/section-index'));
+          if (!Number.isNaN(from) && from !== index) onMove(from, index);
+        }}
+      >
+        <td colSpan={7}>
+          <span className="drag-handle no-print" title="Bereich verschieben">
+            ⠿
+          </span>
+          <input
+            className="lv-section-title"
+            value={section.title}
+            onChange={(e) => renameTitle(e.target.value)}
+          />
+          <button className="icon-btn no-print section-remove-btn" title="Bereich entfernen" onClick={onRemove}>
+            ✕
+          </button>
+        </td>
+      </tr>
+      {section.rows.map((row, rIndex) => (
+        <RowEditor
+          key={row.id}
+          row={row}
+          index={rIndex}
+          onChange={(patch) => updateRow(row.id, patch)}
+          onRemove={() => removeRow(row.id)}
+          onMove={moveRow}
         />
-        <button className="icon-btn no-print" title="Bereich entfernen" onClick={onRemove}>
-          ✕
-        </button>
-      </div>
-      <table className="lv-table">
-        <tbody>
-          {section.rows.map((row, rIndex) => (
-            <RowEditor
-              key={row.id}
-              row={row}
-              index={rIndex}
-              onChange={(patch) => updateRow(row.id, patch)}
-              onRemove={() => removeRow(row.id)}
-              onMove={moveRow}
-            />
-          ))}
-        </tbody>
-      </table>
-      <button className="add-row-btn no-print" onClick={addRow}>
-        + Zeile hinzufügen
-      </button>
-    </div>
+      ))}
+      <tr className="no-print">
+        <td colSpan={7} className="add-row-cell">
+          <button className="add-row-btn" onClick={addRow}>
+            + Zeile hinzufügen
+          </button>
+        </td>
+      </tr>
+    </>
   );
 }

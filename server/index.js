@@ -9,20 +9,21 @@ const PORT = process.env.PORT || 3001;
 
 app.use(express.json({ limit: '5mb' }));
 
-// Proxy to sevDesk to avoid CORS issues from the browser.
-app.post('/api/sevdesk/offer', async (req, res) => {
-  const { token, payload } = req.body || {};
-  if (!token || !payload) {
-    return res.status(400).json({ error: 'token und payload sind erforderlich' });
+// Generic proxy to the sevDesk API to avoid CORS issues from the browser.
+// Body: { token, method, path, body } — path is relative, e.g. "/Contact" or "/Offer".
+app.post('/api/sevdesk/request', async (req, res) => {
+  const { token, method = 'GET', path: sevPath, body } = req.body || {};
+  if (!token || !sevPath) {
+    return res.status(400).json({ error: 'token und path sind erforderlich' });
   }
   try {
-    const sevRes = await fetch('https://my.sevdesk.de/api/v1/Offer', {
-      method: 'POST',
+    const sevRes = await fetch(`https://my.sevdesk.de/api/v1${sevPath}`, {
+      method,
       headers: {
         'Content-Type': 'application/json',
         Authorization: token,
       },
-      body: JSON.stringify(payload),
+      body: method === 'GET' || method === 'HEAD' ? undefined : JSON.stringify(body || {}),
     });
     const data = await sevRes.json().catch(() => ({}));
     res.status(sevRes.status).json(data);

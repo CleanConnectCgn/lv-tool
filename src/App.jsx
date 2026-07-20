@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import Header from './components/Header.jsx';
 import LVEditor from './components/LVEditor.jsx';
+import PrintView from './components/PrintView.jsx';
 import SevDeskModal from './components/SevDeskModal.jsx';
 import { templates, cloneTemplate, cloneOptionalSection, newSection } from './templates/templates.js';
 
@@ -38,7 +39,7 @@ export default function App() {
   useEffect(() => {
     async function exportPdf() {
       const { default: html2pdf } = await import('html2pdf.js');
-      const el = document.getElementById('lv-document');
+      const el = document.getElementById('lv-print-view');
       const safeObjekt = (objekt || 'Objekt').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '_');
       const filename = `Leistungsverzeichnis_${safeObjekt}_${datum}.pdf`;
       html2pdf()
@@ -47,6 +48,7 @@ export default function App() {
           filename,
           html2canvas: { scale: 2 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'] },
         })
         .from(el)
         .save();
@@ -106,6 +108,8 @@ export default function App() {
         />
         <LVEditor sections={sections} setSections={setSections} />
       </div>
+
+      <PrintView objekt={objekt} datum={datum} intervallInfo={intervallInfo} sections={sections} />
 
       {showSevDesk && (
         <SevDeskModal

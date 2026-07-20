@@ -20,31 +20,30 @@ export default function LVEditor({ sections, setSections }) {
   }
 
   return (
-    <div className="lv-columns-header">
-      <table className="lv-table">
-        <thead>
-          <tr>
-            <th className="col-desc">Einzelleistungen</th>
-            <th className="col-check">Bei Bedarf</th>
-            <th className="col-interval">Wöchentlich</th>
-            <th className="col-interval">Monatlich</th>
-            <th className="col-interval">Jährlich</th>
-            <th className="col-remarks">Bemerkungen</th>
-            <th className="col-actions no-print"></th>
-          </tr>
-        </thead>
-      </table>
-      {sections.map((section, index) => (
-        <SectionBlock
-          key={section.id}
-          section={section}
-          index={index}
-          totalSections={sections.length}
-          onChange={(updater) => updateSection(section.id, updater)}
-          onRemove={() => removeSection(section.id)}
-          onMove={moveSection}
-        />
-      ))}
-    </div>
+    <table className="lv-table">
+      <thead>
+        <tr>
+          <th className="col-desc">Einzelleistungen Reinigung</th>
+          <th className="col-check">Bei Bedarf</th>
+          <th className="col-interval" colSpan={3}>
+            Intervall
+          </th>
+          <th className="col-remarks">Bemerkungen</th>
+          <th className="col-actions no-print"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {sections.map((section, index) => (
+          <SectionBlock
+            key={section.id}
+            section={section}
+            index={index}
+            onChange={(updater) => updateSection(section.id, updater)}
+            onRemove={() => removeSection(section.id)}
+            onMove={moveSection}
+          />
+        ))}
+      </tbody>
+    </table>
   );
 }
