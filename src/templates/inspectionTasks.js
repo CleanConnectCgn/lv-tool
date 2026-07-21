@@ -53,7 +53,7 @@ export const TASK_CATEGORIES = [
     tasks: ['Abfalleimer entleeren inkl. Austausch der Beutel', 'Sonderabfall gesondert entsorgen'],
   },
   {
-    name: 'Spinnweben & Staub',
+    name: 'Staub & Spinnen',
     tasks: [
       'Staub & Spinnweben entfernen an Decken und in Ecken',
       'Entstauben der Physiogeräte',

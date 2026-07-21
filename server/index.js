@@ -16,7 +16,7 @@ app.get('/api/sevdesk/token', (req, res) => {
 });
 
 // Generic proxy to the sevDesk API to avoid CORS issues from the browser.
-// Body: { token, method, path, body } — path is relative, e.g. "/Contact" or "/Offer".
+// Body: { token, method, path, body } where path is relative, e.g. "/Contact" or "/Offer".
 app.post('/api/sevdesk/request', async (req, res) => {
   const { method = 'GET', path: sevPath, body } = req.body || {};
   const token = req.body?.token || process.env.SEVDESK_TOKEN;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CLEAN_CONNECT_LOGO_BASE64 } from '../assets/logo.js';
+import { LOGO_URI } from '../assets/logo.js';
 
 export default function Header({
   lvTitle,
@@ -15,6 +15,7 @@ export default function Header({
     <div className="doc-header">
       <div className="doc-title-row">
         <div className="doc-title-cell">
+          <div className="doc-kicker">Clean Connect Gebäudereinigung</div>
           <input
             className="doc-title-input"
             value={lvTitle}
@@ -22,12 +23,12 @@ export default function Header({
           />
         </div>
         <div className="doc-logo-cell">
-          <img src={CLEAN_CONNECT_LOGO_BASE64} alt="Clean Connect" className="doc-logo-img" />
+          <img src={LOGO_URI} alt="Clean Connect" className="doc-logo-img" />
         </div>
       </div>
       <div className="doc-meta-row">
         <div className="doc-meta-cell doc-meta-left">
-          <span>Objekt:</span>
+          <span>Objekt</span>
           <input
             type="text"
             value={objekt}
@@ -36,7 +37,7 @@ export default function Header({
           />
         </div>
         <div className="doc-meta-cell doc-meta-center">
-          <span>Reinigung Intervalle:</span>
+          <span>Reinigung Intervalle</span>
           <input
             type="text"
             value={intervallInfo}
@@ -45,7 +46,7 @@ export default function Header({
           />
         </div>
         <div className="doc-meta-cell doc-meta-right">
-          <span>Stand:</span>
+          <span>Stand</span>
           <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)} />
         </div>
       </div>

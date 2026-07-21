@@ -10,7 +10,7 @@ const COLUMN_LABELS = {
 
 // Combined "column + value" choice, e.g. "woechentlich:2x", plus a "Bei Bedarf" option.
 function buildIntervalOptions() {
-  const opts = [{ value: '', label: '—' }];
+  const opts = [{ value: '', label: 'kein Intervall' }];
   INTERVAL_COLUMNS.forEach((col) => {
     INTERVAL_VALUES.forEach((val) => {
       opts.push({ value: `${col}:${val}`, label: `${COLUMN_LABELS[col]} ${val}` });

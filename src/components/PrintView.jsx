@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CLEAN_CONNECT_LOGO_BASE64 } from '../assets/logo.js';
+import React from 'react';
+import { LOGO_URI } from '../assets/logo.js';
 
 function formatDatum(iso) {
   if (!iso) return '';
@@ -8,44 +8,41 @@ function formatDatum(iso) {
   return `${d}.${m}.${y}`;
 }
 
-function Check({ on }) {
-  return <span className={`pv-check${on ? ' on' : ''}`}>{on ? '☑' : '☐'}</span>;
+function CheckBox({ on }) {
+  return <span className={`pv-check-box${on ? ' on' : ''}`}>{on ? '✓' : ''}</span>;
 }
 
 export default function PrintView({ lvTitle, objekt, datum, intervallInfo, sections }) {
-  const [logoFailed, setLogoFailed] = useState(false);
   return (
     <div className="print-view" id="lv-print-view">
+      <div className="pv-doc-header">
+        <div className="pv-title-row">
+          <div className="pv-title-cell">
+            <div className="pv-kicker">Clean Connect Gebäudereinigung</div>
+            <h1>{lvTitle}</h1>
+          </div>
+          <div className="pv-logo-cell">
+            <img src={LOGO_URI} alt="Clean Connect" className="pv-logo-img" />
+          </div>
+        </div>
+        <div className="pv-meta-row">
+          <div className="pv-meta-cell">
+            <span className="pv-meta-label">Objekt</span>
+            {objekt}
+          </div>
+          <div className="pv-meta-cell pv-meta-center">
+            <span className="pv-meta-label">Reinigung Intervalle</span>
+            {intervallInfo}
+          </div>
+          <div className="pv-meta-cell pv-meta-right">
+            <span className="pv-meta-label">Stand</span>
+            {formatDatum(datum)}
+          </div>
+        </div>
+      </div>
+
       <table className="pv-table">
         <thead>
-          <tr className="pv-title-row">
-            <th className="pv-title-cell" colSpan={5}>
-              {lvTitle}
-            </th>
-            <th className="pv-logo-cell" rowSpan={2}>
-              {CLEAN_CONNECT_LOGO_BASE64 && !logoFailed ? (
-                <img
-                  src={CLEAN_CONNECT_LOGO_BASE64}
-                  alt="Clean Connect"
-                  className="pv-logo-img"
-                  onError={() => setLogoFailed(true)}
-                />
-              ) : (
-                'CLEAN CONNECT'
-              )}
-            </th>
-          </tr>
-          <tr className="pv-meta-row">
-            <td className="pv-meta-cell pv-meta-left" colSpan={2}>
-              Objekt: {objekt || '—'}
-            </td>
-            <td className="pv-meta-cell pv-meta-center" colSpan={1}>
-              Reinigung Intervalle{intervallInfo ? `: ${intervallInfo}` : ''}
-            </td>
-            <td className="pv-meta-cell pv-meta-right" colSpan={2}>
-              Stand: {formatDatum(datum)}
-            </td>
-          </tr>
           <tr>
             <th className="pv-col-desc">Einzelleistungen Reinigung</th>
             <th className="pv-col-check">Bei Bedarf</th>
@@ -67,16 +64,28 @@ export default function PrintView({ lvTitle, objekt, datum, intervallInfo, secti
                   <tr key={row.id}>
                     <td className="pv-col-desc">{row.text}</td>
                     <td className="pv-col-check">
-                      <Check on={row.bedarf} />
+                      <CheckBox on={row.bedarf} />
                     </td>
                     <td className="pv-col-interval">
-                      {row.intervalColumn === 'woechentlich' ? row.intervalValue : ''}
+                      {row.intervalColumn === 'woechentlich' && row.intervalValue ? (
+                        <span className="pv-interval-chip">{row.intervalValue}</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
                     <td className="pv-col-interval">
-                      {row.intervalColumn === 'monatlich' ? row.intervalValue : ''}
+                      {row.intervalColumn === 'monatlich' && row.intervalValue ? (
+                        <span className="pv-interval-chip">{row.intervalValue}</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
                     <td className="pv-col-interval">
-                      {row.intervalColumn === 'jaehrlich' ? row.intervalValue : ''}
+                      {row.intervalColumn === 'jaehrlich' && row.intervalValue ? (
+                        <span className="pv-interval-chip">{row.intervalValue}</span>
+                      ) : (
+                        ''
+                      )}
                     </td>
                     <td className="pv-col-remarks">{row.bemerkung}</td>
                   </tr>
@@ -86,7 +95,9 @@ export default function PrintView({ lvTitle, objekt, datum, intervallInfo, secti
         </tbody>
       </table>
       <div className="pv-footer">
-        <span className="pv-page-number" />
+        <span className="pv-footer-brand">cleanconnect.de</span>
+        <span>Seite 1</span>
+        <span>Clean Connect Gebäudereinigung UG</span>
       </div>
     </div>
   );

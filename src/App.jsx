@@ -83,7 +83,7 @@ export default function App() {
                 e.target.value = '';
               }}
             >
-              <option value="">-- wählen --</option>
+              <option value="">Bitte wählen</option>
               <option value="glasreinigung">Glasreinigung</option>
               <option value="lamellenreinigung">Lamellenreinigung</option>
               <option value="grundreinigung">Grundreinigung</option>
@@ -113,6 +113,11 @@ export default function App() {
           setIntervallInfo={setIntervallInfo}
         />
         <LVEditor sections={sections} setSections={setSections} />
+        <div className="doc-footer">
+          <span className="doc-footer-brand">cleanconnect.de</span>
+          <span>Seite 1</span>
+          <span>Clean Connect Gebäudereinigung UG</span>
+        </div>
       </div>
 
       <PrintView
