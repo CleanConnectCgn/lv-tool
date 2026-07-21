@@ -4,6 +4,7 @@ import LVEditor from './components/LVEditor.jsx';
 import PrintView from './components/PrintView.jsx';
 import SevDeskModal from './components/SevDeskModal.jsx';
 import InspectionMode from './components/InspectionMode.jsx';
+import AICheckupModal from './components/AICheckupModal.jsx';
 import { templates, cloneTemplate, cloneOptionalSection, newSection } from './templates/templates.js';
 
 function todayISO() {
@@ -19,6 +20,7 @@ export default function App() {
   const [sections, setSections] = useState(() => cloneTemplate('buero'));
   const [showSevDesk, setShowSevDesk] = useState(false);
   const [showInspection, setShowInspection] = useState(false);
+  const [showAICheckup, setShowAICheckup] = useState(false);
 
   const templateOptions = useMemo(
     () => Object.entries(templates).map(([key, t]) => ({ key, label: t.label })),
@@ -96,6 +98,7 @@ export default function App() {
           <button onClick={() => window.dispatchEvent(new CustomEvent('lv-export-pdf'))}>
             Als PDF exportieren
           </button>
+          <button onClick={() => setShowAICheckup(true)}>✨ KI Checkup</button>
           <button onClick={() => setShowSevDesk(true)}>An sevDesk senden</button>
           <button onClick={() => setShowInspection(true)}>Besichtigungsmodus</button>
         </div>
@@ -143,6 +146,14 @@ export default function App() {
           sections={sections}
           setSections={setSections}
           onClose={() => setShowInspection(false)}
+        />
+      )}
+
+      {showAICheckup && (
+        <AICheckupModal
+          sections={sections}
+          setSections={setSections}
+          onClose={() => setShowAICheckup(false)}
         />
       )}
     </div>

@@ -39,9 +39,10 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
   const angebotRef = useRef(nextAngebotsnummer());
   const [ansprechpartner, setAnsprechpartner] = useState('Julian Mühlhoff');
   const [leistungsbeginn, setLeistungsbeginn] = useState(() => new Date().toISOString().slice(0, 10));
-  const [nettobetrag, setNettobetrag] = useState('');
   const [gueltigBis, setGueltigBis] = useState(() => addWeeks(new Date().toISOString().slice(0, 10), 6));
   const [zahlungsziel, setZahlungsziel] = useState('14');
+
+  const gesamtPreis = sections.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
 
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
@@ -86,14 +87,9 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
 
   function pickContact(c) {
     setSelectedContact(c);
-    setKunde(c.name || `${c.surename || ''} ${c.familyname || ''}`.trim());
+    setKunde(c.name);
     setShowSuggestions(false);
     setShowNewContact(false);
-  }
-
-  function countRows(secs) {
-    const n = secs.reduce((sum, s) => sum + s.rows.filter((r) => r.text.trim()).length, 0);
-    return n || 1;
   }
 
   async function handleSubmit() {
@@ -145,50 +141,49 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
         'Clean Connect Gebäudereinigung UG',
       ].join('\n');
 
-      const offer = await createOffer(token, { contactId, header, headText, footText, offerNumber });
+      const offer = await createOffer(token, {
+        contactId,
+        header,
+        headText,
+        footText,
+        offerNumber,
+        offerDate: leistungsbeginn,
+        deliveryDate: leistungsbeginn,
+        timeToPay: Number(zahlungsziel) || 14,
+      });
       const offerId = offer?.id;
       if (!offerId) throw new Error('Angebot konnte nicht erstellt werden.');
 
-      const priceEach = nettobetrag ? Number(nettobetrag) / countRows(sections) : 0;
       let positionNumber = 0;
       for (const section of sections) {
         positionNumber += 1;
+        const rowLines = section.rows
+          .filter((r) => r.text.trim())
+          .map((row) => {
+            const intervalText = row.bedarf
+              ? 'Bei Bedarf'
+              : row.intervalColumn
+              ? `${COLUMN_LABELS[row.intervalColumn]}: ${row.intervalValue}`
+              : '';
+            return [row.text, intervalText, row.bemerkung].filter(Boolean).join(', ');
+          });
         await createOfferPos(token, {
           offerId,
           name: section.title,
-          text: '',
-          quantity: 0,
-          price: 0,
-          isTitle: true,
+          text: rowLines.join('\n'),
+          quantity: 1,
+          price: Number(section.price) || 0,
           positionNumber,
         });
-        for (const row of section.rows) {
-          if (!row.text.trim()) continue;
-          positionNumber += 1;
-          const intervalText = row.bedarf
-            ? 'Bei Bedarf'
-            : row.intervalColumn
-            ? `${COLUMN_LABELS[row.intervalColumn]}: ${row.intervalValue}`
-            : '';
-          const descParts = [intervalText, row.bemerkung].filter(Boolean);
-          await createOfferPos(token, {
-            offerId,
-            name: row.text,
-            text: descParts.join(', '),
-            quantity: 1,
-            price: priceEach,
-            positionNumber,
-          });
-        }
       }
 
       localStorage.setItem(ANGEBOT_KEY, String(angebotRef.current.value));
       setStatus('success');
-      setResultLink(`https://my.sevdesk.de/om/detail/type/AN/id/${offerId}`);
-      setMessage(`Angebot erfolgreich in sevDesk erstellt.`);
+      setResultLink(`https://my.sevdesk.de/#/offer/${offerId}`);
+      setMessage('Angebot erfolgreich in sevDesk erstellt.');
     } catch (err) {
       setStatus('error');
-      setMessage(err.message || String(err));
+      setMessage(err?.message || err?.toString() || 'Unbekannter Fehler');
     }
   }
 
@@ -252,8 +247,7 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
                   <ul className="autocomplete-list">
                     {contactSuggestions.map((c) => (
                       <li key={c.id} onMouseDown={() => pickContact(c)}>
-                        {c.name || `${c.surename || ''} ${c.familyname || ''}`.trim()}
-                        {c.city ? `, ${c.city}` : ''}
+                        {c.city ? `${c.name}, ${c.city}` : c.name}
                       </li>
                     ))}
                   </ul>
@@ -338,25 +332,29 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
               </label>
             </div>
 
-            <div className="modal-field-row">
-              <label className="modal-field">
-                Nettobetrag (€)
-                <input
-                  type="number"
-                  value={nettobetrag}
-                  onChange={(e) => setNettobetrag(e.target.value)}
-                  placeholder="0.00"
-                />
-              </label>
-              <label className="modal-field">
-                Zahlungsziel (Tage)
-                <input
-                  type="number"
-                  value={zahlungsziel}
-                  onChange={(e) => setZahlungsziel(e.target.value)}
-                />
-              </label>
-            </div>
+            <label className="modal-field">
+              Zahlungsziel (Tage)
+              <input
+                type="number"
+                value={zahlungsziel}
+                onChange={(e) => setZahlungsziel(e.target.value)}
+              />
+            </label>
+
+            <div className="modal-subheading">Preise pro Bereich</div>
+            <table className="price-summary-table">
+              <tbody>
+                {sections.map((s) => (
+                  <tr key={s.id}>
+                    <td>{s.title}</td>
+                    <td className="price-summary-value">
+                      {s.price !== '' && s.price != null ? `${Number(s.price).toFixed(2)} €` : '0,00 €'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="price-summary-total">Gesamt: {gesamtPreis.toFixed(2)} €</div>
 
             {message && <div className={`modal-message ${status}`}>{message}</div>}
           </>

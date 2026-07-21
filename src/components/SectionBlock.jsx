@@ -32,6 +32,10 @@ export default function SectionBlock({ section, index, onChange, onRemove, onMov
     onChange((s) => ({ ...s, title }));
   }
 
+  function setPrice(price) {
+    onChange((s) => ({ ...s, price }));
+  }
+
   return (
     <>
       <tr
@@ -64,6 +68,16 @@ export default function SectionBlock({ section, index, onChange, onRemove, onMov
           <button className="icon-btn no-print section-remove-btn" title="Bereich entfernen" onClick={onRemove}>
             ✕
           </button>
+          <span className="section-price-field no-print">
+            <span className="section-price-label">Preis (€)</span>
+            <input
+              type="number"
+              className="section-price-input"
+              value={section.price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder="0.00"
+            />
+          </span>
         </td>
       </tr>
       {section.rows.map((row, rIndex) => (

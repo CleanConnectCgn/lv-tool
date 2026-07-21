@@ -8,9 +8,9 @@ async function sevRequest(token, method, path, body) {
     body: JSON.stringify({ token, method, path, body }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message = data?.error || data?.message || `sevDesk Fehler (${res.status})`;
-    throw new Error(message);
+  if (!res.ok || data?.error) {
+    const message = data?.error?.message || data?.error || data?.message || `sevDesk Fehler (${res.status})`;
+    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
   }
   return data;
 }
@@ -18,12 +18,15 @@ async function sevRequest(token, method, path, body) {
 export async function searchContacts(token, query) {
   if (!query || !query.trim()) return [];
   const data = await sevRequest(token, 'GET', `/Contact?depth=1&limit=50`);
-  const list = data?.objects || [];
+  const list = data?.objects ?? data ?? [];
   const q = query.trim().toLowerCase();
-  return list.filter((c) => {
-    const name = c.name || `${c.surename || ''} ${c.familyname || ''}`.trim();
-    return name.toLowerCase().includes(q);
-  });
+  return list
+    .map((c) => ({
+      id: c.id,
+      name: c.name || `${c.surename || ''} ${c.familyname || ''}`.trim(),
+      city: c.addresses?.[0]?.city || '',
+    }))
+    .filter((c) => c.name.toLowerCase().includes(q));
 }
 
 export async function createContact(token, { name, street, zip, city, email }) {
@@ -58,24 +61,53 @@ export async function createContact(token, { name, street, zip, city, email }) {
   return contact;
 }
 
-export async function createOffer(token, { contactId, header, headText, footText, offerNumber }) {
-  const data = await sevRequest(token, 'POST', '/Offer', {
-    offer: {
-      objectName: 'Offer',
-      status: 100,
-      contact: { id: contactId, objectName: 'Contact' },
-      offerNumber,
-      header,
-      headText,
-      footText,
-      taxRate: 19,
-      taxType: 'default',
-      currency: 'EUR',
-    },
-    offerPosSave: [],
-    offerPosDelete: null,
-  });
-  return data?.objects?.offer || data?.objects;
+let cachedSevUserId = null;
+
+async function getSevUserId(token) {
+  if (cachedSevUserId) return cachedSevUserId;
+  const data = await sevRequest(token, 'GET', '/SevUser?limit=1');
+  const user = (data?.objects ?? data ?? [])[0];
+  cachedSevUserId = user?.id || null;
+  return cachedSevUserId;
+}
+
+export async function createOffer(token, {
+  contactId,
+  header,
+  headText,
+  footText,
+  offerNumber,
+  offerDate,
+  deliveryDate,
+  timeToPay,
+}) {
+  const userId = await getSevUserId(token).catch(() => null);
+  const body = {
+    objectName: 'Offer',
+    mapAll: 'true',
+    offerNumber,
+    contact: { id: contactId, objectName: 'Contact' },
+    offerDate: offerDate || new Date().toISOString().slice(0, 10),
+    header,
+    headText,
+    footText,
+    timeToPay: timeToPay || 14,
+    deliveryDate: deliveryDate || new Date().toISOString().slice(0, 10),
+    status: '100',
+    smallSettlement: 0,
+    taxRate: 19,
+    taxText: 'Umsatzsteuer 19%',
+    taxType: 'default',
+    currency: 'EUR',
+    showNet: 1,
+    sendType: 'VPR',
+    address: '',
+  };
+  if (userId) {
+    body.contactPerson = { id: userId, objectName: 'SevUser' };
+  }
+  const data = await sevRequest(token, 'POST', '/Offer', body);
+  return data?.objects?.offer || data?.objects || data;
 }
 
 export async function createOfferPos(token, {
@@ -84,21 +116,19 @@ export async function createOfferPos(token, {
   text,
   quantity = 1,
   price = 0,
-  isTitle = false,
-  positionNumber = 0,
+  positionNumber = 1,
 }) {
   const data = await sevRequest(token, 'POST', '/OfferPos', {
+    objectName: 'OfferPos',
+    mapAll: 'true',
     offer: { id: offerId, objectName: 'Offer' },
-    positionNumber,
-    quantity,
-    price,
-    priceGross: price,
-    priceTax: 0,
     name,
-    text,
-    unity: { id: 1, objectName: 'Unity' },
+    price,
+    quantity,
+    unity: { id: '1', objectName: 'Unity' },
     taxRate: 19,
-    isTitle,
+    text,
+    positionNumber,
   });
   return data?.objects;
 }
