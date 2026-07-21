@@ -18,7 +18,7 @@ function row(text, opts = {}) {
 }
 
 function section(title, rows) {
-  return { id: uid(), title, rows, price: '' };
+  return { id: uid(), title, rows };
 }
 
 // ---- Büro ----
@@ -175,7 +175,6 @@ export function cloneTemplate(key) {
     id: uid(),
     title: s.title,
     rows: s.rows.map((r) => ({ ...r, id: uid() })),
-    price: '',
   }));
 }
 
@@ -186,7 +185,6 @@ export function cloneOptionalSection(key) {
     id: uid(),
     title: s.title,
     rows: s.rows.map((r) => ({ ...r, id: uid() })),
-    price: '',
   };
 }
 

@@ -5,6 +5,7 @@ import PrintView from './components/PrintView.jsx';
 import SevDeskModal from './components/SevDeskModal.jsx';
 import InspectionMode from './components/InspectionMode.jsx';
 import AICheckupModal from './components/AICheckupModal.jsx';
+import AIStatusBadge from './components/AIStatusBadge.jsx';
 import { templates, cloneTemplate, cloneOptionalSection, newSection } from './templates/templates.js';
 
 function todayISO() {
@@ -21,6 +22,9 @@ export default function App() {
   const [showSevDesk, setShowSevDesk] = useState(false);
   const [showInspection, setShowInspection] = useState(false);
   const [showAICheckup, setShowAICheckup] = useState(false);
+  const [aiStatus, setAiStatus] = useState('idle');
+  const [aiIssues, setAiIssues] = useState([]);
+  const [aiError, setAiError] = useState('');
 
   const templateOptions = useMemo(
     () => Object.entries(templates).map(([key, t]) => ({ key, label: t.label })),
@@ -40,6 +44,36 @@ export default function App() {
   function addSection() {
     setSections((prev) => [...prev, newSection()]);
   }
+
+  async function runAICheck() {
+    setAiStatus('pending');
+    setAiError('');
+    try {
+      const res = await fetch('/api/ai-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) {
+        throw new Error(data?.error?.message || data?.error || 'Unbekannter Fehler');
+      }
+      setAiIssues(Array.isArray(data?.issues) ? data.issues : []);
+      setAiStatus('done');
+    } catch (err) {
+      setAiError(err?.message || err?.toString() || 'Unbekannter Fehler');
+      setAiStatus('error');
+    }
+  }
+
+  // Auto-run the AI checkup 3s after the last edit to the LV.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      runAICheck();
+    }, 3000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sections]);
 
   useEffect(() => {
     async function exportPdf() {
@@ -98,7 +132,15 @@ export default function App() {
           <button onClick={() => window.dispatchEvent(new CustomEvent('lv-export-pdf'))}>
             Als PDF exportieren
           </button>
-          <button onClick={() => setShowAICheckup(true)}>✨ KI Checkup</button>
+          <button
+            onClick={() => {
+              setShowAICheckup(true);
+              runAICheck();
+            }}
+          >
+            ✨ KI Checkup
+          </button>
+          <AIStatusBadge status={aiStatus} issues={aiIssues} onClick={() => setShowAICheckup(true)} />
           <button onClick={() => setShowSevDesk(true)}>An sevDesk senden</button>
           <button onClick={() => setShowInspection(true)}>Besichtigungsmodus</button>
         </div>
@@ -151,9 +193,12 @@ export default function App() {
 
       {showAICheckup && (
         <AICheckupModal
-          sections={sections}
+          status={aiStatus}
+          issues={aiIssues}
+          error={aiError}
           setSections={setSections}
           onClose={() => setShowAICheckup(false)}
+          onRecheck={runAICheck}
         />
       )}
     </div>

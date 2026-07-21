@@ -1,5 +1,10 @@
 // Thin client for the sevDesk API, routed through our server proxy at
 // /api/sevdesk/request to avoid browser CORS restrictions.
+//
+// Note: sevDesk has no separate "Offer" resource. Angebote are stored as
+// /Order documents with orderType "AN" (bestaetigt by GET /Order/Factory/
+// getNextOrderNumber?orderType=AN and by POST /Offer returning
+// "Model_Offer not found").
 
 async function sevRequest(token, method, path, body) {
   const res = await fetch('/api/sevdesk/request', {
@@ -71,6 +76,12 @@ async function getSevUserId(token) {
   return cachedSevUserId;
 }
 
+// Real, sequential sevDesk offer number, e.g. "AN-1275".
+export async function getNextOfferNumber(token) {
+  const data = await sevRequest(token, 'GET', '/Order/Factory/getNextOrderNumber?orderType=AN');
+  return data?.objects || null;
+}
+
 export async function createOffer(token, {
   contactId,
   header,
@@ -82,32 +93,32 @@ export async function createOffer(token, {
   timeToPay,
 }) {
   const userId = await getSevUserId(token).catch(() => null);
-  const body = {
-    objectName: 'Offer',
+  const order = {
+    objectName: 'Order',
     mapAll: 'true',
-    offerNumber,
+    orderType: 'AN',
     contact: { id: contactId, objectName: 'Contact' },
-    offerDate: offerDate || new Date().toISOString().slice(0, 10),
+    orderDate: offerDate || new Date().toISOString().slice(0, 10),
+    deliveryDate: deliveryDate || new Date().toISOString().slice(0, 10),
+    orderNumber: offerNumber,
     header,
     headText,
     footText,
     timeToPay: timeToPay || 14,
-    deliveryDate: deliveryDate || new Date().toISOString().slice(0, 10),
     status: '100',
-    smallSettlement: 0,
-    taxRate: 19,
-    taxText: 'Umsatzsteuer 19%',
-    taxType: 'default',
     currency: 'EUR',
-    showNet: 1,
-    sendType: 'VPR',
-    address: '',
+    taxRate: 19,
+    taxRule: { id: '1', objectName: 'TaxRule' },
   };
   if (userId) {
-    body.contactPerson = { id: userId, objectName: 'SevUser' };
+    order.contactPerson = { id: userId, objectName: 'SevUser' };
   }
-  const data = await sevRequest(token, 'POST', '/Offer', body);
-  return data?.objects?.offer || data?.objects || data;
+  const data = await sevRequest(token, 'POST', '/Order/Factory/saveOrder', {
+    order,
+    orderPosSave: [],
+    orderPosDelete: null,
+  });
+  return data?.objects?.order || data?.objects || data;
 }
 
 export async function createOfferPos(token, {
@@ -118,10 +129,10 @@ export async function createOfferPos(token, {
   price = 0,
   positionNumber = 1,
 }) {
-  const data = await sevRequest(token, 'POST', '/OfferPos', {
-    objectName: 'OfferPos',
+  const data = await sevRequest(token, 'POST', '/OrderPos', {
+    objectName: 'OrderPos',
     mapAll: 'true',
-    offer: { id: offerId, objectName: 'Offer' },
+    order: { id: offerId, objectName: 'Order' },
     name,
     price,
     quantity,

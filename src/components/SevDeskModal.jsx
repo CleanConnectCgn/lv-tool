@@ -1,19 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { searchContacts, createContact, createOffer, createOfferPos } from '../lib/sevdesk.js';
+import { searchContacts, createContact, createOffer, createOfferPos, getNextOfferNumber } from '../lib/sevdesk.js';
 
 const TOKEN_KEY = 'lv-tool:sevdesk-token';
-const ANGEBOT_KEY = 'lv-tool:last-angebotsnummer';
-
-function nextAngebotsnummer() {
-  const last = parseInt(localStorage.getItem(ANGEBOT_KEY) || '1000', 10);
-  const next = last + 1;
-  return { display: `AN-${next}`, value: next };
-}
 
 function addWeeks(dateStr, weeks) {
   const d = new Date(dateStr || Date.now());
   d.setDate(d.getDate() + weeks * 7);
   return d.toISOString().slice(0, 10);
+}
+
+function isGlasSection(title) {
+  const t = (title || '').toLowerCase();
+  return t.includes('glas') || t.includes('lamell');
 }
 
 const COLUMN_LABELS = { woechentlich: 'Wöchentlich', monatlich: 'Monatlich', jaehrlich: 'Jährlich' };
@@ -36,17 +34,25 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
   const [ncStadt, setNcStadt] = useState('');
   const [ncEmail, setNcEmail] = useState('');
 
-  const angebotRef = useRef(nextAngebotsnummer());
+  const [offerNumber, setOfferNumber] = useState('');
+  const [offerNumberLoading, setOfferNumberLoading] = useState(false);
   const [ansprechpartner, setAnsprechpartner] = useState('Julian Mühlhoff');
   const [leistungsbeginn, setLeistungsbeginn] = useState(() => new Date().toISOString().slice(0, 10));
   const [gueltigBis, setGueltigBis] = useState(() => addWeeks(new Date().toISOString().slice(0, 10), 6));
   const [zahlungsziel, setZahlungsziel] = useState('14');
-
-  const gesamtPreis = sections.reduce((sum, s) => sum + (Number(s.price) || 0), 0);
+  const [nettobetragUHR, setNettobetragUHR] = useState('');
+  const [nettobetragGlas, setNettobetragGlas] = useState('');
 
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [resultLink, setResultLink] = useState('');
+  const [offerStatusDraft, setOfferStatusDraft] = useState(true);
+  const [offerId, setOfferId] = useState(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState('');
+
+  const gesamtPreis = (Number(nettobetragUHR) || 0) + (Number(nettobetragGlas) || 0);
+  const hasGlasSections = sections.some((s) => isGlasSection(s.title));
 
   useEffect(() => {
     if (token && !tokenFromServer) localStorage.setItem(TOKEN_KEY, token);
@@ -65,6 +71,23 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    setOfferNumberLoading(true);
+    getNextOfferNumber(token)
+      .then((n) => {
+        if (!cancelled && n) setOfferNumber(n);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setOfferNumberLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   function handleKundeChange(value) {
     setKunde(value);
@@ -104,6 +127,11 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
       setMessage('Bitte Kundenname eingeben.');
       return;
     }
+    if (!offerNumber) {
+      setStatus('error');
+      setMessage('Angebotsnummer konnte nicht von sevDesk geladen werden.');
+      return;
+    }
     setStatus('loading');
     setMessage('');
     try {
@@ -120,7 +148,6 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
       }
       if (!contactId) throw new Error('Kunde konnte nicht ermittelt oder erstellt werden.');
 
-      const { display: offerNumber } = angebotRef.current;
       const kontaktperson = showNewContact ? ncAnsprechpartner : ansprechpartner;
       const header = `Angebot ${offerNumber} Leistungsverzeichnis ${lvTypeLabel || ''} für ${objekt || 'Objekt'}`;
       const headText = [
@@ -151,13 +178,11 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
         deliveryDate: leistungsbeginn,
         timeToPay: Number(zahlungsziel) || 14,
       });
-      const offerId = offer?.id;
-      if (!offerId) throw new Error('Angebot konnte nicht erstellt werden.');
+      const newOfferId = offer?.id;
+      if (!newOfferId) throw new Error('Angebot konnte nicht erstellt werden.');
 
-      let positionNumber = 0;
-      for (const section of sections) {
-        positionNumber += 1;
-        const rowLines = section.rows
+      function sectionRowLines(section) {
+        return section.rows
           .filter((r) => r.text.trim())
           .map((row) => {
             const intervalText = row.bedarf
@@ -166,24 +191,72 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
               ? `${COLUMN_LABELS[row.intervalColumn]}: ${row.intervalValue}`
               : '';
             return [row.text, intervalText, row.bemerkung].filter(Boolean).join(', ');
-          });
+          })
+          .join('\n');
+      }
+
+      const uhrSections = sections.filter((s) => !isGlasSection(s.title));
+      const glasSections = sections.filter((s) => isGlasSection(s.title));
+
+      let positionNumber = 0;
+      if (uhrSections.length > 0) {
+        positionNumber += 1;
         await createOfferPos(token, {
-          offerId,
-          name: section.title,
-          text: rowLines.join('\n'),
+          offerId: newOfferId,
+          name: 'Unterhaltsreinigung',
+          text: uhrSections.map((s) => `${s.title}\n${sectionRowLines(s)}`).join('\n\n'),
           quantity: 1,
-          price: Number(section.price) || 0,
+          price: Number(nettobetragUHR) || 0,
+          positionNumber,
+        });
+      }
+      if (glasSections.length > 0) {
+        positionNumber += 1;
+        await createOfferPos(token, {
+          offerId: newOfferId,
+          name: 'Glasreinigung',
+          text: glasSections.map((s) => `${s.title}\n${sectionRowLines(s)}`).join('\n\n'),
+          quantity: 1,
+          price: Number(nettobetragGlas) || 0,
           positionNumber,
         });
       }
 
-      localStorage.setItem(ANGEBOT_KEY, String(angebotRef.current.value));
       setStatus('success');
-      setResultLink(`https://my.sevdesk.de/#/offer/${offerId}`);
-      setMessage('Angebot erfolgreich in sevDesk erstellt.');
+      setOfferId(newOfferId);
+      setOfferStatusDraft(true);
+      setResultLink(`https://my.sevdesk.de/om/detail/type/AN/id/${newOfferId}`);
+      setMessage(`Angebot ${offerNumber} erfolgreich in sevDesk erstellt.`);
     } catch (err) {
       setStatus('error');
       setMessage(err?.message || err?.toString() || 'Unbekannter Fehler');
+    }
+  }
+
+  async function handleDownloadPdf() {
+    if (!offerId) return;
+    setPdfLoading(true);
+    setPdfError('');
+    try {
+      const res = await fetch(`/api/sevdesk/offer-pdf/${offerId}`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error || `PDF nicht verfügbar (${res.status})`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeObjekt = (objekt || 'Objekt').replace(/[^a-zA-Z0-9äöüÄÖÜß_]+/g, '_');
+      a.href = url;
+      a.download = `Angebot_${offerNumber}_${safeObjekt}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setPdfError(err?.message || err?.toString() || 'Unbekannter Fehler');
+    } finally {
+      setPdfLoading(false);
     }
   }
 
@@ -220,15 +293,23 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
 
         {status === 'success' ? (
           <div className="modal-message success">
-            <div className="offer-number-display">{angebotRef.current.display}</div>
+            <div className="offer-number-display">{offerNumber}</div>
             {message}
-            {resultLink && (
-              <div>
-                <a href={resultLink} target="_blank" rel="noreferrer">
-                  Angebot in sevDesk öffnen
-                </a>
-              </div>
-            )}
+            <div className="offer-success-actions">
+              {offerStatusDraft ? (
+                <>
+                  <a href={resultLink} target="_blank" rel="noreferrer">
+                    In sevDesk öffnen
+                  </a>
+                  <p className="modal-hint">PDF nach Fertigstellung des Angebots verfügbar.</p>
+                </>
+              ) : (
+                <button type="button" onClick={handleDownloadPdf} disabled={pdfLoading}>
+                  {pdfLoading ? 'Lädt...' : 'Als PDF herunterladen'}
+                </button>
+              )}
+              {pdfError && <div className="modal-message error">{pdfError}</div>}
+            </div>
           </div>
         ) : (
           <>
@@ -303,7 +384,11 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
 
             <label className="modal-field">
               Angebotsnummer
-              <input type="text" value={angebotRef.current.display} readOnly />
+              <input
+                type="text"
+                value={offerNumberLoading ? 'Lädt...' : offerNumber}
+                readOnly
+              />
             </label>
 
             {!showNewContact && (
@@ -341,19 +426,27 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
               />
             </label>
 
-            <div className="modal-subheading">Preise pro Bereich</div>
-            <table className="price-summary-table">
-              <tbody>
-                {sections.map((s) => (
-                  <tr key={s.id}>
-                    <td>{s.title}</td>
-                    <td className="price-summary-value">
-                      {s.price !== '' && s.price != null ? `${Number(s.price).toFixed(2)} €` : '0,00 €'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div className="modal-subheading">Preise</div>
+            <label className="modal-field">
+              Nettobetrag Unterhaltsreinigung (€)
+              <input
+                type="number"
+                value={nettobetragUHR}
+                onChange={(e) => setNettobetragUHR(e.target.value)}
+                placeholder="0.00"
+              />
+            </label>
+            {hasGlasSections && (
+              <label className="modal-field">
+                Nettobetrag Glasreinigung (€)
+                <input
+                  type="number"
+                  value={nettobetragGlas}
+                  onChange={(e) => setNettobetragGlas(e.target.value)}
+                  placeholder="0.00"
+                />
+              </label>
+            )}
             <div className="price-summary-total">Gesamt: {gesamtPreis.toFixed(2)} €</div>
 
             {message && <div className={`modal-message ${status}`}>{message}</div>}

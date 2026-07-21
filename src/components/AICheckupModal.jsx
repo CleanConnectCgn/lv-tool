@@ -1,41 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 
-export default function AICheckupModal({ sections, setSections, onClose }) {
-  const [status, setStatus] = useState('loading');
-  const [issues, setIssues] = useState([]);
-  const [error, setError] = useState('');
+export default function AICheckupModal({ status, issues, error, setSections, onClose, onRecheck }) {
   const [appliedIds, setAppliedIds] = useState({});
-
-  useEffect(() => {
-    let cancelled = false;
-    async function run() {
-      try {
-        const res = await fetch('/api/ai-check', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sections }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || data?.error) {
-          throw new Error(data?.error?.message || data?.error || 'Unbekannter Fehler');
-        }
-        if (!cancelled) {
-          setIssues(Array.isArray(data?.issues) ? data.issues : []);
-          setStatus('done');
-        }
-      } catch (err) {
-        if (!cancelled) {
-          setError(err?.message || err?.toString() || 'Unbekannter Fehler');
-          setStatus('error');
-        }
-      }
-    }
-    run();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   function applyFix(issue) {
     if (!issue.fix && issue.fixType !== 'remove_row') return;
@@ -102,9 +68,14 @@ export default function AICheckupModal({ sections, setSections, onClose }) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal ai-checkup-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>KI Qualitätsprüfung</h2>
+        <div className="ai-modal-header">
+          <h2>KI Qualitätsprüfung</h2>
+          <button type="button" className="ai-recheck-btn" onClick={onRecheck} disabled={status === 'pending'}>
+            {status === 'pending' ? 'Prüft...' : 'Neu prüfen'}
+          </button>
+        </div>
 
-        {status === 'loading' && (
+        {status === 'pending' && (
           <div className="ai-loading">
             <div className="ai-spinner" />
             <p>KI analysiert Ihr Leistungsverzeichnis...</p>

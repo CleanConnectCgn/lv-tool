@@ -54,6 +54,31 @@ app.post('/api/sevdesk/request', async (req, res) => {
   }
 });
 
+// Downloads the sevDesk PDF for a given offer (stored internally as an
+// /Order document with orderType "AN" — sevDesk has no separate "Offer"
+// resource, despite the endpoint name below).
+app.get('/api/sevdesk/offer-pdf/:id', async (req, res) => {
+  const token = process.env.SEVDESK_TOKEN;
+  if (!token) {
+    return res.status(500).json({ error: 'SEVDESK_TOKEN ist nicht konfiguriert' });
+  }
+  try {
+    const sevRes = await fetch(`https://my.sevdesk.de/api/v1/Order/${req.params.id}/getPdf?download=1`, {
+      headers: { Authorization: token },
+    });
+    if (!sevRes.ok) {
+      const data = await sevRes.json().catch(() => ({}));
+      return res.status(sevRes.status).json({ error: extractSevDeskError(data) || 'PDF nicht verfügbar' });
+    }
+    const buffer = Buffer.from(await sevRes.arrayBuffer());
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `attachment; filename="Angebot.pdf"`);
+    res.send(buffer);
+  } catch (err) {
+    res.status(502).json({ error: err?.message || err?.toString() || 'PDF Anfrage fehlgeschlagen' });
+  }
+});
+
 // AI quality checkup for the LV: sends the sections to Claude and returns
 // structured feedback (duplicates, typos, missing tasks, wording).
 app.post('/api/ai-check', async (req, res) => {
