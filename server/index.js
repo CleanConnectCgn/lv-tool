@@ -78,22 +78,22 @@ app.post('/api/sevdesk/form-request', async (req, res) => {
 });
 
 function flattenToForm(obj, prefix = '') {
-  const result = {};
-  for (const [key, val] of Object.entries(obj || {})) {
-    const fullKey = prefix ? `${prefix}[${key}]` : key;
-    if (val === null || val === undefined) { result[fullKey] = 'null'; continue; }
-    if (typeof val === 'object' && !Array.isArray(val)) {
-      Object.assign(result, flattenToForm(val, fullKey));
+  const parts = [];
+  function flatten(val, key) {
+    if (val === null || val === undefined) {
+      parts.push([key, 'null']);
+    } else if (typeof val === 'boolean') {
+      parts.push([key, val ? 'true' : 'false']);
     } else if (Array.isArray(val)) {
-      val.forEach((item, i) => {
-        if (typeof item === 'object') Object.assign(result, flattenToForm(item, `${fullKey}[${i}]`));
-        else result[`${fullKey}[${i}]`] = item;
-      });
+      val.forEach((item, i) => flatten(item, `${key}[${i}]`));
+    } else if (typeof val === 'object') {
+      Object.entries(val).forEach(([k, v]) => flatten(v, `${key}[${k}]`));
     } else {
-      result[fullKey] = val;
+      parts.push([key, String(val)]);
     }
   }
-  return result;
+  Object.entries(obj).forEach(([k, v]) => flatten(v, prefix ? `${prefix}[${k}]` : k));
+  return Object.fromEntries(parts);
 }
 
 // Downloads the sevDesk PDF for a given offer (stored internally as an

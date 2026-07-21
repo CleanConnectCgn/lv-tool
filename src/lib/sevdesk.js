@@ -39,14 +39,14 @@ async function sevFormRequest(token, path, params) {
 }
 
 export async function searchContacts(token, query) {
-  if (!query || !query.trim()) return [];
-  const data = await sevRequest(token, 'GET', `/Contact?depth=1&limit=50`);
-  const list = data?.objects ?? data ?? [];
+  if (!query || query.trim().length < 2) return [];
+  const data = await sevRequest(token, 'GET', `/Contact?depth=1&limit=100`);
+  const list = data?.objects ?? [];
   const q = query.trim().toLowerCase();
   return list
     .map((c) => ({
       id: c.id,
-      name: c.name || `${c.surename || ''} ${c.familyname || ''}`.trim(),
+      name: (c.name || `${c.surename || ''} ${c.familyname || ''}`.trim()),
       city: c.addresses?.[0]?.city || '',
     }))
     .filter((c) => c.name.toLowerCase().includes(q));
