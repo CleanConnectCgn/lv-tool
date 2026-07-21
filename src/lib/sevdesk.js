@@ -193,6 +193,7 @@ export async function createOffer(token, {
       objectName: 'Order',
       mapAll: 'true',
       orderType: 'AN',
+      orderNumber: offerNumber,
       orderDate,
       contact: { id: contactId, objectName: 'Contact' },
       status: 100,
