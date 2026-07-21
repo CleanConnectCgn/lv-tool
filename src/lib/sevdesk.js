@@ -100,9 +100,93 @@ export async function getNextOfferNumber(token) {
   return data?.objects || null;
 }
 
-export async function createOffer(token, { contactId, header, headText, footText, offerNumber, offerDate, deliveryDate, timeToPay }) {
+function isGlasSection(title) {
+  const t = (title || '').toLowerCase();
+  return t.includes('glas') || t.includes('lamell');
+}
+
+const COLUMN_LABELS = { woechentlich: 'Wöchentlich', monatlich: 'Monatlich', jaehrlich: 'Jährlich' };
+
+function sectionText(section) {
+  return section.rows
+    .filter((r) => r.text?.trim())
+    .map((row) => {
+      const interval = row.bedarf
+        ? 'Bei Bedarf'
+        : row.intervalColumn
+        ? `${COLUMN_LABELS[row.intervalColumn]}: ${row.intervalValue}`
+        : '';
+      return [row.text, interval, row.bemerkung].filter(Boolean).join(' | ');
+    })
+    .join('\n');
+}
+
+export async function createOffer(token, {
+  contactId,
+  header,
+  headText,
+  footText,
+  offerNumber,
+  offerDate,
+  timeToPay,
+  sections,
+  nettobetragUHR,
+  nettobetragGlas,
+}) {
   const userId = await getSevUserId(token).catch(() => null);
   const orderDate = Math.floor((offerDate ? new Date(offerDate) : new Date()).getTime() / 1000);
+
+  const uhrSections = (sections || []).filter((s) => !isGlasSection(s.title));
+  const glasSections = (sections || []).filter((s) => isGlasSection(s.title));
+
+  const orderPosSave = [];
+  if (uhrSections.length > 0) {
+    orderPosSave.push({
+      objectName: 'OrderPos',
+      mapAll: 'true',
+      name: 'Unterhaltsreinigung',
+      text: uhrSections.map((s) => `${s.title}:\n${sectionText(s)}`).join('\n\n'),
+      price: Number(nettobetragUHR) || 0,
+      priceNet: Number(nettobetragUHR) || 0,
+      quantity: 1,
+      unity: { id: '9', objectName: 'Unity' },
+      taxRate: 19,
+      positionNumber: 1,
+      discount: 0,
+    });
+  }
+  if (glasSections.length > 0) {
+    orderPosSave.push({
+      objectName: 'OrderPos',
+      mapAll: 'true',
+      name: 'Glasreinigung',
+      text: glasSections.map((s) => `${s.title}:\n${sectionText(s)}`).join('\n\n'),
+      price: Number(nettobetragGlas) || 0,
+      priceNet: Number(nettobetragGlas) || 0,
+      quantity: 1,
+      unity: { id: '9', objectName: 'Unity' },
+      taxRate: 19,
+      positionNumber: 2,
+      discount: 0,
+    });
+  }
+
+  // Fallback: mindestens eine Dummy-Position damit sevDesk nicht abbricht
+  if (orderPosSave.length === 0) {
+    orderPosSave.push({
+      objectName: 'OrderPos',
+      mapAll: 'true',
+      name: 'Reinigungsleistungen',
+      text: '',
+      price: 0,
+      priceNet: 0,
+      quantity: 1,
+      unity: { id: '9', objectName: 'Unity' },
+      taxRate: 19,
+      positionNumber: 1,
+      discount: 0,
+    });
+  }
 
   const orderParams = {
     order: {
@@ -115,7 +199,6 @@ export async function createOffer(token, { contactId, header, headText, footText
       header,
       headText,
       footText,
-      addressCountry: { id: 1, objectName: 'StaticCountry' },
       version: 0,
       smallSettlement: false,
       taxRate: 0,
@@ -124,31 +207,12 @@ export async function createOffer(token, { contactId, header, headText, footText
       showNet: true,
       taxRule: { id: '1', objectName: 'TaxRule' },
       propertyUseNewCalculation: 1,
+      ...(userId ? { contactPerson: { id: userId, objectName: 'SevUser' } } : {}),
     },
+    orderPosSave,
+    orderPosDelete: null,
   };
-  if (userId) orderParams.order.contactPerson = { id: userId, objectName: 'SevUser' };
 
   const data = await sevFormRequest(token, '/Order/Factory/saveOrder', orderParams);
   return data?.objects?.order || data?.objects || data;
-}
-
-export async function createOfferPos(token, { offerId, name, text, quantity = 1, price = 0, positionNumber = 1 }) {
-  const data = await sevFormRequest(token, '/Order/Factory/saveOrder', {
-    order: { id: offerId, objectName: 'Order' },
-    orderPosSave: [{
-      objectName: 'OrderPos',
-      mapAll: 'true',
-      name,
-      price,
-      priceNet: price,
-      quantity,
-      unity: { id: '9', objectName: 'Unity' },
-      taxRate: 19,
-      positionNumber,
-      text: text || '',
-      discount: 0,
-    }],
-    orderPosDelete: null,
-  });
-  return data?.objects;
 }

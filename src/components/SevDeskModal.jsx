@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { searchContacts, createContact, createOffer, createOfferPos, getNextOfferNumber } from '../lib/sevdesk.js';
+import { searchContacts, createContact, createOffer, getNextOfferNumber } from '../lib/sevdesk.js';
 
 const TOKEN_KEY = 'lv-tool:sevdesk-token';
 
@@ -175,52 +175,13 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
         footText,
         offerNumber,
         offerDate: leistungsbeginn,
-        deliveryDate: leistungsbeginn,
         timeToPay: Number(zahlungsziel) || 14,
+        sections,
+        nettobetragUHR,
+        nettobetragGlas,
       });
       const newOfferId = offer?.id;
       if (!newOfferId) throw new Error('Angebot konnte nicht erstellt werden.');
-
-      function sectionRowLines(section) {
-        return section.rows
-          .filter((r) => r.text.trim())
-          .map((row) => {
-            const intervalText = row.bedarf
-              ? 'Bei Bedarf'
-              : row.intervalColumn
-              ? `${COLUMN_LABELS[row.intervalColumn]}: ${row.intervalValue}`
-              : '';
-            return [row.text, intervalText, row.bemerkung].filter(Boolean).join(', ');
-          })
-          .join('\n');
-      }
-
-      const uhrSections = sections.filter((s) => !isGlasSection(s.title));
-      const glasSections = sections.filter((s) => isGlasSection(s.title));
-
-      let positionNumber = 0;
-      if (uhrSections.length > 0) {
-        positionNumber += 1;
-        await createOfferPos(token, {
-          offerId: newOfferId,
-          name: 'Unterhaltsreinigung',
-          text: uhrSections.map((s) => `${s.title}\n${sectionRowLines(s)}`).join('\n\n'),
-          quantity: 1,
-          price: Number(nettobetragUHR) || 0,
-          positionNumber,
-        });
-      }
-      if (glasSections.length > 0) {
-        positionNumber += 1;
-        await createOfferPos(token, {
-          offerId: newOfferId,
-          name: 'Glasreinigung',
-          text: glasSections.map((s) => `${s.title}\n${sectionRowLines(s)}`).join('\n\n'),
-          quantity: 1,
-          price: Number(nettobetragGlas) || 0,
-          positionNumber,
-        });
-      }
 
       setStatus('success');
       setOfferId(newOfferId);
