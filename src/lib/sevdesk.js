@@ -5,12 +5,30 @@
 // /Order documents with orderType "AN" (bestaetigt by GET /Order/Factory/
 // getNextOrderNumber?orderType=AN and by POST /Offer returning
 // "Model_Offer not found").
+//
+// The sevDesk API expects form-encoded bodies (application/x-www-form-urlencoded)
+// for the Factory endpoints, not JSON. Those calls go through
+// /api/sevdesk/form-request, which flattens and form-encodes the params server-side.
 
 async function sevRequest(token, method, path, body) {
   const res = await fetch('/api/sevdesk/request', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ token, method, path, body }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) {
+    const message = data?.error?.message || data?.error || data?.message || `sevDesk Fehler (${res.status})`;
+    throw new Error(typeof message === 'string' ? message : JSON.stringify(message));
+  }
+  return data;
+}
+
+async function sevFormRequest(token, path, params) {
+  const res = await fetch('/api/sevdesk/form-request', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, path, params }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data?.error) {
@@ -82,64 +100,55 @@ export async function getNextOfferNumber(token) {
   return data?.objects || null;
 }
 
-export async function createOffer(token, {
-  contactId,
-  header,
-  headText,
-  footText,
-  offerNumber,
-  offerDate,
-  deliveryDate,
-  timeToPay,
-}) {
+export async function createOffer(token, { contactId, header, headText, footText, offerNumber, offerDate, deliveryDate, timeToPay }) {
   const userId = await getSevUserId(token).catch(() => null);
-  const order = {
-    objectName: 'Order',
-    mapAll: 'true',
-    orderType: 'AN',
-    contact: { id: contactId, objectName: 'Contact' },
-    orderDate: offerDate || new Date().toISOString().slice(0, 10),
-    deliveryDate: deliveryDate || new Date().toISOString().slice(0, 10),
-    orderNumber: offerNumber,
-    header,
-    headText,
-    footText,
-    timeToPay: timeToPay || 14,
-    status: '100',
-    currency: 'EUR',
-    taxRate: 19,
-    taxRule: { id: '1', objectName: 'TaxRule' },
+  const orderDate = Math.floor((offerDate ? new Date(offerDate) : new Date()).getTime() / 1000);
+
+  const orderParams = {
+    order: {
+      objectName: 'Order',
+      mapAll: 'true',
+      orderType: 'AN',
+      orderDate,
+      contact: { id: contactId, objectName: 'Contact' },
+      status: 100,
+      header,
+      headText,
+      footText,
+      addressCountry: { id: 1, objectName: 'StaticCountry' },
+      version: 0,
+      smallSettlement: false,
+      taxRate: 0,
+      taxText: '0',
+      currency: 'EUR',
+      showNet: true,
+      taxRule: { id: '1', objectName: 'TaxRule' },
+      propertyUseNewCalculation: 1,
+    },
   };
-  if (userId) {
-    order.contactPerson = { id: userId, objectName: 'SevUser' };
-  }
-  const data = await sevRequest(token, 'POST', '/Order/Factory/saveOrder', {
-    order,
-    orderPosSave: [],
-    orderPosDelete: null,
-  });
+  if (userId) orderParams.order.contactPerson = { id: userId, objectName: 'SevUser' };
+
+  const data = await sevFormRequest(token, '/Order/Factory/saveOrder', orderParams);
   return data?.objects?.order || data?.objects || data;
 }
 
-export async function createOfferPos(token, {
-  offerId,
-  name,
-  text,
-  quantity = 1,
-  price = 0,
-  positionNumber = 1,
-}) {
-  const data = await sevRequest(token, 'POST', '/OrderPos', {
-    objectName: 'OrderPos',
-    mapAll: 'true',
+export async function createOfferPos(token, { offerId, name, text, quantity = 1, price = 0, positionNumber = 1 }) {
+  const data = await sevFormRequest(token, '/Order/Factory/saveOrder', {
     order: { id: offerId, objectName: 'Order' },
-    name,
-    price,
-    quantity,
-    unity: { id: '1', objectName: 'Unity' },
-    taxRate: 19,
-    text,
-    positionNumber,
+    orderPosSave: [{
+      objectName: 'OrderPos',
+      mapAll: 'true',
+      name,
+      price,
+      priceNet: price,
+      quantity,
+      unity: { id: '9', objectName: 'Unity' },
+      taxRate: 19,
+      positionNumber,
+      text: text || '',
+      discount: 0,
+    }],
+    orderPosDelete: null,
   });
   return data?.objects;
 }

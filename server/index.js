@@ -54,6 +54,48 @@ app.post('/api/sevdesk/request', async (req, res) => {
   }
 });
 
+// Form-encoded proxy for the sevDesk Factory endpoints, which expect
+// application/x-www-form-urlencoded bodies instead of JSON.
+// Body: { token, path, params } where params is a nested object that gets
+// flattened into bracket-notation form fields, e.g. order[header]=Foo.
+app.post('/api/sevdesk/form-request', async (req, res) => {
+  const { token, path: sevPath, params } = req.body || {};
+  const useToken = token || process.env.SEVDESK_TOKEN;
+  if (!useToken || !sevPath) return res.status(400).json({ error: 'token und path erforderlich' });
+  try {
+    const formBody = new URLSearchParams(flattenToForm(params)).toString();
+    const sevRes = await fetch(`https://my.sevdesk.de/api/v1${sevPath}`, {
+      method: 'POST',
+      headers: { Authorization: useToken, 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formBody,
+    });
+    const data = await sevRes.json().catch(() => ({}));
+    if (!sevRes.ok) return res.status(sevRes.status).json({ error: extractSevDeskError(data) });
+    res.status(sevRes.status).json(data);
+  } catch (err) {
+    res.status(502).json({ error: err?.message || 'Fehler' });
+  }
+});
+
+function flattenToForm(obj, prefix = '') {
+  const result = {};
+  for (const [key, val] of Object.entries(obj || {})) {
+    const fullKey = prefix ? `${prefix}[${key}]` : key;
+    if (val === null || val === undefined) { result[fullKey] = 'null'; continue; }
+    if (typeof val === 'object' && !Array.isArray(val)) {
+      Object.assign(result, flattenToForm(val, fullKey));
+    } else if (Array.isArray(val)) {
+      val.forEach((item, i) => {
+        if (typeof item === 'object') Object.assign(result, flattenToForm(item, `${fullKey}[${i}]`));
+        else result[`${fullKey}[${i}]`] = item;
+      });
+    } else {
+      result[fullKey] = val;
+    }
+  }
+  return result;
+}
+
 // Downloads the sevDesk PDF for a given offer (stored internally as an
 // /Order document with orderType "AN" — sevDesk has no separate "Offer"
 // resource, despite the endpoint name below).
