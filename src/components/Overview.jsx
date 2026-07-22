@@ -14,7 +14,7 @@ function formatUpdatedAt(iso) {
   return d.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export default function Overview({ onClose, onOpen, onNew, variant = 'modal' }) {
+export default function Overview({ onClose, onOpen, onNew, onInspect, variant = 'modal' }) {
   const [docs, setDocs] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -61,6 +61,7 @@ export default function Overview({ onClose, onOpen, onNew, variant = 'modal' }) 
         <button className="primary" onClick={onNew}>
           + Neues Leistungsverzeichnis
         </button>
+        {onInspect && <button onClick={onInspect}>Besichtigungsmodus</button>}
       </div>
 
       {status === 'loading' && <p className="modal-hint">Lädt...</p>}
@@ -72,35 +73,52 @@ export default function Overview({ onClose, onOpen, onNew, variant = 'modal' }) 
 
       {status === 'done' && docs.length > 0 && (
         <div className="overview-list">
-          {docs.map((d) => (
-            <div key={d.id} className="overview-row" onClick={() => onOpen(d.id)}>
-              <div className="overview-row-main">
-                <div className="overview-row-title">{d.objekt || 'Ohne Objekt'}</div>
-                <div className="overview-row-sub">
-                  {d.lvTitle}
-                  {d.offerNumber ? ` · Angebot ${d.offerNumber}` : ''}
-                  {d.contactName ? ` · ${d.contactName}` : ''}
+          {(() => {
+            const ids = new Set(docs.map((d) => d.id));
+            const topLevel = docs.filter((d) => !d.parentId || !ids.has(d.parentId));
+            const childrenOf = (parentId) => docs.filter((d) => d.parentId === parentId);
+            const renderRow = (d, nested) => (
+              <div
+                key={d.id}
+                className={`overview-row${nested ? ' overview-row-nested' : ''}`}
+                onClick={() => onOpen(d.id)}
+              >
+                <div className="overview-row-main">
+                  <div className="overview-row-title">
+                    {nested ? d.lvTitle : d.objekt || 'Ohne Objekt'}
+                  </div>
+                  <div className="overview-row-sub">
+                    {!nested && d.lvTitle}
+                    {d.offerNumber ? ` · Angebot ${d.offerNumber}` : ''}
+                    {d.contactName ? ` · ${d.contactName}` : ''}
+                  </div>
                 </div>
+                <div className="overview-row-meta">
+                  <span>Stand {formatDateDE(d.datum)}</span>
+                  <span>Zuletzt bearbeitet {formatUpdatedAt(d.updatedAt)}</span>
+                </div>
+                {confirmDeleteId === d.id ? (
+                  <button
+                    className="overview-delete-confirm"
+                    onClick={(e) => handleConfirmDelete(e, d.id)}
+                    onMouseLeave={() => setConfirmDeleteId(null)}
+                  >
+                    Wirklich löschen?
+                  </button>
+                ) : (
+                  <button className="icon-btn overview-delete" onClick={(e) => handleDeleteClick(e, d.id)}>
+                    ✕
+                  </button>
+                )}
               </div>
-              <div className="overview-row-meta">
-                <span>Stand {formatDateDE(d.datum)}</span>
-                <span>Zuletzt bearbeitet {formatUpdatedAt(d.updatedAt)}</span>
+            );
+            return topLevel.map((d) => (
+              <div key={d.id} className="overview-group">
+                {renderRow(d, false)}
+                {childrenOf(d.id).map((c) => renderRow(c, true))}
               </div>
-              {confirmDeleteId === d.id ? (
-                <button
-                  className="overview-delete-confirm"
-                  onClick={(e) => handleConfirmDelete(e, d.id)}
-                  onMouseLeave={() => setConfirmDeleteId(null)}
-                >
-                  Wirklich löschen?
-                </button>
-              ) : (
-                <button className="icon-btn overview-delete" onClick={(e) => handleDeleteClick(e, d.id)}>
-                  ✕
-                </button>
-              )}
-            </div>
-          ))}
+            ));
+          })()}
         </div>
       )}
 

@@ -213,6 +213,8 @@ app.get('/api/documents', async (req, res) => {
     const summaries = docs
       .map((d) => ({
         id: d.id,
+        parentId: d.parentId || null,
+        docType: d.docType || 'main',
         objekt: d.objekt,
         lvTitle: d.lvTitle,
         datum: d.datum,

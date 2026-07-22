@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { INTERVAL_COLUMNS, INTERVAL_VALUES } from '../templates/templates.js';
 import { getSuggestions } from '../templates/suggestions.js';
 
@@ -26,6 +26,17 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const blurTimeout = useRef(null);
+  const textareaRef = useRef(null);
+
+  function autoResize(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }
+
+  useEffect(() => {
+    autoResize(textareaRef.current);
+  }, [row.text]);
 
   const intervalSelectValue = row.bedarf
     ? ''
@@ -87,8 +98,10 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
           ⠿
         </span>
         <div className="autocomplete-wrap">
-          <input
-            type="text"
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            className="lv-desc-textarea"
             value={row.text}
             onChange={(e) => handleTextChange(e.target.value)}
             onFocus={() => {

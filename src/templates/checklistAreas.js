@@ -36,7 +36,6 @@ export const AREA_DEFINITIONS = {
           column: 'woechentlich',
         }),
         row('Feuchte Reinigung der Fußleisten', { column: 'monatlich', value: '2x' }),
-        row('Feuchtes Abwaschen der Stühle & Sitzmöbel', { bedarf: true }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
         }),
@@ -53,7 +52,6 @@ export const AREA_DEFINITIONS = {
           column: 'woechentlich',
         }),
         row('Feuchte Reinigung der Fensterbänke & Fußleisten', { column: 'monatlich', value: '2x' }),
-        row('Feuchtes Abwaschen der Stühle & Sitzmöbel', { bedarf: true }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
         }),
@@ -63,18 +61,13 @@ export const AREA_DEFINITIONS = {
     label: 'Büro- und Behandlungsräume',
     build: () =>
       section('Büro- und Behandlungsräume', [
-        row('Hartböden feucht wischen & Textilbeläge saugen', {
-          column: 'woechentlich',
-          bemerkung:
-            'Oberflächen und Maschinen im Behandlungs-, Steril- und Laborbereich, auf denen medizinisches Equipment oder Behandlungsmaterialien abgelegt sind, sind von der Reinigung ausgeschlossen.',
-        }),
+        row('Hartböden feucht wischen & Textilbeläge saugen', { column: 'woechentlich' }),
         row('Reinigung der Oberflächen von Arbeits- & Schreibtischen', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Türblätter & Türklinken', { column: 'woechentlich' }),
         row('Entfernen von Fingerabdrücken & Schlieren von Innenverglasungen, Türen & Einbauschränken', {
           column: 'woechentlich',
         }),
         row('Feuchte Reinigung der Fensterbänke & Fußleisten', { column: 'monatlich', value: '2x' }),
-        row('Feuchtes Abwaschen der Stühle & Sitzmöbel', { bedarf: true }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
         }),
@@ -163,8 +156,13 @@ function buildErstreinigungSection(stunden) {
 //   grundreinigung: bool, winterdienst: bool, hausmeisterservice: bool,
 //   erstreinigung: { enabled, stunden },
 // }
+//
+// Glasreinigung und Winterdienst bilden jeweils ein eigenständiges,
+// verknüpftes Leistungsverzeichnis statt zusätzlicher Sektionen im
+// Unterhaltsreinigungs-LV - deshalb liegen sie unter `children`, nicht in
+// `main`.
 export function buildSectionsFromSetup(setup) {
-  const sections = [];
+  const main = [];
 
   AREA_ORDER.forEach((key) => {
     if (!setup.areas?.[key]) return;
@@ -174,24 +172,16 @@ export function buildSectionsFromSetup(setup) {
         ? { ...r, intervalValue: setup.frequency }
         : r
     );
-    sections.push(built);
+    main.push(built);
   });
-
-  if (setup.glas?.enabled) {
-    sections.push(buildGlasSection(setup.glas));
-  }
 
   if (setup.grundreinigung) {
     const s = cloneOptionalSection('grundreinigung');
-    if (s) sections.push(s);
-  }
-
-  if (setup.winterdienst) {
-    cloneTemplate('winterdienst').forEach((s) => sections.push(s));
+    if (s) main.push(s);
   }
 
   if (setup.hausmeisterservice) {
-    sections.push(
+    main.push(
       section('Hausmeisterservice', [
         row('Allgemeine Hausmeistertätigkeiten nach Absprache', { bedarf: true }),
       ])
@@ -199,8 +189,26 @@ export function buildSectionsFromSetup(setup) {
   }
 
   if (setup.erstreinigung?.enabled) {
-    sections.push(buildErstreinigungSection(setup.erstreinigung.stunden));
+    main.push(buildErstreinigungSection(setup.erstreinigung.stunden));
   }
 
-  return sections;
+  const children = [];
+
+  if (setup.glas?.enabled) {
+    children.push({
+      docType: 'glasreinigung',
+      lvTitle: 'Leistungsverzeichnis Glasreinigung',
+      sections: [buildGlasSection(setup.glas)],
+    });
+  }
+
+  if (setup.winterdienst) {
+    children.push({
+      docType: 'winterdienst',
+      lvTitle: 'Leistungsverzeichnis Winterdienst',
+      sections: cloneTemplate('winterdienst'),
+    });
+  }
+
+  return { main, children };
 }

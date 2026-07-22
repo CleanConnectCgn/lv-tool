@@ -88,7 +88,7 @@ export default function QuickSetup({ onGenerate, onCancel }) {
   }
 
   async function handleGenerate() {
-    const sections = buildSectionsFromSetup({
+    const { main, children } = buildSectionsFromSetup({
       frequency,
       areas,
       glas: { enabled: glasEnabled, rahmen, lamellen, lamellenFreq },
@@ -132,7 +132,7 @@ export default function QuickSetup({ onGenerate, onCancel }) {
       };
     }
 
-    onGenerate({ sections, customer });
+    onGenerate({ sections: main, children, customer });
   }
 
   return (
