@@ -9,6 +9,12 @@ function addWeeks(dateStr, weeks) {
   return d.toISOString().slice(0, 10);
 }
 
+function formatDateDE(isoStr) {
+  if (!isoStr) return '';
+  const [y, m, d] = isoStr.split('-');
+  return `${d}.${m}.${y}`;
+}
+
 function isGlasSection(title) {
   const t = (title || '').toLowerCase();
   return t.includes('glas') || t.includes('lamell');
@@ -43,10 +49,27 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
   const [nettobetragUHR, setNettobetragUHR] = useState('');
   const [nettobetragGlas, setNettobetragGlas] = useState('');
 
+  const [showTexts, setShowTexts] = useState(false);
+  const [anrede, setAnrede] = useState('Sehr geehrte Damen und Herren,');
+  const [einleitung, setEinleitung] = useState(
+    'im Folgenden erhalten Sie unser unverbindliches Angebot zur Reinigung Ihrer Räumlichkeiten. Dieses ist auf Ihre Anforderungen abgestimmt und kann nach Absprache jederzeit angepasst werden.'
+  );
+  const [hinweis, setHinweis] = useState(
+    'Reinigungsmaterialien, Wasseraufbereitung und die Anfahrt sind im Preis enthalten. Die Begehung und Flächenaufnahme erfolgt im Rahmen der Objektbesichtigung.'
+  );
+  const [zusatzhinweis, setZusatzhinweis] = useState('');
+  const [kuendigungsfristMonate, setKuendigungsfristMonate] = useState('3');
+  const [vertragstext, setVertragstext] = useState(
+    'Vertragsunterzeichnung: Nach Auftragserteilung erhalten Sie den Vertrag separat zur Prüfung und Unterzeichnung.'
+  );
+  const [dankText, setDankText] = useState(
+    'Wir danken Ihnen für Ihr Vertrauen und freuen uns auf eine erfolgreiche Zusammenarbeit.\n\nFür Rückfragen stehen wir Ihnen jederzeit gerne zur Verfügung.'
+  );
+  const [grussformel, setGrussformel] = useState('Mit freundlichen Grüßen\n\nIhr Clean Connect Team');
+
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
   const [resultLink, setResultLink] = useState('');
-  const [offerStatusDraft, setOfferStatusDraft] = useState(true);
   const [offerId, setOfferId] = useState(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState('');
@@ -148,25 +171,19 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
       }
       if (!contactId) throw new Error('Kunde konnte nicht ermittelt oder erstellt werden.');
 
-      const kontaktperson = showNewContact ? ncAnsprechpartner : ansprechpartner;
-      const header = `Angebot ${offerNumber} Leistungsverzeichnis ${lvTypeLabel || ''} für ${objekt || 'Objekt'}`;
-      const headText = [
-        'Sehr geehrte Damen und Herren,',
-        '',
-        `wir bieten Ihnen die Reinigungsleistungen gemäß beiliegendem Leistungsverzeichnis für "${objekt || 'Objekt'}" an.`,
-        '',
-        `Ansprechpartner: ${kontaktperson}`,
-        `Leistungsbeginn: ${leistungsbeginn}`,
-        `Gültig bis: ${gueltigBis}`,
-        `Zahlungsziel: ${zahlungsziel} Tage`,
-      ].join('\n');
+      const header = `Angebot ${offerNumber}`;
+      const headText = [anrede, einleitung].filter(Boolean).join('\n\n');
       const footText = [
-        'Wir freuen uns auf Ihre Beauftragung.',
-        '',
-        'Mit freundlichen Grüßen',
-        'Julian Mühlhoff',
-        'Clean Connect Gebäudereinigung UG',
-      ].join('\n');
+        hinweis,
+        zusatzhinweis.trim(),
+        `Gültigkeit: Dieses Angebot ist bis zum ${formatDateDE(gueltigBis)} gültig.`,
+        `Kündigungsfrist: Der Vertrag ist mit einer Frist von ${kuendigungsfristMonate} Monaten zum Monatsende kündbar.`,
+        vertragstext,
+        dankText,
+        grussformel,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
 
       const offer = await createOffer(token, {
         contactId,
@@ -185,7 +202,6 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
 
       setStatus('success');
       setOfferId(newOfferId);
-      setOfferStatusDraft(true);
       setResultLink(`https://my.sevdesk.de/om/detail/type/AN/id/${newOfferId}`);
       setMessage(`Angebot ${offerNumber} erfolgreich in sevDesk erstellt.`);
     } catch (err) {
@@ -257,18 +273,18 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
             <div className="offer-number-display">{offerNumber}</div>
             {message}
             <div className="offer-success-actions">
-              {offerStatusDraft ? (
-                <>
-                  <a href={resultLink} target="_blank" rel="noreferrer">
-                    In sevDesk öffnen
-                  </a>
-                  <p className="modal-hint">PDF nach Fertigstellung des Angebots verfügbar.</p>
-                </>
-              ) : (
-                <button type="button" onClick={handleDownloadPdf} disabled={pdfLoading}>
-                  {pdfLoading ? 'Lädt...' : 'Als PDF herunterladen'}
-                </button>
-              )}
+              <button type="button" onClick={handleDownloadPdf} disabled={pdfLoading}>
+                {pdfLoading ? 'Lädt...' : 'Angebot als PDF herunterladen'}
+              </button>
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('lv-export-pdf'))}
+              >
+                Leistungsverzeichnis als PDF herunterladen
+              </button>
+              <a href={resultLink} target="_blank" rel="noreferrer">
+                In sevDesk öffnen
+              </a>
               {pdfError && <div className="modal-message error">{pdfError}</div>}
             </div>
           </div>
@@ -409,6 +425,59 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
               </label>
             )}
             <div className="price-summary-total">Gesamt: {gesamtPreis.toFixed(2)} €</div>
+
+            <hr className="modal-section-divider" />
+            <button type="button" onClick={() => setShowTexts((v) => !v)} style={{ marginBottom: 12 }}>
+              {showTexts ? 'Kopf- und Fußtext ausblenden' : 'Kopf- und Fußtext bearbeiten'}
+            </button>
+
+            {showTexts && (
+              <>
+                <div className="modal-subheading">Kopftext</div>
+                <label className="modal-field">
+                  Anrede
+                  <input type="text" value={anrede} onChange={(e) => setAnrede(e.target.value)} />
+                </label>
+                <label className="modal-field">
+                  Einleitungstext
+                  <textarea rows={3} value={einleitung} onChange={(e) => setEinleitung(e.target.value)} />
+                </label>
+
+                <div className="modal-subheading">Fußtext</div>
+                <label className="modal-field">
+                  Hinweis
+                  <textarea rows={3} value={hinweis} onChange={(e) => setHinweis(e.target.value)} />
+                </label>
+                <label className="modal-field">
+                  Zusätzlicher Hinweis (optional, z. B. Preisnachlass)
+                  <textarea
+                    rows={2}
+                    value={zusatzhinweis}
+                    onChange={(e) => setZusatzhinweis(e.target.value)}
+                  />
+                </label>
+                <label className="modal-field">
+                  Kündigungsfrist (Monate)
+                  <input
+                    type="number"
+                    value={kuendigungsfristMonate}
+                    onChange={(e) => setKuendigungsfristMonate(e.target.value)}
+                  />
+                </label>
+                <label className="modal-field">
+                  Vertragsunterzeichnung
+                  <textarea rows={2} value={vertragstext} onChange={(e) => setVertragstext(e.target.value)} />
+                </label>
+                <label className="modal-field">
+                  Dank / Schlusstext
+                  <textarea rows={3} value={dankText} onChange={(e) => setDankText(e.target.value)} />
+                </label>
+                <label className="modal-field">
+                  Grußformel
+                  <textarea rows={3} value={grussformel} onChange={(e) => setGrussformel(e.target.value)} />
+                </label>
+              </>
+            )}
 
             {message && <div className={`modal-message ${status}`}>{message}</div>}
           </>

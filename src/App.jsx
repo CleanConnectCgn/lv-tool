@@ -81,16 +81,25 @@ export default function App() {
       const el = document.getElementById('lv-print-view');
       const safeObjekt = (objekt || 'Objekt').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '_');
       const filename = `Leistungsverzeichnis_${safeObjekt}_${datum}.pdf`;
-      html2pdf()
-        .set({
-          margin: 10,
-          filename,
-          html2canvas: { scale: 2 },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'] },
-        })
-        .from(el)
-        .save();
+      // The print-view is normally hidden (opacity:0, position:absolute) and only
+      // becomes visible/static via an @media print rule. html2canvas clones the
+      // DOM without reliably applying that media query, which collapses the
+      // element to zero height. Apply the same overrides directly instead.
+      document.body.classList.add('exporting-pdf');
+      try {
+        await html2pdf()
+          .set({
+            margin: 10,
+            filename,
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+            pagebreak: { mode: ['css', 'legacy'] },
+          })
+          .from(el)
+          .save();
+      } finally {
+        document.body.classList.remove('exporting-pdf');
+      }
     }
     window.addEventListener('lv-export-pdf', exportPdf);
     return () => window.removeEventListener('lv-export-pdf', exportPdf);

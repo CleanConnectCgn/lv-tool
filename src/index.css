@@ -774,6 +774,20 @@ tr.drag-over td {
   padding: 18px;
 }
 
+body.exporting-pdf .no-print,
+body.exporting-pdf .toolbar,
+body.exporting-pdf .lv-document {
+  display: none !important;
+}
+
+body.exporting-pdf .print-view {
+  position: static;
+  width: 100%;
+  opacity: 1;
+  z-index: auto;
+  pointer-events: auto;
+}
+
 .pv-doc-header {
   border: 1px solid var(--line-strong);
   border-radius: 10px;
