@@ -96,6 +96,15 @@ async function getSevUserId(token) {
   return cachedSevUserId;
 }
 
+// Staff members selectable as "Ihr Ansprechpartner" on the offer.
+export async function listSevUsers(token) {
+  const data = await sevRequest(token, 'GET', '/SevUser');
+  const list = data?.objects ?? [];
+  return list
+    .filter((u) => u.status === '100' || u.status === 100)
+    .map((u) => ({ id: u.id, fullname: u.fullname }));
+}
+
 // Real, sequential sevDesk offer number, e.g. "AN-1275".
 export async function getNextOfferNumber(token) {
   const data = await sevRequest(token, 'GET', '/Order/Factory/getNextOrderNumber?orderType=AN');
@@ -138,8 +147,9 @@ export async function createOffer(token, {
   objekt,
   intervallInfo,
   standDatum,
+  contactPersonId,
 }) {
-  const userId = await getSevUserId(token).catch(() => null);
+  const userId = contactPersonId || (await getSevUserId(token).catch(() => null));
   const orderDate = Math.floor((offerDate ? new Date(offerDate) : new Date()).getTime() / 1000);
 
   const uhrSections = (sections || []).filter((s) => !isGlasSection(s.title));

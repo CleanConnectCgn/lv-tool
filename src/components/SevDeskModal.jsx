@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { searchContacts, createContact, createOffer, getNextOfferNumber } from '../lib/sevdesk.js';
+import { searchContacts, createContact, createOffer, getNextOfferNumber, listSevUsers } from '../lib/sevdesk.js';
+
+const DEFAULT_SEV_USER = { id: '1361306', fullname: 'Julian Mühlhoff' };
 
 const TOKEN_KEY = 'lv-tool:sevdesk-token';
 
@@ -47,7 +49,6 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
 
   const [showNewContact, setShowNewContact] = useState(false);
   const [ncFirma, setNcFirma] = useState('');
-  const [ncAnsprechpartner, setNcAnsprechpartner] = useState('Julian Mühlhoff');
   const [ncStrasse, setNcStrasse] = useState('');
   const [ncPlz, setNcPlz] = useState('');
   const [ncStadt, setNcStadt] = useState('');
@@ -55,14 +56,15 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
 
   const [offerNumber, setOfferNumber] = useState('');
   const [offerNumberLoading, setOfferNumberLoading] = useState(false);
-  const [ansprechpartner, setAnsprechpartner] = useState('Julian Mühlhoff');
+  const [sevUsers, setSevUsers] = useState([DEFAULT_SEV_USER]);
+  const [contactPersonId, setContactPersonId] = useState(DEFAULT_SEV_USER.id);
   const [leistungsbeginn, setLeistungsbeginn] = useState(() => new Date().toISOString().slice(0, 10));
   const [gueltigBis, setGueltigBis] = useState(() => addWeeks(new Date().toISOString().slice(0, 10), 6));
   const [zahlungsziel, setZahlungsziel] = useState('14');
   const [nettobetragUHR, setNettobetragUHR] = useState('');
   const [nettobetragGlas, setNettobetragGlas] = useState('');
 
-  const [showTexts, setShowTexts] = useState(false);
+  const [showTexts, setShowTexts] = useState(true);
   const [anrede, setAnrede] = useState('Sehr geehrte Damen und Herren,');
   const [einleitung, setEinleitung] = useState(
     'im Folgenden erhalten Sie unser unverbindliches Angebot zur Reinigung Ihrer Räumlichkeiten. Dieses ist auf Ihre Anforderungen abgestimmt und kann nach Absprache jederzeit angepasst werden.'
@@ -123,6 +125,25 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
     return () => {
       cancelled = true;
     };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    listSevUsers(token)
+      .then((users) => {
+        if (cancelled || !users?.length) return;
+        setSevUsers(users);
+        if (!users.some((u) => u.id === contactPersonId)) {
+          const julian = users.find((u) => u.fullname === DEFAULT_SEV_USER.fullname);
+          setContactPersonId(julian?.id || users[0].id);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   function handleKundeChange(value) {
@@ -221,6 +242,7 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
         objekt,
         intervallInfo,
         standDatum: datum,
+        contactPersonId,
       });
       const newOfferId = offer?.id;
       if (!newOfferId) throw new Error('Angebot konnte nicht erstellt werden.');
@@ -340,7 +362,13 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
 
             <button
               type="button"
-              onClick={() => setShowNewContact((v) => !v)}
+              onClick={() => {
+                setShowNewContact((v) => {
+                  const next = !v;
+                  if (next && !ncFirma.trim() && kunde.trim()) setNcFirma(kunde.trim());
+                  return next;
+                });
+              }}
               style={{ marginBottom: 12 }}
             >
               {showNewContact ? 'Bestehenden Kunden suchen' : 'Neuer Kunde'}
@@ -351,14 +379,6 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
                 <label className="modal-field">
                   Firmenname
                   <input type="text" value={ncFirma} onChange={(e) => setNcFirma(e.target.value)} />
-                </label>
-                <label className="modal-field">
-                  Ansprechpartner
-                  <input
-                    type="text"
-                    value={ncAnsprechpartner}
-                    onChange={(e) => setNcAnsprechpartner(e.target.value)}
-                  />
                 </label>
                 <label className="modal-field">
                   Straße
@@ -393,16 +413,16 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
               />
             </label>
 
-            {!showNewContact && (
-              <label className="modal-field">
-                Ansprechpartner
-                <input
-                  type="text"
-                  value={ansprechpartner}
-                  onChange={(e) => setAnsprechpartner(e.target.value)}
-                />
-              </label>
-            )}
+            <label className="modal-field">
+              Ihr Ansprechpartner
+              <select value={contactPersonId} onChange={(e) => setContactPersonId(e.target.value)}>
+                {sevUsers.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.fullname}
+                  </option>
+                ))}
+              </select>
+            </label>
 
             <div className="modal-field-row">
               <label className="modal-field">
