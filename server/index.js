@@ -15,6 +15,7 @@ const PORT = process.env.PORT || 3001;
 // redeploy (the container filesystem is ephemeral).
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const DOCUMENTS_DIR = path.join(DATA_DIR, 'documents');
+const LV_PDFS_DIR = path.join(DATA_DIR, 'Leistungsverzeichnisse');
 
 app.use(express.json({ limit: '5mb' }));
 
@@ -275,6 +276,52 @@ app.delete('/api/documents/:id', async (req, res) => {
   } catch (err) {
     res.status(404).json({ error: 'Dokument nicht gefunden' });
   }
+});
+
+// Exportierte Leistungsverzeichnis-PDFs landen zusätzlich zum Browser-
+// Download hier im "Leistungsverzeichnisse"-Ordner auf dem Volume, damit
+// man sie später über die Übersicht erneut abrufen kann.
+function safePdfFilename(name) {
+  return path.basename(name || 'Leistungsverzeichnis.pdf').replace(/[^a-zA-Z0-9äöüÄÖÜß._-]+/g, '_');
+}
+
+app.post(
+  '/api/lv-pdfs',
+  express.raw({ type: 'application/pdf', limit: '20mb' }),
+  async (req, res) => {
+    try {
+      const filename = safePdfFilename(decodeURIComponent(req.get('X-Filename') || ''));
+      await fs.mkdir(LV_PDFS_DIR, { recursive: true });
+      await fs.writeFile(path.join(LV_PDFS_DIR, filename), req.body);
+      res.status(201).json({ success: true, filename });
+    } catch (err) {
+      res.status(500).json({ error: err?.message || 'PDF konnte nicht gespeichert werden' });
+    }
+  }
+);
+
+app.get('/api/lv-pdfs', async (req, res) => {
+  try {
+    await fs.mkdir(LV_PDFS_DIR, { recursive: true });
+    const files = await fs.readdir(LV_PDFS_DIR);
+    const list = await Promise.all(
+      files.map(async (f) => {
+        const stat = await fs.stat(path.join(LV_PDFS_DIR, f));
+        return { filename: f, size: stat.size, mtime: stat.mtime };
+      })
+    );
+    list.sort((a, b) => (a.mtime < b.mtime ? 1 : -1));
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Liste konnte nicht geladen werden' });
+  }
+});
+
+app.get('/api/lv-pdfs/:filename', (req, res) => {
+  const filePath = path.join(LV_PDFS_DIR, safePdfFilename(req.params.filename));
+  res.download(filePath, req.params.filename, (err) => {
+    if (err && !res.headersSent) res.status(404).json({ error: 'PDF nicht gefunden' });
+  });
 });
 
 const distPath = path.join(__dirname, '..', 'dist');

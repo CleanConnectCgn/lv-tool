@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { listDocuments, deleteDocument } from '../lib/documents.js';
+import MiniGame from './MiniGame.jsx';
+import ExportedPdfsList from './ExportedPdfsList.jsx';
 
 function formatDateDE(isoStr) {
   if (!isoStr) return '';
@@ -120,6 +122,13 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, variant = 
             ));
           })()}
         </div>
+      )}
+
+      {variant === 'page' && (
+        <>
+          <ExportedPdfsList />
+          <MiniGame />
+        </>
       )}
 
       {variant !== 'page' && (

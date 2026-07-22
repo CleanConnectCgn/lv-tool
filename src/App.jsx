@@ -11,6 +11,7 @@ import Overview from './components/Overview.jsx';
 import QuickSetup from './components/QuickSetup.jsx';
 import { cloneOptionalSection, newSection } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument, listDocuments } from './lib/documents.js';
+import { uploadLvPdf } from './lib/lvPdfs.js';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -51,6 +52,7 @@ export default function App() {
   const [aiError, setAiError] = useState('');
 
   const [saveStatus, setSaveStatus] = useState('idle');
+  const [pendingInspection, setPendingInspection] = useState(false);
 
   const activeDoc = activeIndex === -1 ? mainDoc : childDocs[activeIndex];
   const sections = activeDoc?.sections || [];
@@ -84,6 +86,10 @@ export default function App() {
     setDatum(todayISO());
     setIntervallInfo('');
     setView('editor');
+    if (pendingInspection) {
+      setPendingInspection(false);
+      setShowInspection(true);
+    }
   }
 
   function addOptionalService(key) {
@@ -207,16 +213,12 @@ export default function App() {
     setView('setup');
   }
 
+  // Besichtigungsmodus durchläuft zuerst denselben Quick-Setup-Assistenten
+  // wie eine normale LV-Erstellung (Kundendaten, Frequenz, Bereiche) und
+  // öffnet danach direkt den Besichtigungsmodus auf dem generierten LV.
   function handleStartInspection() {
-    setMainDoc(blankMainDoc());
-    setChildDocs([]);
-    setActiveIndex(-1);
-    setCustomer(null);
-    setObjekt('');
-    setDatum(todayISO());
-    setIntervallInfo('');
-    setView('editor');
-    setShowInspection(true);
+    setPendingInspection(true);
+    setView('setup');
   }
 
   async function runAICheck() {
@@ -261,16 +263,25 @@ export default function App() {
       // element to zero height. Apply the same overrides directly instead.
       document.body.classList.add('exporting-pdf');
       try {
-        await html2pdf()
-          .set({
-            margin: 10,
-            filename,
-            html2canvas: { scale: 2 },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-            pagebreak: { mode: ['css', 'legacy'] },
-          })
-          .from(el)
-          .save();
+        const worker = html2pdf().set({
+          margin: 10,
+          filename,
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+          pagebreak: { mode: ['css', 'legacy'] },
+        }).from(el);
+        const blob = await worker.toPdf().output('blob');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        // Zusätzlich im Leistungsverzeichnisse-Ordner auf dem Server ablegen,
+        // damit das PDF auch ohne den Browser-Download wiederauffindbar ist.
+        uploadLvPdf(blob, filename).catch(() => {});
       } finally {
         document.body.classList.remove('exporting-pdf');
       }
@@ -291,7 +302,16 @@ export default function App() {
   }
 
   if (view === 'setup') {
-    return <QuickSetup onGenerate={handleSetupGenerated} onCancel={() => setView('overview')} />;
+    return (
+      <QuickSetup
+        heading={pendingInspection ? 'Besichtigung starten' : 'Neues Leistungsverzeichnis'}
+        onGenerate={handleSetupGenerated}
+        onCancel={() => {
+          setPendingInspection(false);
+          setView('overview');
+        }}
+      />
+    );
   }
 
   return (

@@ -515,6 +515,93 @@ tr.drag-over td {
   max-width: 100%;
 }
 
+.exported-pdfs {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.exported-pdfs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.exported-pdf-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.exported-pdf-row:hover {
+  background: #f7fbfa;
+}
+
+.exported-pdf-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.exported-pdf-date {
+  color: var(--gray);
+  white-space: nowrap;
+}
+
+.minigame {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.minigame-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--gray);
+  margin-bottom: 8px;
+}
+
+.minigame-area {
+  position: relative;
+  background: #f5f7f8;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.minigame-dot {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--teal);
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.minigame-dot:hover {
+  background: var(--teal-dark);
+}
+
+.minigame-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--gray);
+}
+
 .overview-page-card h2 {
   margin-top: 0;
   font-size: 22px;

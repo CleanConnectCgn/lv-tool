@@ -11,7 +11,7 @@ function addressLine(addr) {
   return [addr.street, [addr.zip, addr.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 }
 
-export default function QuickSetup({ onGenerate, onCancel }) {
+export default function QuickSetup({ onGenerate, onCancel, heading = 'Neues Leistungsverzeichnis' }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
 
   // Kundendaten
@@ -138,7 +138,7 @@ export default function QuickSetup({ onGenerate, onCancel }) {
   return (
     <div className="overview-page">
       <div className="overview-page-card quick-setup-card">
-        <h2>Neues Leistungsverzeichnis</h2>
+        <h2>{heading}</h2>
         <p className="modal-hint">
           Kundendaten und Grundeinstellungen festlegen, dann das Leistungsverzeichnis generieren.
         </p>
