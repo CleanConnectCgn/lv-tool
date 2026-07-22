@@ -2,11 +2,19 @@ import express from 'express';
 import fetch from 'node-fetch';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs/promises';
+import { randomUUID } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
+
+// Where saved LV/Angebot documents are stored. On Railway this needs a
+// Volume mounted at this path, otherwise the directory is wiped on every
+// redeploy (the container filesystem is ephemeral).
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const DOCUMENTS_DIR = path.join(DATA_DIR, 'documents');
 
 app.use(express.json({ limit: '5mb' }));
 
@@ -180,6 +188,90 @@ Sei präzise und praxisnah. Max 15 Issues. Nur echte Probleme melden, keine Phan
     res.json(parsed);
   } catch (err) {
     res.status(502).json({ error: err?.message || err?.toString() || 'KI Anfrage fehlgeschlagen' });
+  }
+});
+
+// Persisted LVs/Angebote. One JSON file per document under DOCUMENTS_DIR.
+async function ensureDocumentsDir() {
+  await fs.mkdir(DOCUMENTS_DIR, { recursive: true });
+}
+
+async function readDocument(id) {
+  const raw = await fs.readFile(path.join(DOCUMENTS_DIR, `${id}.json`), 'utf-8');
+  return JSON.parse(raw);
+}
+
+app.get('/api/documents', async (req, res) => {
+  try {
+    await ensureDocumentsDir();
+    const files = await fs.readdir(DOCUMENTS_DIR);
+    const docs = await Promise.all(
+      files
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => fs.readFile(path.join(DOCUMENTS_DIR, f), 'utf-8').then(JSON.parse))
+    );
+    const summaries = docs
+      .map((d) => ({
+        id: d.id,
+        objekt: d.objekt,
+        lvTitle: d.lvTitle,
+        datum: d.datum,
+        updatedAt: d.updatedAt,
+        offerNumber: d.offer?.offerNumber || null,
+        contactName: d.offer?.contactName || null,
+      }))
+      .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
+    res.json(summaries);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Dokumente konnten nicht geladen werden' });
+  }
+});
+
+app.get('/api/documents/:id', async (req, res) => {
+  try {
+    res.json(await readDocument(req.params.id));
+  } catch (err) {
+    res.status(404).json({ error: 'Dokument nicht gefunden' });
+  }
+});
+
+app.post('/api/documents', async (req, res) => {
+  try {
+    await ensureDocumentsDir();
+    const now = new Date().toISOString();
+    const doc = { ...req.body, id: randomUUID(), createdAt: now, updatedAt: now };
+    await fs.writeFile(path.join(DOCUMENTS_DIR, `${doc.id}.json`), JSON.stringify(doc, null, 2));
+    res.status(201).json(doc);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Dokument konnte nicht gespeichert werden' });
+  }
+});
+
+app.put('/api/documents/:id', async (req, res) => {
+  try {
+    const existing = await readDocument(req.params.id).catch(() => null);
+    const merged = {
+      ...existing,
+      ...req.body,
+      offer: req.body.offer !== undefined ? req.body.offer : existing?.offer,
+      id: req.params.id,
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    await ensureDocumentsDir();
+    await fs.writeFile(path.join(DOCUMENTS_DIR, `${req.params.id}.json`), JSON.stringify(merged, null, 2));
+    res.json(merged);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Dokument konnte nicht aktualisiert werden' });
+  }
+});
+
+app.delete('/api/documents/:id', async (req, res) => {
+  try {
+    await fs.unlink(path.join(DOCUMENTS_DIR, `${req.params.id}.json`));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(404).json({ error: 'Dokument nicht gefunden' });
   }
 });
 

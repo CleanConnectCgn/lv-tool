@@ -461,6 +461,76 @@ tr.drag-over td {
   width: 460px;
 }
 
+.overview-modal {
+  width: 640px;
+}
+
+.overview-actions {
+  margin-bottom: 14px;
+}
+
+.overview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 55vh;
+  overflow-y: auto;
+}
+
+.overview-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.overview-row:hover {
+  border-color: var(--teal, #2a9d8f);
+  background: #f7fbfa;
+}
+
+.overview-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.overview-row-title {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.overview-row-sub {
+  font-size: 12.5px;
+  color: var(--gray);
+}
+
+.overview-row-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 11.5px;
+  color: var(--gray);
+  white-space: nowrap;
+}
+
+.overview-delete {
+  color: #c0392b;
+  padding: 4px 8px;
+}
+
+.overview-delete-confirm {
+  color: #fff;
+  background: #c0392b;
+  border-color: #c0392b;
+  font-size: 12px;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
 .modal h2 {
   margin-top: 0;
   font-size: 17px;

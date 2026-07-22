@@ -54,6 +54,17 @@ export async function searchContacts(token, query) {
     .filter((c) => c.name.toLowerCase().includes(q));
 }
 
+export async function getContactAddress(token, contactId) {
+  const data = await sevRequest(
+    token,
+    'GET',
+    `/ContactAddress?contact[id]=${contactId}&contact[objectName]=Contact`
+  );
+  const addr = (data?.objects ?? [])[0];
+  if (!addr) return null;
+  return { street: addr.street || '', zip: addr.zip || '', city: addr.city || '' };
+}
+
 export async function createContact(token, { name, street, zip, city, email }) {
   const data = await sevRequest(token, 'POST', '/Contact', {
     name,

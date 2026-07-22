@@ -1,5 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { searchContacts, createContact, createOffer, getNextOfferNumber, listSevUsers } from '../lib/sevdesk.js';
+import {
+  searchContacts,
+  createContact,
+  createOffer,
+  getNextOfferNumber,
+  listSevUsers,
+  getContactAddress,
+} from '../lib/sevdesk.js';
 
 const DEFAULT_SEV_USER = { id: '1361306', fullname: 'Julian Mühlhoff' };
 
@@ -37,13 +44,22 @@ function salutationForContact(c) {
   return 'Sehr geehrte Damen und Herren,';
 }
 
-export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, sections, lvTypeLabel }) {
+export default function SevDeskModal({
+  onClose,
+  objekt,
+  datum,
+  intervallInfo,
+  sections,
+  lvTypeLabel,
+  onOfferCreated,
+}) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [tokenFromServer, setTokenFromServer] = useState(false);
 
   const [kunde, setKunde] = useState('');
   const [contactSuggestions, setContactSuggestions] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
+  const [selectedContactAddress, setSelectedContactAddress] = useState(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimer = useRef(null);
 
@@ -167,10 +183,16 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
 
   function pickContact(c) {
     setSelectedContact(c);
+    setSelectedContactAddress(null);
     setKunde(c.name);
     setShowSuggestions(false);
     setShowNewContact(false);
     setAnrede(salutationForContact(c));
+    if (token) {
+      getContactAddress(token, c.id)
+        .then(setSelectedContactAddress)
+        .catch(() => {});
+    }
   }
 
   async function handleSubmit() {
@@ -251,6 +273,22 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
       setOfferId(newOfferId);
       setResultLink(`https://my.sevdesk.de/om/detail/type/AN/id/${newOfferId}`);
       setMessage(`Angebot ${offerNumber} erfolgreich in sevDesk erstellt.`);
+
+      onOfferCreated?.({
+        offerNumber,
+        sevDeskOrderId: newOfferId,
+        contactId,
+        contactName: kundeName,
+        contactPersonId,
+        leistungsbeginn,
+        gueltigBis,
+        zahlungsziel,
+        kuendigungsfristMonate,
+        nettobetragUHR,
+        nettobetragGlas,
+        texts: { anrede, einleitung, hinweis, zusatzhinweis, vertragstext, dankText, grussformel },
+        resultLink: `https://my.sevdesk.de/om/detail/type/AN/id/${newOfferId}`,
+      });
     } catch (err) {
       setStatus('error');
       setMessage(err?.message || err?.toString() || 'Unbekannter Fehler');
@@ -358,6 +396,19 @@ export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, se
                   </ul>
                 )}
               </label>
+            )}
+
+            {!showNewContact && selectedContact && (
+              <div className="modal-hint contact-address-preview">
+                {selectedContactAddress
+                  ? [
+                      selectedContactAddress.street,
+                      [selectedContactAddress.zip, selectedContactAddress.city].filter(Boolean).join(' '),
+                    ]
+                      .filter(Boolean)
+                      .join(', ') || 'Keine Adresse hinterlegt'
+                  : 'Lädt Adresse...'}
+              </div>
             )}
 
             <button

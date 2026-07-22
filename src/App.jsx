@@ -6,7 +6,9 @@ import SevDeskModal from './components/SevDeskModal.jsx';
 import InspectionMode from './components/InspectionMode.jsx';
 import AICheckupModal from './components/AICheckupModal.jsx';
 import AIStatusBadge from './components/AIStatusBadge.jsx';
+import Overview from './components/Overview.jsx';
 import { templates, cloneTemplate, cloneOptionalSection, newSection } from './templates/templates.js';
+import { createDocument, updateDocument, getDocument } from './lib/documents.js';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -22,9 +24,13 @@ export default function App() {
   const [showSevDesk, setShowSevDesk] = useState(false);
   const [showInspection, setShowInspection] = useState(false);
   const [showAICheckup, setShowAICheckup] = useState(false);
+  const [showOverview, setShowOverview] = useState(false);
   const [aiStatus, setAiStatus] = useState('idle');
   const [aiIssues, setAiIssues] = useState([]);
   const [aiError, setAiError] = useState('');
+
+  const [documentId, setDocumentId] = useState(null);
+  const [saveStatus, setSaveStatus] = useState('idle');
 
   const templateOptions = useMemo(
     () => Object.entries(templates).map(([key, t]) => ({ key, label: t.label })),
@@ -43,6 +49,69 @@ export default function App() {
 
   function addSection() {
     setSections((prev) => [...prev, newSection()]);
+  }
+
+  function currentDocPayload(extra) {
+    return { lvType, lvTitle, objekt, datum, intervallInfo, sections, ...extra };
+  }
+
+  async function persistDocument(extra) {
+    const payload = currentDocPayload(extra);
+    if (documentId) {
+      await updateDocument(documentId, payload);
+    } else {
+      const created = await createDocument(payload);
+      setDocumentId(created.id);
+    }
+  }
+
+  async function handleSave() {
+    setSaveStatus('saving');
+    try {
+      await persistDocument();
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      setSaveStatus('error');
+    }
+  }
+
+  // Called by SevDeskModal once an offer was created in sevDesk, so the
+  // link between this LV and the resulting Angebot survives a reload.
+  async function handleOfferCreated(offerData) {
+    try {
+      await persistDocument({ offer: offerData });
+    } catch (err) {
+      // The offer already exists in sevDesk regardless; losing the local
+      // link is not worth surfacing as an error here.
+    }
+  }
+
+  async function handleOpenDocument(id) {
+    try {
+      const doc = await getDocument(id);
+      setLvType(doc.lvType);
+      setLvTitle(doc.lvTitle);
+      setObjekt(doc.objekt);
+      setDatum(doc.datum);
+      setIntervallInfo(doc.intervallInfo);
+      setSections(doc.sections);
+      setDocumentId(doc.id);
+      setShowOverview(false);
+    } catch (err) {
+      alert(err?.message || 'Dokument konnte nicht geladen werden.');
+    }
+  }
+
+  function handleNewDocument() {
+    setLvType('buero');
+    setLvTitle('Leistungsverzeichnis Unterhaltsreinigung');
+    setObjekt('');
+    setDatum(todayISO());
+    setIntervallInfo('');
+    setSections(cloneTemplate('buero'));
+    setDocumentId(null);
+    setShowOverview(false);
   }
 
   async function runAICheck() {
@@ -152,6 +221,10 @@ export default function App() {
           <AIStatusBadge status={aiStatus} issues={aiIssues} onClick={() => setShowAICheckup(true)} />
           <button onClick={() => setShowSevDesk(true)}>An sevDesk senden</button>
           <button onClick={() => setShowInspection(true)}>Besichtigungsmodus</button>
+          <button onClick={handleSave} disabled={saveStatus === 'saving'}>
+            {saveStatus === 'saving' ? 'Speichert...' : saveStatus === 'saved' ? '✓ Gespeichert' : 'Speichern'}
+          </button>
+          <button onClick={() => setShowOverview(true)}>Übersicht</button>
         </div>
       </div>
 
@@ -190,6 +263,15 @@ export default function App() {
           intervallInfo={intervallInfo}
           sections={sections}
           lvTypeLabel={templates[lvType]?.label || ''}
+          onOfferCreated={handleOfferCreated}
+        />
+      )}
+
+      {showOverview && (
+        <Overview
+          onClose={() => setShowOverview(false)}
+          onOpen={handleOpenDocument}
+          onNew={handleNewDocument}
         />
       )}
 
