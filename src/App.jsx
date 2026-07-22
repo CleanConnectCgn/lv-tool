@@ -147,22 +147,30 @@ export default function App() {
 
   // Called by SevDeskModal once an offer was created in sevDesk, so the
   // link between this LV and the resulting Angebot survives a reload.
+  // Persists into whichever document is currently active (mainDoc or a
+  // childDoc) - not always mainDoc, since the offer may have been sent
+  // from e.g. the Glasreinigung tab.
   async function handleOfferCreated(offerData) {
     try {
       const payload = {
-        lvTitle: mainDoc.lvTitle,
+        lvTitle,
         objekt,
         datum,
         intervallInfo,
         sections,
         customer,
         offer: offerData,
+        ...(activeIndex !== -1 ? { parentId: mainDoc.id, docType: childDocs[activeIndex].docType } : {}),
       };
-      if (mainDoc.id) {
-        await updateDocument(mainDoc.id, payload);
+      if (activeDoc.id) {
+        await updateDocument(activeDoc.id, payload);
       } else {
         const created = await createDocument(payload);
-        setMainDoc((d) => ({ ...d, id: created.id }));
+        if (activeIndex === -1) {
+          setMainDoc((d) => ({ ...d, id: created.id }));
+        } else {
+          setChildDocs((docs) => docs.map((d, i) => (i === activeIndex ? { ...d, id: created.id } : d)));
+        }
       }
     } catch (err) {
       // The offer already exists in sevDesk regardless; losing the local
