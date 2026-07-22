@@ -282,6 +282,12 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`LV-Tool server läuft auf Port ${PORT}`);
+});
+
+// Exit cleanly on Railway's redeploy/restart signal instead of letting node
+// get killed mid-request, which npm reports as a crash in the logs.
+process.on('SIGTERM', () => {
+  server.close(() => process.exit(0));
 });
