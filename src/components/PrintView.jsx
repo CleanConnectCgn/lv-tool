@@ -66,27 +66,35 @@ export default function PrintView({ lvTitle, objekt, datum, intervallInfo, secti
                     <td className="pv-col-check">
                       <CheckBox on={row.bedarf} />
                     </td>
-                    <td className="pv-col-interval">
-                      {row.intervalColumn === 'woechentlich' && row.intervalValue ? (
-                        <span className="pv-interval-chip">{row.intervalValue}</span>
-                      ) : (
-                        ''
-                      )}
-                    </td>
-                    <td className="pv-col-interval">
-                      {row.intervalColumn === 'monatlich' && row.intervalValue ? (
-                        <span className="pv-interval-chip">{row.intervalValue}</span>
-                      ) : (
-                        ''
-                      )}
-                    </td>
-                    <td className="pv-col-interval">
-                      {row.intervalColumn === 'jaehrlich' && row.intervalValue ? (
-                        <span className="pv-interval-chip">{row.intervalValue}</span>
-                      ) : (
-                        ''
-                      )}
-                    </td>
+                    {row.intervalColumn === 'aufAnfrage' ? (
+                      <td className="pv-col-interval pv-col-interval-freeform" colSpan={3}>
+                        <span className="pv-interval-chip">Auf Anfrage</span>
+                      </td>
+                    ) : (
+                      <>
+                        <td className="pv-col-interval">
+                          {row.intervalColumn === 'woechentlich' && row.intervalValue ? (
+                            <span className="pv-interval-chip">{row.intervalValue}</span>
+                          ) : (
+                            ''
+                          )}
+                        </td>
+                        <td className="pv-col-interval">
+                          {row.intervalColumn === 'monatlich' && row.intervalValue ? (
+                            <span className="pv-interval-chip">{row.intervalValue}</span>
+                          ) : (
+                            ''
+                          )}
+                        </td>
+                        <td className="pv-col-interval">
+                          {row.intervalColumn === 'jaehrlich' && row.intervalValue ? (
+                            <span className="pv-interval-chip">{row.intervalValue}</span>
+                          ) : (
+                            ''
+                          )}
+                        </td>
+                      </>
+                    )}
                     <td className="pv-col-remarks">{row.bemerkung}</td>
                   </tr>
                 ))}

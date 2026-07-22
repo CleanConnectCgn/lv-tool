@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header.jsx';
 import LVEditor from './components/LVEditor.jsx';
 import PrintView from './components/PrintView.jsx';
@@ -7,24 +7,34 @@ import InspectionMode from './components/InspectionMode.jsx';
 import AICheckupModal from './components/AICheckupModal.jsx';
 import AIStatusBadge from './components/AIStatusBadge.jsx';
 import Overview from './components/Overview.jsx';
-import { templates, cloneTemplate, cloneOptionalSection, newSection } from './templates/templates.js';
+import QuickSetup from './components/QuickSetup.jsx';
+import { cloneOptionalSection, newSection } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument } from './lib/documents.js';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function addressLine(customer) {
+  if (!customer) return '';
+  return [customer.street, [customer.zip, customer.city].filter(Boolean).join(' ')]
+    .filter(Boolean)
+    .join(', ');
+}
+
 export default function App() {
-  const [lvType, setLvType] = useState('buero');
+  // 'overview' (Startseite) | 'setup' (Quick-Setup-Assistent) | 'editor'
+  const [view, setView] = useState('overview');
+
   const [lvTitle, setLvTitle] = useState('Leistungsverzeichnis Unterhaltsreinigung');
   const [objekt, setObjekt] = useState('');
   const [datum, setDatum] = useState(todayISO());
   const [intervallInfo, setIntervallInfo] = useState('');
-  const [sections, setSections] = useState(() => cloneTemplate('buero'));
+  const [sections, setSections] = useState([]);
+  const [customer, setCustomer] = useState(null);
   const [showSevDesk, setShowSevDesk] = useState(false);
   const [showInspection, setShowInspection] = useState(false);
   const [showAICheckup, setShowAICheckup] = useState(false);
-  const [showOverview, setShowOverview] = useState(false);
   const [aiStatus, setAiStatus] = useState('idle');
   const [aiIssues, setAiIssues] = useState([]);
   const [aiError, setAiError] = useState('');
@@ -32,14 +42,12 @@ export default function App() {
   const [documentId, setDocumentId] = useState(null);
   const [saveStatus, setSaveStatus] = useState('idle');
 
-  const templateOptions = useMemo(
-    () => Object.entries(templates).map(([key, t]) => ({ key, label: t.label })),
-    []
-  );
-
-  function handleTemplateChange(key) {
-    setLvType(key);
-    setSections(cloneTemplate(key));
+  function handleSetupGenerated({ sections: newSections, customer: newCustomer }) {
+    setSections(newSections);
+    setCustomer(newCustomer);
+    if (newCustomer) setObjekt(addressLine(newCustomer) || newCustomer.name || '');
+    setDocumentId(null);
+    setView('editor');
   }
 
   function addOptionalService(key) {
@@ -52,7 +60,7 @@ export default function App() {
   }
 
   function currentDocPayload(extra) {
-    return { lvType, lvTitle, objekt, datum, intervallInfo, sections, ...extra };
+    return { lvTitle, objekt, datum, intervallInfo, sections, customer, ...extra };
   }
 
   async function persistDocument(extra) {
@@ -90,28 +98,21 @@ export default function App() {
   async function handleOpenDocument(id) {
     try {
       const doc = await getDocument(id);
-      setLvType(doc.lvType);
       setLvTitle(doc.lvTitle);
       setObjekt(doc.objekt);
       setDatum(doc.datum);
       setIntervallInfo(doc.intervallInfo);
       setSections(doc.sections);
+      setCustomer(doc.customer || null);
       setDocumentId(doc.id);
-      setShowOverview(false);
+      setView('editor');
     } catch (err) {
       alert(err?.message || 'Dokument konnte nicht geladen werden.');
     }
   }
 
   function handleNewDocument() {
-    setLvType('buero');
-    setLvTitle('Leistungsverzeichnis Unterhaltsreinigung');
-    setObjekt('');
-    setDatum(todayISO());
-    setIntervallInfo('');
-    setSections(cloneTemplate('buero'));
-    setDocumentId(null);
-    setShowOverview(false);
+    setView('setup');
   }
 
   async function runAICheck() {
@@ -174,20 +175,20 @@ export default function App() {
     return () => window.removeEventListener('lv-export-pdf', exportPdf);
   }, [objekt, datum]);
 
+  if (view === 'overview') {
+    return (
+      <Overview variant="page" onOpen={handleOpenDocument} onNew={handleNewDocument} />
+    );
+  }
+
+  if (view === 'setup') {
+    return <QuickSetup onGenerate={handleSetupGenerated} onCancel={() => setView('overview')} />;
+  }
+
   return (
     <div className="app-shell">
       <div className="toolbar no-print">
         <div className="toolbar-group">
-          <label>
-            LV-Typ:
-            <select value={lvType} onChange={(e) => handleTemplateChange(e.target.value)}>
-              {templateOptions.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <label>
             Zusatzleistung hinzufügen:
             <select
@@ -224,7 +225,7 @@ export default function App() {
           <button onClick={handleSave} disabled={saveStatus === 'saving'}>
             {saveStatus === 'saving' ? 'Speichert...' : saveStatus === 'saved' ? '✓ Gespeichert' : 'Speichern'}
           </button>
-          <button onClick={() => setShowOverview(true)}>Übersicht</button>
+          <button onClick={() => setView('overview')}>Übersicht</button>
         </div>
       </div>
 
@@ -262,16 +263,8 @@ export default function App() {
           datum={datum}
           intervallInfo={intervallInfo}
           sections={sections}
-          lvTypeLabel={templates[lvType]?.label || ''}
+          initialContact={customer}
           onOfferCreated={handleOfferCreated}
-        />
-      )}
-
-      {showOverview && (
-        <Overview
-          onClose={() => setShowOverview(false)}
-          onOpen={handleOpenDocument}
-          onNew={handleNewDocument}
         />
       )}
 

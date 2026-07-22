@@ -50,24 +50,28 @@ export default function SevDeskModal({
   datum,
   intervallInfo,
   sections,
-  lvTypeLabel,
+  initialContact,
   onOfferCreated,
 }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [tokenFromServer, setTokenFromServer] = useState(false);
 
-  const [kunde, setKunde] = useState('');
+  const [kunde, setKunde] = useState(() => (initialContact?.id ? initialContact.name : ''));
   const [contactSuggestions, setContactSuggestions] = useState([]);
-  const [selectedContact, setSelectedContact] = useState(null);
-  const [selectedContactAddress, setSelectedContactAddress] = useState(null);
+  const [selectedContact, setSelectedContact] = useState(() =>
+    initialContact?.id ? { id: initialContact.id, name: initialContact.name } : null
+  );
+  const [selectedContactAddress, setSelectedContactAddress] = useState(() =>
+    initialContact?.id ? { street: initialContact.street, zip: initialContact.zip, city: initialContact.city } : null
+  );
   const [showSuggestions, setShowSuggestions] = useState(false);
   const searchTimer = useRef(null);
 
-  const [showNewContact, setShowNewContact] = useState(false);
-  const [ncFirma, setNcFirma] = useState('');
-  const [ncStrasse, setNcStrasse] = useState('');
-  const [ncPlz, setNcPlz] = useState('');
-  const [ncStadt, setNcStadt] = useState('');
+  const [showNewContact, setShowNewContact] = useState(() => Boolean(initialContact && !initialContact.id));
+  const [ncFirma, setNcFirma] = useState(() => (!initialContact?.id ? initialContact?.name || '' : ''));
+  const [ncStrasse, setNcStrasse] = useState(() => (!initialContact?.id ? initialContact?.street || '' : ''));
+  const [ncPlz, setNcPlz] = useState(() => (!initialContact?.id ? initialContact?.zip || '' : ''));
+  const [ncStadt, setNcStadt] = useState(() => (!initialContact?.id ? initialContact?.city || '' : ''));
   const [ncEmail, setNcEmail] = useState('');
 
   const [offerNumber, setOfferNumber] = useState('');

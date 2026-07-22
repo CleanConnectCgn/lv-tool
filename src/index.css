@@ -465,6 +465,64 @@ tr.drag-over td {
   width: 640px;
 }
 
+.overview-page {
+  display: flex;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.overview-page-card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 28px 32px;
+  width: 720px;
+  max-width: 100%;
+}
+
+.overview-page-card h2 {
+  margin-top: 0;
+  font-size: 22px;
+  color: var(--ink);
+}
+
+.quick-setup-card {
+  max-width: 560px;
+}
+
+.quick-setup-static-item {
+  font-size: 13px;
+  color: var(--gray);
+  margin-bottom: 8px;
+}
+
+.quick-setup-checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.quick-setup-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink);
+}
+
+.quick-setup-suboptions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-left: 26px;
+  margin: 2px 0 6px;
+}
+
+.quick-setup-sub-field {
+  padding-left: 26px;
+  max-width: 220px;
+}
+
 .overview-actions {
   margin-bottom: 14px;
 }

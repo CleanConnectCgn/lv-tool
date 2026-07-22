@@ -16,6 +16,7 @@ function buildIntervalOptions() {
       opts.push({ value: `${col}:${val}`, label: `${COLUMN_LABELS[col]} ${val}` });
     });
   });
+  opts.push({ value: 'aufAnfrage:Ja', label: 'Auf Anfrage' });
   return opts;
 }
 const INTERVAL_OPTIONS = buildIntervalOptions();
