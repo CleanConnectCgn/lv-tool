@@ -187,6 +187,7 @@ export default function App() {
           onClose={() => setShowSevDesk(false)}
           objekt={objekt}
           datum={datum}
+          intervallInfo={intervallInfo}
           sections={sections}
           lvTypeLabel={templates[lvType]?.label || ''}
         />

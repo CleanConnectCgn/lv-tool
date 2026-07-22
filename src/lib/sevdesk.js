@@ -48,6 +48,8 @@ export async function searchContacts(token, query) {
       id: c.id,
       name: (c.name || `${c.surename || ''} ${c.familyname || ''}`.trim()),
       city: c.addresses?.[0]?.city || '',
+      gender: c.gender || null,
+      familyname: c.familyname || null,
     }))
     .filter((c) => c.name.toLowerCase().includes(q));
 }
@@ -105,20 +107,21 @@ function isGlasSection(title) {
   return t.includes('glas') || t.includes('lamell');
 }
 
-const COLUMN_LABELS = { woechentlich: 'Wöchentlich', monatlich: 'Monatlich', jaehrlich: 'Jährlich' };
+function formatDateDE(isoStr) {
+  if (!isoStr) return '';
+  const [y, m, d] = isoStr.split('-');
+  return `${d}.${m}.${y}`;
+}
 
-function sectionText(section) {
-  return section.rows
-    .filter((r) => r.text?.trim())
-    .map((row) => {
-      const interval = row.bedarf
-        ? 'Bei Bedarf'
-        : row.intervalColumn
-        ? `${COLUMN_LABELS[row.intervalColumn]}: ${row.intervalValue}`
-        : '';
-      return [row.text, interval, row.bemerkung].filter(Boolean).join(' | ');
-    })
-    .join('\n');
+// Kurzer Positionstext fürs Angebot: Preisart, Intervall, Objekt, Verweis
+// auf das beigefügte Leistungsverzeichnis - nicht der komplette LV-Inhalt.
+function positionText({ priceLabel, intervalLabel, objekt, standDatum }) {
+  return [
+    priceLabel,
+    `→ Reinigungsintervall: ${intervalLabel}`,
+    `→ Objekt: ${objekt || 'Objekt'}`,
+    `→ Gemäß beigefügtem Leistungsverzeichnis (Stand: ${formatDateDE(standDatum)})`,
+  ].join('\n');
 }
 
 export async function createOffer(token, {
@@ -132,6 +135,9 @@ export async function createOffer(token, {
   sections,
   nettobetragUHR,
   nettobetragGlas,
+  objekt,
+  intervallInfo,
+  standDatum,
 }) {
   const userId = await getSevUserId(token).catch(() => null);
   const orderDate = Math.floor((offerDate ? new Date(offerDate) : new Date()).getTime() / 1000);
@@ -145,7 +151,12 @@ export async function createOffer(token, {
       objectName: 'OrderPos',
       mapAll: 'true',
       name: 'Unterhaltsreinigung',
-      text: uhrSections.map((s) => `${s.title}:\n${sectionText(s)}`).join('\n\n'),
+      text: positionText({
+        priceLabel: 'Monatlicher Pauschalpreis',
+        intervalLabel: intervallInfo || 'laut Leistungsverzeichnis',
+        objekt,
+        standDatum,
+      }),
       price: Number(nettobetragUHR) || 0,
       priceNet: Number(nettobetragUHR) || 0,
       quantity: 1,
@@ -160,7 +171,12 @@ export async function createOffer(token, {
       objectName: 'OrderPos',
       mapAll: 'true',
       name: 'Glasreinigung',
-      text: glasSections.map((s) => `${s.title}:\n${sectionText(s)}`).join('\n\n'),
+      text: positionText({
+        priceLabel: 'Pauschalpreis pro Einsatz',
+        intervalLabel: 'auf Anfrage',
+        objekt,
+        standDatum,
+      }),
       price: Number(nettobetragGlas) || 0,
       priceNet: Number(nettobetragGlas) || 0,
       quantity: 1,
@@ -168,6 +184,7 @@ export async function createOffer(token, {
       taxRate: 19,
       positionNumber: 2,
       discount: 0,
+      optional: true,
     });
   }
 

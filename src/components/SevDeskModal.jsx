@@ -22,7 +22,20 @@ function isGlasSection(title) {
 
 const COLUMN_LABELS = { woechentlich: 'Wöchentlich', monatlich: 'Monatlich', jaehrlich: 'Jährlich' };
 
-export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeLabel }) {
+function escapeHtml(str) {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function salutationForContact(c) {
+  if (c?.gender === 'm' && c.familyname) return `Sehr geehrter Herr ${c.familyname},`;
+  if (c?.gender === 'w' && c.familyname) return `Sehr geehrte Frau ${c.familyname},`;
+  return 'Sehr geehrte Damen und Herren,';
+}
+
+export default function SevDeskModal({ onClose, objekt, datum, intervallInfo, sections, lvTypeLabel }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [tokenFromServer, setTokenFromServer] = useState(false);
 
@@ -136,6 +149,7 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
     setKunde(c.name);
     setShowSuggestions(false);
     setShowNewContact(false);
+    setAnrede(salutationForContact(c));
   }
 
   async function handleSubmit() {
@@ -172,8 +186,18 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
       if (!contactId) throw new Error('Kunde konnte nicht ermittelt oder erstellt werden.');
 
       const header = `Angebot ${offerNumber}`;
-      const headText = [anrede, einleitung].filter(Boolean).join('\n\n');
-      const footText = [
+      // sevDesk speichert Kopf-/Fußtext als HTML: jeder Absatz braucht ein
+      // eigenes <p>, sonst werden Zeilenumbrüche beim Rendern verschluckt
+      // und Sätze laufen ohne Leerzeichen ineinander.
+      const asParagraphs = (blocks) =>
+        blocks
+          .filter(Boolean)
+          .flatMap((b) => b.split(/\n\s*\n/))
+          .filter((p) => p.trim())
+          .map((p) => `<p>${escapeHtml(p.trim()).replace(/\n/g, '<br>')}</p>`)
+          .join('');
+      const headText = asParagraphs([anrede, einleitung]);
+      const footText = asParagraphs([
         hinweis,
         zusatzhinweis.trim(),
         `Gültigkeit: Dieses Angebot ist bis zum ${formatDateDE(gueltigBis)} gültig.`,
@@ -181,9 +205,7 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
         vertragstext,
         dankText,
         grussformel,
-      ]
-        .filter(Boolean)
-        .join('\n\n');
+      ]);
 
       const offer = await createOffer(token, {
         contactId,
@@ -196,6 +218,9 @@ export default function SevDeskModal({ onClose, objekt, datum, sections, lvTypeL
         sections,
         nettobetragUHR,
         nettobetragGlas,
+        objekt,
+        intervallInfo,
+        standDatum: datum,
       });
       const newOfferId = offer?.id;
       if (!newOfferId) throw new Error('Angebot konnte nicht erstellt werden.');
