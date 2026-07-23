@@ -312,7 +312,14 @@ export default function App() {
           html2canvas: { scale: 2 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css', 'legacy'] },
-        }).from(el).toPdf().get('pdf').then((pdf) => drawPdfFurniture(pdf));
+        }).from(el).toPdf();
+        await worker.get('pdf').then((pdf) => {
+          try {
+            drawPdfFurniture(pdf);
+          } catch {
+            // Fußzeile ist optional - Export darf daran nicht scheitern.
+          }
+        });
         const blob = await worker.output('blob');
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');

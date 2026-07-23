@@ -1154,78 +1154,61 @@ body.exporting-pdf .print-view {
   page-break-after: avoid;
 }
 
-.pv-table {
-  border: 1px solid var(--line-strong);
-}
-
 .pv-table thead th {
   background: var(--teal-bg);
   color: var(--teal-dark);
-  font-size: 9px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.4px;
   font-weight: 700;
-  padding: 10px 6px;
+  padding: 9px 6px;
   text-align: center;
   white-space: nowrap;
   border-bottom: 2px solid var(--teal);
-  border-right: 1px solid var(--teal-line);
-}
-
-.pv-table thead th:last-child {
-  border-right: none;
 }
 
 .pv-table thead th.pv-col-desc,
-.pv-table td.pv-col-desc,
-.pv-table thead th.pv-col-remarks,
-.pv-table td.pv-col-remarks {
+.pv-table td.pv-col-desc {
   text-align: left;
 }
 
 .pv-table td {
   border-bottom: 1px solid var(--line);
-  border-right: 1px solid var(--line);
-  padding: 7px 8px;
-  font-size: 12px;
+  padding: 5px 6px;
+  font-size: 12.5px;
   text-align: center;
-  vertical-align: middle;
-}
-
-.pv-table td:last-child {
-  border-right: none;
 }
 
 .pv-col-desc {
-  width: 32%;
+  width: 30%;
 }
 
 .pv-col-check {
-  width: 10%;
-}
-
-.pv-col-interval {
   width: 11%;
 }
 
+.pv-col-interval {
+  width: 10%;
+  border-left: 1px solid #f0f2f3;
+}
+
 .pv-col-remarks {
-  width: 24%;
+  width: 25%;
+  text-align: left;
   font-size: 11px;
   color: var(--gray);
+  white-space: nowrap;
 }
 
 .pv-section-row td {
   background: var(--sec-bg);
   font-weight: 700;
-  color: var(--teal-dark);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  color: var(--ink);
   text-align: left;
-  padding: 9px 8px 9px 16px;
-  font-size: 12px;
+  padding: 8px 8px 8px 14px;
+  font-size: 13.5px;
   border-top: 1px solid var(--line-strong);
   border-bottom: 1px solid var(--line-strong);
-  border-right: none;
   position: relative;
 }
 
