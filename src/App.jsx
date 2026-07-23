@@ -402,11 +402,13 @@ export default function App() {
       </div>
 
       <PrintView
-        lvTitle={lvTitle}
         objekt={objekt}
         datum={datum}
         intervallInfo={intervallInfo}
-        sections={sections}
+        docs={[
+          { lvTitle: mainDoc.lvTitle, sections: mainDoc.sections },
+          ...childDocs.map((c) => ({ lvTitle: c.lvTitle, sections: c.sections })),
+        ]}
       />
 
       {showSevDesk && (
@@ -415,7 +417,15 @@ export default function App() {
           objekt={objekt}
           datum={datum}
           intervallInfo={intervallInfo}
-          sections={sections}
+          docGroups={[
+            { key: 'main', label: 'Unterhaltsreinigung', sections: mainDoc.sections, optional: false },
+            ...childDocs.map((c) => ({
+              key: c.docType,
+              label: c.lvTitle.replace('Leistungsverzeichnis ', ''),
+              sections: c.sections,
+              optional: true,
+            })),
+          ]}
           initialContact={customer}
           onOfferCreated={handleOfferCreated}
         />

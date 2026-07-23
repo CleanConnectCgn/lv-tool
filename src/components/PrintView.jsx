@@ -12,9 +12,9 @@ function CheckBox({ on }) {
   return <span className={`pv-check-box${on ? ' on' : ''}`}>{on ? '✓' : ''}</span>;
 }
 
-export default function PrintView({ lvTitle, objekt, datum, intervallInfo, sections }) {
+function DocPage({ lvTitle, objekt, datum, intervallInfo, sections, pageBreakBefore }) {
   return (
-    <div className="print-view" id="lv-print-view">
+    <div className={`pv-page${pageBreakBefore ? ' pv-page-break' : ''}`}>
       <div className="pv-doc-header">
         <div className="pv-title-row">
           <div className="pv-title-cell">
@@ -104,9 +104,32 @@ export default function PrintView({ lvTitle, objekt, datum, intervallInfo, secti
       </table>
       <div className="pv-footer">
         <span className="pv-footer-brand">cleanconnect.de</span>
-        <span>Seite 1</span>
+        <span>{lvTitle}</span>
         <span>Clean Connect Gebäudereinigung UG</span>
       </div>
+    </div>
+  );
+}
+
+// docs: [{ lvTitle, sections }] - jedes verknüpfte Dokument (Hauptdokument +
+// z. B. Glasreinigung/Winterdienst) bekommt seine eigene Seite mit eigenem
+// Überschriften-Layout, damit der PDF-Export alle Leistungsverzeichnisse in
+// einer Datei zusammenfasst statt nur die aktive Editor-Ansicht.
+export default function PrintView({ lvTitle, objekt, datum, intervallInfo, sections, docs }) {
+  const pages = docs && docs.length > 0 ? docs : [{ lvTitle, sections }];
+  return (
+    <div className="print-view" id="lv-print-view">
+      {pages.map((doc, i) => (
+        <DocPage
+          key={i}
+          lvTitle={doc.lvTitle}
+          objekt={objekt}
+          datum={datum}
+          intervallInfo={intervallInfo}
+          sections={doc.sections}
+          pageBreakBefore={i > 0}
+        />
+      ))}
     </div>
   );
 }

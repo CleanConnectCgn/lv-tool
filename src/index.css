@@ -1050,6 +1050,15 @@ body.exporting-pdf .print-view {
   pointer-events: auto;
 }
 
+.pv-page {
+  break-inside: avoid-page;
+}
+
+.pv-page-break {
+  page-break-before: always;
+  break-before: page;
+}
+
 .pv-doc-header {
   border: 1px solid var(--line-strong);
   border-radius: 10px;
@@ -1131,6 +1140,22 @@ body.exporting-pdf .print-view {
 .pv-table {
   width: 100%;
   border-collapse: collapse;
+}
+
+.pv-table thead {
+  display: table-header-group;
+}
+
+.pv-table tr {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pv-section-row {
+  break-inside: avoid;
+  break-after: avoid;
+  page-break-inside: avoid;
+  page-break-after: avoid;
 }
 
 .pv-table thead th {
@@ -1544,11 +1569,5 @@ body.exporting-pdf .print-view {
     width: 100%;
     opacity: 1;
     z-index: auto;
-  }
-  .pv-section-row {
-    break-inside: avoid;
-  }
-  .pv-table tr {
-    break-inside: avoid;
   }
 }

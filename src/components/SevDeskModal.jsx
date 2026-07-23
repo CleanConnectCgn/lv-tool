@@ -24,13 +24,6 @@ function formatDateDE(isoStr) {
   return `${d}.${m}.${y}`;
 }
 
-function isGlasSection(title) {
-  const t = (title || '').toLowerCase();
-  return t.includes('glas') || t.includes('lamell');
-}
-
-const COLUMN_LABELS = { woechentlich: 'Wöchentlich', monatlich: 'Monatlich', jaehrlich: 'Jährlich' };
-
 function escapeHtml(str) {
   return (str || '')
     .replace(/&/g, '&amp;')
@@ -49,7 +42,7 @@ export default function SevDeskModal({
   objekt,
   datum,
   intervallInfo,
-  sections,
+  docGroups,
   initialContact,
   onOfferCreated,
 }) {
@@ -81,8 +74,11 @@ export default function SevDeskModal({
   const [leistungsbeginn, setLeistungsbeginn] = useState(() => new Date().toISOString().slice(0, 10));
   const [gueltigBis, setGueltigBis] = useState(() => addWeeks(new Date().toISOString().slice(0, 10), 6));
   const [zahlungsziel, setZahlungsziel] = useState('14');
-  const [nettobetragUHR, setNettobetragUHR] = useState('');
-  const [nettobetragGlas, setNettobetragGlas] = useState('');
+  const [amounts, setAmounts] = useState({});
+
+  function setAmount(key, value) {
+    setAmounts((prev) => ({ ...prev, [key]: value }));
+  }
 
   const [showTexts, setShowTexts] = useState(true);
   const [anrede, setAnrede] = useState('Sehr geehrte Damen und Herren,');
@@ -109,8 +105,7 @@ export default function SevDeskModal({
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState('');
 
-  const gesamtPreis = (Number(nettobetragUHR) || 0) + (Number(nettobetragGlas) || 0);
-  const hasGlasSections = sections.some((s) => isGlasSection(s.title));
+  const gesamtPreis = (docGroups || []).reduce((sum, g) => sum + (Number(amounts[g.key]) || 0), 0);
 
   useEffect(() => {
     if (token && !tokenFromServer) localStorage.setItem(TOKEN_KEY, token);
@@ -254,17 +249,21 @@ export default function SevDeskModal({
         grussformel,
       ]);
 
+      const contactAddress = showNewContact
+        ? { street: ncStrasse.trim(), zip: ncPlz.trim(), city: ncStadt.trim() }
+        : selectedContactAddress;
+
       const offer = await createOffer(token, {
         contactId,
+        contactName: kundeName,
+        contactAddress,
         header,
         headText,
         footText,
         offerNumber,
         offerDate: leistungsbeginn,
         timeToPay: Number(zahlungsziel) || 14,
-        sections,
-        nettobetragUHR,
-        nettobetragGlas,
+        groups: (docGroups || []).map((g) => ({ ...g, amount: amounts[g.key] })),
         objekt,
         intervallInfo,
         standDatum: datum,
@@ -288,8 +287,7 @@ export default function SevDeskModal({
         gueltigBis,
         zahlungsziel,
         kuendigungsfristMonate,
-        nettobetragUHR,
-        nettobetragGlas,
+        amounts,
         texts: { anrede, einleitung, hinweis, zusatzhinweis, vertragstext, dankText, grussformel },
         resultLink: `https://my.sevdesk.de/om/detail/type/AN/id/${newOfferId}`,
       });
@@ -330,7 +328,9 @@ export default function SevDeskModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal sevdesk-modal" onClick={(e) => e.stopPropagation()}>
         <h2>An sevDesk senden</h2>
-        <p className="modal-hint">Erstellt ein Angebot in sevDesk mit allen Positionen aus diesem LV.</p>
+        <p className="modal-hint">
+          Erstellt EIN Angebot in sevDesk mit einer Position je verknüpftem Leistungsverzeichnis.
+        </p>
 
         <label className="modal-field">
           sevDesk API Token
@@ -504,26 +504,21 @@ export default function SevDeskModal({
             </label>
 
             <div className="modal-subheading">Preise</div>
-            <label className="modal-field">
-              Nettobetrag Unterhaltsreinigung (€)
-              <input
-                type="number"
-                value={nettobetragUHR}
-                onChange={(e) => setNettobetragUHR(e.target.value)}
-                placeholder="0.00"
-              />
-            </label>
-            {hasGlasSections && (
-              <label className="modal-field">
-                Nettobetrag Glasreinigung (€)
+            <p className="modal-hint">
+              Alle verknüpften Leistungsverzeichnisse werden als Positionen in EINEM Angebot
+              zusammengefasst.
+            </p>
+            {(docGroups || []).map((g) => (
+              <label className="modal-field" key={g.key}>
+                Nettobetrag {g.label} (€){g.optional ? ' — optional' : ''}
                 <input
                   type="number"
-                  value={nettobetragGlas}
-                  onChange={(e) => setNettobetragGlas(e.target.value)}
+                  value={amounts[g.key] || ''}
+                  onChange={(e) => setAmount(g.key, e.target.value)}
                   placeholder="0.00"
                 />
               </label>
-            )}
+            ))}
             <div className="price-summary-total">Gesamt: {gesamtPreis.toFixed(2)} €</div>
 
             <hr className="modal-section-divider" />

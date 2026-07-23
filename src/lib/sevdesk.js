@@ -122,11 +122,6 @@ export async function getNextOfferNumber(token) {
   return data?.objects || null;
 }
 
-function isGlasSection(title) {
-  const t = (title || '').toLowerCase();
-  return t.includes('glas') || t.includes('lamell');
-}
-
 function formatDateDE(isoStr) {
   if (!isoStr) return '';
   const [y, m, d] = isoStr.split('-');
@@ -144,17 +139,21 @@ function positionText({ priceLabel, intervalLabel, objekt, standDatum }) {
   ].join('\n');
 }
 
+// Ein "Angebot" fasst mehrere Leistungsgruppen (Hauptleistung + optionale
+// verknüpfte Leistungen wie Glasreinigung/Winterdienst) in EINEM sevDesk
+// Order zusammen - jede Gruppe wird zu genau einer OrderPos.
+// groups: [{ key, label, sections, optional, amount, priceLabel, intervalLabel }]
 export async function createOffer(token, {
   contactId,
+  contactName,
+  contactAddress,
   header,
   headText,
   footText,
   offerNumber,
   offerDate,
   timeToPay,
-  sections,
-  nettobetragUHR,
-  nettobetragGlas,
+  groups,
   objekt,
   intervallInfo,
   standDatum,
@@ -163,51 +162,29 @@ export async function createOffer(token, {
   const userId = contactPersonId || (await getSevUserId(token).catch(() => null));
   const orderDate = Math.floor((offerDate ? new Date(offerDate) : new Date()).getTime() / 1000);
 
-  const uhrSections = (sections || []).filter((s) => !isGlasSection(s.title));
-  const glasSections = (sections || []).filter((s) => isGlasSection(s.title));
+  const activeGroups = (groups || []).filter(
+    (g) => g.sections?.some((s) => s.rows?.some((r) => (r.text || '').trim()))
+  );
 
-  const orderPosSave = [];
-  if (uhrSections.length > 0) {
-    orderPosSave.push({
-      objectName: 'OrderPos',
-      mapAll: 'true',
-      name: 'Unterhaltsreinigung',
-      text: positionText({
-        priceLabel: 'Monatlicher Pauschalpreis',
-        intervalLabel: intervallInfo || 'laut Leistungsverzeichnis',
-        objekt,
-        standDatum,
-      }),
-      price: Number(nettobetragUHR) || 0,
-      priceNet: Number(nettobetragUHR) || 0,
-      quantity: 1,
-      unity: { id: '7', objectName: 'Unity' },
-      taxRate: 19,
-      positionNumber: 1,
-      discount: 0,
-    });
-  }
-  if (glasSections.length > 0) {
-    orderPosSave.push({
-      objectName: 'OrderPos',
-      mapAll: 'true',
-      name: 'Glasreinigung',
-      text: positionText({
-        priceLabel: 'Pauschalpreis pro Einsatz',
-        intervalLabel: 'auf Anfrage',
-        objekt,
-        standDatum,
-      }),
-      price: Number(nettobetragGlas) || 0,
-      priceNet: Number(nettobetragGlas) || 0,
-      quantity: 1,
-      unity: { id: '7', objectName: 'Unity' },
-      taxRate: 19,
-      positionNumber: 2,
-      discount: 0,
-      optional: true,
-    });
-  }
+  const orderPosSave = activeGroups.map((g, i) => ({
+    objectName: 'OrderPos',
+    mapAll: 'true',
+    name: g.label,
+    text: positionText({
+      priceLabel: g.priceLabel || (g.optional ? 'Pauschalpreis pro Einsatz' : 'Monatlicher Pauschalpreis'),
+      intervalLabel: g.intervalLabel || (g.optional ? 'auf Anfrage' : (intervallInfo || 'laut Leistungsverzeichnis')),
+      objekt,
+      standDatum,
+    }),
+    price: Number(g.amount) || 0,
+    priceNet: Number(g.amount) || 0,
+    quantity: 1,
+    unity: { id: '7', objectName: 'Unity' },
+    taxRate: 19,
+    positionNumber: i + 1,
+    discount: 0,
+    ...(g.optional ? { optional: true } : {}),
+  }));
 
   // Fallback: mindestens eine Dummy-Position damit sevDesk nicht abbricht
   if (orderPosSave.length === 0) {
@@ -225,6 +202,12 @@ export async function createOffer(token, {
       discount: 0,
     });
   }
+
+  const addressLines = [
+    contactName,
+    contactAddress?.street,
+    [contactAddress?.zip, contactAddress?.city].filter(Boolean).join(' '),
+  ].filter(Boolean);
 
   const orderParams = {
     order: {
@@ -246,6 +229,12 @@ export async function createOffer(token, {
       showNet: true,
       taxRule: { id: '1', objectName: 'TaxRule' },
       propertyUseNewCalculation: 1,
+      addressName: contactName || '',
+      addressStreet: contactAddress?.street || '',
+      addressZip: contactAddress?.zip || '',
+      addressCity: contactAddress?.city || '',
+      addressCountry: { id: '1', objectName: 'StaticCountry' },
+      address: addressLines.join('\n'),
       ...(userId ? { contactPerson: { id: userId, objectName: 'SevUser' } } : {}),
     },
     orderPosSave,
