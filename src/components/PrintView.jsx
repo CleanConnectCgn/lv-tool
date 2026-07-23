@@ -12,7 +12,7 @@ function CheckBox({ on }) {
   return <span className={`pv-check-box${on ? ' on' : ''}`}>{on ? '✓' : ''}</span>;
 }
 
-function DocPage({ lvTitle, objekt, datum, intervallInfo, sections, pageBreakBefore }) {
+function DocPage({ lvTitle, objekt, datum, sections, pageBreakBefore }) {
   return (
     <div className={`pv-page${pageBreakBefore ? ' pv-page-break' : ''}`}>
       <div className="pv-doc-header">
@@ -30,9 +30,8 @@ function DocPage({ lvTitle, objekt, datum, intervallInfo, sections, pageBreakBef
             <span className="pv-meta-label">Objekt</span>
             {objekt}
           </div>
-          <div className="pv-meta-cell pv-meta-center">
+          <div className="pv-meta-cell pv-meta-center pv-meta-static">
             <span className="pv-meta-label">Reinigung Intervalle</span>
-            {intervallInfo}
           </div>
           <div className="pv-meta-cell pv-meta-right">
             <span className="pv-meta-label">Stand</span>
@@ -115,7 +114,7 @@ function DocPage({ lvTitle, objekt, datum, intervallInfo, sections, pageBreakBef
 // z. B. Glasreinigung/Winterdienst) bekommt seine eigene Seite mit eigenem
 // Überschriften-Layout, damit der PDF-Export alle Leistungsverzeichnisse in
 // einer Datei zusammenfasst statt nur die aktive Editor-Ansicht.
-export default function PrintView({ lvTitle, objekt, datum, intervallInfo, sections, docs }) {
+export default function PrintView({ lvTitle, objekt, datum, sections, docs }) {
   const pages = docs && docs.length > 0 ? docs : [{ lvTitle, sections }];
   return (
     <div className="print-view" id="lv-print-view">
@@ -125,7 +124,6 @@ export default function PrintView({ lvTitle, objekt, datum, intervallInfo, secti
           lvTitle={doc.lvTitle}
           objekt={objekt}
           datum={datum}
-          intervallInfo={intervallInfo}
           sections={doc.sections}
           pageBreakBefore={i > 0}
         />

@@ -390,8 +390,6 @@ export default function App() {
           setObjekt={setObjekt}
           datum={datum}
           setDatum={setDatum}
-          intervallInfo={intervallInfo}
-          setIntervallInfo={setIntervallInfo}
         />
         <LVEditor sections={sections} setSections={setSections} />
         <div className="doc-footer">
@@ -404,7 +402,6 @@ export default function App() {
       <PrintView
         objekt={objekt}
         datum={datum}
-        intervallInfo={intervallInfo}
         docs={[
           { lvTitle: mainDoc.lvTitle, sections: mainDoc.sections },
           ...childDocs.map((c) => ({ lvTitle: c.lvTitle, sections: c.sections })),

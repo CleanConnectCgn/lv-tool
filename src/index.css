@@ -1050,10 +1050,6 @@ body.exporting-pdf .print-view {
   pointer-events: auto;
 }
 
-.pv-page {
-  break-inside: avoid-page;
-}
-
 .pv-page-break {
   page-break-before: always;
   break-before: page;
@@ -1182,25 +1178,26 @@ body.exporting-pdf .print-view {
 }
 
 .pv-col-desc {
-  width: 36%;
+  width: 30%;
   text-align: left;
 }
 
 .pv-col-check {
-  width: 10%;
+  width: 8%;
 }
 
 .pv-col-interval {
-  width: 12%;
+  width: 10%;
   border-left: 1px solid #f0f2f3;
 }
 
 .pv-col-remarks {
-  width: 18%;
+  width: 26%;
   text-align: left;
   font-style: italic;
   font-size: 11px;
   color: var(--gray);
+  white-space: nowrap;
 }
 
 .pv-section-row td {

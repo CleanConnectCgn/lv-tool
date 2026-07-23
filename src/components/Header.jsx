@@ -8,8 +8,6 @@ export default function Header({
   setObjekt,
   datum,
   setDatum,
-  intervallInfo,
-  setIntervallInfo,
 }) {
   return (
     <div className="doc-header">
@@ -36,14 +34,8 @@ export default function Header({
             placeholder="Objektname / Adresse"
           />
         </div>
-        <div className="doc-meta-cell doc-meta-center">
+        <div className="doc-meta-cell doc-meta-center doc-meta-static">
           <span>Reinigung Intervalle</span>
-          <input
-            type="text"
-            value={intervallInfo}
-            onChange={(e) => setIntervallInfo(e.target.value)}
-            placeholder="z.B. lt. Leistungsverzeichnis"
-          />
         </div>
         <div className="doc-meta-cell doc-meta-right">
           <span>Stand</span>
