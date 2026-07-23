@@ -28,6 +28,49 @@ function blankMainDoc() {
   return { id: null, lvTitle: 'Leistungsverzeichnis Unterhaltsreinigung', sections: [] };
 }
 
+// Firmenangaben für die Fußzeile - identisch zu unseren sevDesk-Angeboten
+// (AN-...), damit LV und Angebot einheitlich wirken.
+const COMPANY_FOOTER_COLS = [
+  ['Clean Connect Gebäudereinigung UG', 'Berliner Straße 957', '51069 Köln', 'Deutschland'],
+  ['Tel. +49 221 95490625', 'E-Mail service@reinigungsdienst-', 'cleanconnect.de', 'Web www.cleanconnect.de'],
+  ['Amtsgericht Köln', 'HR-Nr. HRB 119725', 'USt.-ID DE369309039', 'Steuer-Nr. 218/5706/1994', 'Geschäftsführung Fynn Laubkermeier'],
+  ['Bank Sparkasse KölnBonn', 'Konto 1901211506', 'BLZ 37050198', 'IBAN DE79 3705 0198 1901 2115 06', 'BIC COLSDE33XXX'],
+];
+
+// Zeichnet auf JEDER Seite des exportierten PDFs eine einheitliche
+// Kopfzeile (Brand) und eine Fußzeile mit vollständiger Firmenanschrift.
+function drawPdfFurniture(pdf) {
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const total = pdf.internal.getNumberOfPages();
+  const colX = [10, 60, 112, 158];
+  for (let p = 1; p <= total; p++) {
+    pdf.setPage(p);
+    pdf.setFont('helvetica', 'normal');
+
+    // Kopfzeile: schmale Markenzeile + Seitenzahl
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(150);
+    pdf.text('Clean Connect Gebäudereinigung · Berliner Straße 957 · 51069 Köln', 10, 8);
+    pdf.text(`Seite ${p} / ${total}`, pageW - 10, 8, { align: 'right' });
+
+    // Fußzeile: Trennlinie + 4 Spalten Firmendaten
+    const footTop = pageH - 25;
+    pdf.setDrawColor(205);
+    pdf.setLineWidth(0.2);
+    pdf.line(10, footTop, pageW - 10, footTop);
+    pdf.setFontSize(6.5);
+    pdf.setTextColor(120);
+    COMPANY_FOOTER_COLS.forEach((lines, ci) => {
+      let y = footTop + 4;
+      lines.forEach((ln) => {
+        pdf.text(ln, colX[ci], y);
+        y += 2.7;
+      });
+    });
+  }
+}
+
 export default function App() {
   // 'overview' (Startseite) | 'setup' (Quick-Setup-Assistent) | 'editor'
   const [view, setView] = useState('overview');
@@ -264,13 +307,13 @@ export default function App() {
       document.body.classList.add('exporting-pdf');
       try {
         const worker = html2pdf().set({
-          margin: 10,
+          margin: [14, 10, 28, 10],
           filename,
           html2canvas: { scale: 2 },
           jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
           pagebreak: { mode: ['css', 'legacy'] },
-        }).from(el);
-        const blob = await worker.toPdf().output('blob');
+        }).from(el).toPdf().get('pdf').then((pdf) => drawPdfFurniture(pdf));
+        const blob = await worker.output('blob');
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;

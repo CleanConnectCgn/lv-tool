@@ -101,11 +101,6 @@ function DocPage({ lvTitle, objekt, datum, sections, pageBreakBefore }) {
           ))}
         </tbody>
       </table>
-      <div className="pv-footer">
-        <span className="pv-footer-brand">cleanconnect.de</span>
-        <span>{lvTitle}</span>
-        <span>Clean Connect Gebäudereinigung UG</span>
-      </div>
     </div>
   );
 }
