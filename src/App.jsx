@@ -28,49 +28,6 @@ function blankMainDoc() {
   return { id: null, lvTitle: 'Leistungsverzeichnis Unterhaltsreinigung', sections: [] };
 }
 
-// Firmenangaben für die Fußzeile - identisch zu unseren sevDesk-Angeboten
-// (AN-...), damit LV und Angebot einheitlich wirken.
-const COMPANY_FOOTER_COLS = [
-  ['Clean Connect Gebäudereinigung UG', 'Berliner Straße 957', '51069 Köln', 'Deutschland'],
-  ['Tel. +49 221 95490625', 'E-Mail service@reinigungsdienst-', 'cleanconnect.de', 'Web www.cleanconnect.de'],
-  ['Amtsgericht Köln', 'HR-Nr. HRB 119725', 'USt.-ID DE369309039', 'Steuer-Nr. 218/5706/1994', 'Geschäftsführung Fynn Laubkermeier'],
-  ['Bank Sparkasse KölnBonn', 'Konto 1901211506', 'BLZ 37050198', 'IBAN DE79 3705 0198 1901 2115 06', 'BIC COLSDE33XXX'],
-];
-
-// Zeichnet auf JEDER Seite des exportierten PDFs eine einheitliche
-// Kopfzeile (Brand) und eine Fußzeile mit vollständiger Firmenanschrift.
-function drawPdfFurniture(pdf) {
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  const total = pdf.internal.getNumberOfPages();
-  const colX = [10, 60, 112, 158];
-  for (let p = 1; p <= total; p++) {
-    pdf.setPage(p);
-    pdf.setFont('helvetica', 'normal');
-
-    // Kopfzeile: schmale Markenzeile + Seitenzahl
-    pdf.setFontSize(6.5);
-    pdf.setTextColor(150);
-    pdf.text('Clean Connect Gebäudereinigung · Berliner Straße 957 · 51069 Köln', 10, 8);
-    pdf.text(`Seite ${p} / ${total}`, pageW - 10, 8, { align: 'right' });
-
-    // Fußzeile: Trennlinie + 4 Spalten Firmendaten
-    const footTop = pageH - 25;
-    pdf.setDrawColor(205);
-    pdf.setLineWidth(0.2);
-    pdf.line(10, footTop, pageW - 10, footTop);
-    pdf.setFontSize(6.5);
-    pdf.setTextColor(120);
-    COMPANY_FOOTER_COLS.forEach((lines, ci) => {
-      let y = footTop + 4;
-      lines.forEach((ln) => {
-        pdf.text(ln, colX[ci], y);
-        y += 2.7;
-      });
-    });
-  }
-}
-
 export default function App() {
   // 'overview' (Startseite) | 'setup' (Quick-Setup-Assistent) | 'editor'
   const [view, setView] = useState('overview');
@@ -296,49 +253,29 @@ export default function App() {
 
   useEffect(() => {
     async function exportPdf() {
-      const { default: html2pdf } = await import('html2pdf.js');
-      const el = document.getElementById('lv-print-view');
+      const { generateLvPdfBlob } = await import('./lib/lvPdfExport.js');
       const safeObjekt = (objekt || 'Objekt').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '_');
       const filename = `${lvTitle || 'Leistungsverzeichnis'}_${safeObjekt}_${datum}.pdf`.replace(/\s+/g, '_');
-      // The print-view is normally hidden (opacity:0, position:absolute) and only
-      // becomes visible/static via an @media print rule. html2canvas clones the
-      // DOM without reliably applying that media query, which collapses the
-      // element to zero height. Apply the same overrides directly instead.
-      document.body.classList.add('exporting-pdf');
-      try {
-        const worker = html2pdf().set({
-          margin: [14, 10, 28, 10],
-          filename,
-          html2canvas: { scale: 2 },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-          pagebreak: { mode: ['css', 'legacy'] },
-        }).from(el).toPdf();
-        await worker.get('pdf').then((pdf) => {
-          try {
-            drawPdfFurniture(pdf);
-          } catch {
-            // Fußzeile ist optional - Export darf daran nicht scheitern.
-          }
-        });
-        const blob = await worker.output('blob');
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-        // Zusätzlich im Leistungsverzeichnisse-Ordner auf dem Server ablegen,
-        // damit das PDF auch ohne den Browser-Download wiederauffindbar ist.
-        uploadLvPdf(blob, filename).catch(() => {});
-      } finally {
-        document.body.classList.remove('exporting-pdf');
-      }
+      const exportDocs = [
+        { lvTitle: mainDoc.lvTitle, sections: mainDoc.sections },
+        ...childDocs.map((c) => ({ lvTitle: c.lvTitle, sections: c.sections })),
+      ];
+      const blob = generateLvPdfBlob(exportDocs, { objekt, datum });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      // Zusätzlich im Leistungsverzeichnisse-Ordner auf dem Server ablegen,
+      // damit das PDF auch ohne den Browser-Download wiederauffindbar ist.
+      uploadLvPdf(blob, filename).catch(() => {});
     }
     window.addEventListener('lv-export-pdf', exportPdf);
     return () => window.removeEventListener('lv-export-pdf', exportPdf);
-  }, [objekt, datum, lvTitle]);
+  }, [objekt, datum, lvTitle, mainDoc, childDocs]);
 
   if (view === 'overview') {
     return (
