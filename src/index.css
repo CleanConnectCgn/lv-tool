@@ -1136,6 +1136,7 @@ body.exporting-pdf .print-view {
 .pv-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .pv-table thead {
@@ -1145,6 +1146,17 @@ body.exporting-pdf .print-view {
 .pv-table tr {
   break-inside: avoid;
   page-break-inside: avoid;
+}
+
+/* Ein Bereich (Spaltenkopf + Überschrift + Zeilen) bleibt als Ganzes
+   zusammen und wird nie über einen Seitenumbruch getrennt. */
+.pv-section-block {
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+
+.pv-section-block + .pv-section-block {
+  margin-top: 10px;
 }
 
 .pv-section-row {
