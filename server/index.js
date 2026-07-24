@@ -1189,12 +1189,18 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-const server = app.listen(PORT, () => {
-  console.log(`LV-Tool server läuft auf Port ${PORT}`);
-});
+// Nur beim direkten Start lauschen (nicht beim Import in Tests, z.B. via
+// supertest, das die App ohne offenen Port ansprechen kann).
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const server = app.listen(PORT, () => {
+    console.log(`LV-Tool server läuft auf Port ${PORT}`);
+  });
 
-// Exit cleanly on Railway's redeploy/restart signal instead of letting node
-// get killed mid-request, which npm reports as a crash in the logs.
-process.on('SIGTERM', () => {
-  server.close(() => process.exit(0));
-});
+  // Exit cleanly on Railway's redeploy/restart signal instead of letting node
+  // get killed mid-request, which npm reports as a crash in the logs.
+  process.on('SIGTERM', () => {
+    server.close(() => process.exit(0));
+  });
+}
+
+export default app;

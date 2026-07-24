@@ -187,8 +187,8 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
         const recurrence = newWiederholt ? buildWeeklyRecurrence(newWiederholTage, newWiederholBis) : undefined;
         const event = await createCalendarEvent({
           summary: `${newTitel.trim()} — ${profile.customer?.name || ''}`,
-          start: { dateTime: startDate.toISOString() },
-          end: { dateTime: end },
+          start: { dateTime: startDate.toISOString(), timeZone: 'Europe/Berlin' },
+          end: { dateTime: end, timeZone: 'Europe/Berlin' },
           recurrence,
           customerKey,
           auftragId: auftrag.id,
@@ -249,8 +249,8 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
         new Date(event.start?.dateTime || event.start?.date).getTime();
       const end = new Date(start.getTime() + (durationMs > 0 ? durationMs : 60 * 60 * 1000));
       await updateCalendarEvent(event.id, {
-        start: { dateTime: start.toISOString() },
-        end: { dateTime: end.toISOString() },
+        start: { dateTime: start.toISOString(), timeZone: 'Europe/Berlin' },
+        end: { dateTime: end.toISOString(), timeZone: 'Europe/Berlin' },
       });
       setReschedulingEventId(null);
       loadEvents();
