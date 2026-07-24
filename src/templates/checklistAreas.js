@@ -32,13 +32,16 @@ export const AREA_DEFINITIONS = {
       section('Flur- und Verkehrsbereich', [
         row('Hartböden feucht wischen & Textilbeläge saugen', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Türblätter & Türklinken', { column: 'woechentlich' }),
+        row('Lichtschalter & Steckdosenrahmen desinfizierend abwischen', { column: 'woechentlich' }),
         row('Entfernen von Fingerabdrücken & Schlieren von Innenverglasungen, Türen & Einbauschränken', {
           column: 'woechentlich',
         }),
+        row('Abfallbehälter leeren inkl. Austausch der Beutel', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Fußleisten', { column: 'monatlich', value: '2x' }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
         }),
+        row('Aufzug: Boden, Wände & Bedienfeld desinfizierend reinigen (falls vorhanden)', { bedarf: true }),
       ]),
   },
   empfang: {
@@ -48,9 +51,12 @@ export const AREA_DEFINITIONS = {
         row('Hartböden feucht wischen & Textilbeläge saugen', { column: 'woechentlich' }),
         row('Reinigung der Oberflächen von Arbeits- & Schreibtischen', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Türblätter & Türklinken', { column: 'woechentlich' }),
+        row('Sitzflächen & Wartebereich-Möbel desinfizierend abwischen', { column: 'woechentlich' }),
+        row('Telefone & Klingelanlage desinfizierend abwischen', { column: 'woechentlich' }),
         row('Entfernen von Fingerabdrücken & Schlieren von Innenverglasungen, Türen & Einbauschränken', {
           column: 'woechentlich',
         }),
+        row('Abfallbehälter leeren inkl. Austausch der Beutel', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Fensterbänke & Fußleisten', { column: 'monatlich', value: '2x' }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
@@ -62,11 +68,16 @@ export const AREA_DEFINITIONS = {
     build: () =>
       section('Büro- und Behandlungsräume', [
         row('Hartböden feucht wischen & Textilbeläge saugen', { column: 'woechentlich' }),
-        row('Reinigung der Oberflächen von Arbeits- & Schreibtischen', { column: 'woechentlich' }),
+        row('Reinigung der Oberflächen von Arbeits- & Schreibtischen (nur freigeräumte Flächen)', {
+          column: 'woechentlich',
+        }),
         row('Feuchte Reinigung der Türblätter & Türklinken', { column: 'woechentlich' }),
+        row('Lichtschalter & Steckdosenrahmen desinfizierend abwischen', { column: 'woechentlich' }),
         row('Entfernen von Fingerabdrücken & Schlieren von Innenverglasungen, Türen & Einbauschränken', {
           column: 'woechentlich',
         }),
+        row('Abfallbehälter leeren inkl. Austausch der Beutel', { column: 'woechentlich' }),
+        row('Bildschirme, Tastaturen & Telefone desinfizierend abwischen', { column: 'monatlich', value: '1x' }),
         row('Feuchte Reinigung der Fensterbänke & Fußleisten', { column: 'monatlich', value: '2x' }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
@@ -82,6 +93,10 @@ export const AREA_DEFINITIONS = {
         row('WC-Oberflächen, WC-Sitze, Urinale & Spülungen säubern', { column: 'woechentlich' }),
         row('Waschbecken, Armaturen & Wandspiegel reinigen', { column: 'woechentlich' }),
         row('WC Fliesenwände reinigen', { column: 'woechentlich' }),
+        row('Seifen-, Desinfektionsmittel- & Handtuchspender kontrollieren und auffüllen', {
+          column: 'woechentlich',
+        }),
+        row('Abfallbehälter leeren, desinfizieren & Beutel austauschen', { column: 'woechentlich' }),
         row('Vollreinigung der Dusche inkl. Armaturen & Fliesen', { column: 'monatlich', value: '2x' }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
@@ -93,12 +108,14 @@ export const AREA_DEFINITIONS = {
     build: () =>
       section('Küchenräume', [
         row('Hartböden feucht wischen & Textilbeläge saugen', { column: 'woechentlich' }),
-        row('Feuchte Reinigung der Oberflächen & Arbeitsplatten', { column: 'woechentlich' }),
+        row('Feuchte Reinigung der Oberflächen & Arbeitsplatten (desinfizierend)', { column: 'woechentlich' }),
         row('Entfernen von Fingerabdrücken & Schlieren von Innenverglasungen, Türen, Küchen- & Einbauschränken', {
           column: 'woechentlich',
         }),
-        row('Waschbecken & Armatur reinigen', { column: 'woechentlich' }),
+        row('Waschbecken & Armatur reinigen und desinfizieren', { column: 'woechentlich' }),
+        row('Küchengeräte außen abwischen (Mikrowelle, Kaffeemaschine, Kühlschrank)', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Fensterbänke', { column: 'woechentlich' }),
+        row('Abfall trennen und entsorgen (Restmüll, Papier, Glas nach Vorgabe)', { column: 'woechentlich' }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
         }),
@@ -111,13 +128,47 @@ export const AREA_DEFINITIONS = {
         row('Hartböden feucht wischen & Textilbeläge saugen', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Treppengeländer & Handläufe', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Türblätter & Türklinken', { column: 'woechentlich' }),
+        row('Briefkastenanlage & Klingelanlage abwischen', { column: 'woechentlich' }),
+        row('Fußmatten reinigen (schütteln, saugen oder nass abwischen je nach Typ)', { column: 'woechentlich' }),
         row('Feuchte Reinigung der Fensterbänke & Fußleisten', { column: 'monatlich', value: '2x' }),
+        row('Entfernen von Staub & Spinnweben an Decken, Lampen & in Ecken', { bedarf: true }),
+      ]),
+  },
+  archivlager: {
+    label: 'Archiv / Lager (nur Boden, keine Akten/Waren)',
+    build: () =>
+      section('Archiv / Lager', [
+        row('Hartböden feucht wischen bzw. kehren (Gänge und Freiflächen)', { column: 'woechentlich' }),
+        row('Abfallbehälter leeren inkl. Austausch der Beutel', { column: 'woechentlich' }),
+        row('Akten, Unterlagen, Waren & Regale werden nicht angefasst oder verschoben', { bedarf: true }),
+        row('Entfernen von Staub & Spinnweben an Decken, Lampen & in Ecken', { bedarf: true }),
+      ]),
+  },
+  kinderbereich: {
+    label: 'Gruppen-/Kinderbereich (erhöhte Hygieneanforderung)',
+    build: () =>
+      section('Gruppen-/Kinderbereich', [
+        row('Hartböden feucht wischen & Textilbeläge saugen (desinfizierend)', { column: 'woechentlich' }),
+        row('Tische & Stühle (alle Kontaktflächen) desinfizierend abwischen', { column: 'woechentlich' }),
+        row('Türklinken & Lichtschalter desinfizierend abwischen', { column: 'woechentlich' }),
+        row('Wickelbereich vollständig desinfizieren (falls vorhanden)', { column: 'woechentlich' }),
+        row('Abfallbehälter leeren, desinfizieren & Beutel austauschen', { column: 'woechentlich' }),
+        row('Spielzeug wird nicht gereinigt oder bewegt (pädagogisches Eigentum)', { bedarf: true }),
         row('Entfernen von Staub & Spinnweben an Decken, Lampen & in Ecken', { bedarf: true }),
       ]),
   },
 };
 
-export const AREA_ORDER = ['flur', 'empfang', 'buero', 'sanitaer', 'kueche', 'treppenhaus'];
+export const AREA_ORDER = [
+  'flur',
+  'empfang',
+  'buero',
+  'sanitaer',
+  'kueche',
+  'treppenhaus',
+  'archivlager',
+  'kinderbereich',
+];
 
 function buildGlasSection(glas) {
   const rows = [

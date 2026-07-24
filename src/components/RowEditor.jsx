@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { INTERVAL_COLUMNS, INTERVAL_VALUES } from '../templates/templates.js';
 import { getSuggestions } from '../templates/suggestions.js';
+import WeekdaySelector from './WeekdaySelector.jsx';
 
 const COLUMN_LABELS = {
   woechentlich: 'Wöchentlich',
@@ -139,6 +140,13 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
             </option>
           ))}
         </select>
+        {row.intervalColumn === 'woechentlich' && (
+          <WeekdaySelector
+            compact
+            value={row.wochentage || []}
+            onChange={(wochentage) => onChange({ wochentage })}
+          />
+        )}
       </td>
       <td className="col-remarks">
         <input

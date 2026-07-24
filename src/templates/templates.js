@@ -14,6 +14,9 @@ function row(text, opts = {}) {
     intervalColumn: opts.bedarf ? '' : opts.column || '',
     intervalValue: opts.bedarf ? '' : opts.value || '',
     bemerkung: opts.bemerkung || '',
+    // Optionale Wochentags-Auswahl (z.B. ["Mo","Mi","Fr"]) zusätzlich zur
+    // Intervall-Spalte, siehe WeekdaySelector.jsx.
+    wochentage: opts.wochentage || [],
   };
 }
 

@@ -11,7 +11,7 @@ function addressLine(addr) {
   return [addr.street, [addr.zip, addr.city].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 }
 
-export default function QuickSetup({ onGenerate, onCancel, heading = 'Neues Leistungsverzeichnis' }) {
+export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, heading = 'Neues Leistungsverzeichnis' }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
 
   // Kundendaten
@@ -142,6 +142,12 @@ export default function QuickSetup({ onGenerate, onCancel, heading = 'Neues Leis
         <p className="modal-hint">
           Kundendaten und Grundeinstellungen festlegen, dann das Leistungsverzeichnis generieren.
         </p>
+
+        {onGenerateFromFile && (
+          <button type="button" className="lv-from-file-btn" onClick={onGenerateFromFile}>
+            📎 LV aus Datei erstellen
+          </button>
+        )}
 
         <div className="modal-subheading">Kundendaten</div>
         {!showNewContact && (

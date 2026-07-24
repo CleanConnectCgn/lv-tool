@@ -117,7 +117,8 @@ function buildBody(sections) {
     ]);
     rows.forEach((r) => {
       const check = { content: '', checkCell: true, checked: !!r.bedarf };
-      const bem = r.bemerkung || '';
+      const weekdayNote = r.wochentage?.length ? `(${r.wochentage.join(', ')})` : '';
+      const bem = [r.bemerkung, weekdayNote].filter(Boolean).join(' ');
       if (r.intervalColumn === 'aufAnfrage') {
         body.push([
           r.text,

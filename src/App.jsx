@@ -9,6 +9,7 @@ import AICheckupModal from './components/AICheckupModal.jsx';
 import AIStatusBadge from './components/AIStatusBadge.jsx';
 import Overview from './components/Overview.jsx';
 import QuickSetup from './components/QuickSetup.jsx';
+import LvFromFileModal from './components/LvFromFileModal.jsx';
 import { cloneOptionalSection, newSection } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument, listDocuments } from './lib/documents.js';
 import { uploadLvPdf } from './lib/lvPdfs.js';
@@ -51,8 +52,17 @@ export default function App() {
   const [aiIssues, setAiIssues] = useState([]);
   const [aiError, setAiError] = useState('');
 
+  // Dualer KI-Checkup (Gemini zuerst, dann Claude review von Geminis Ergebnis).
+  const [geminiStatus, setGeminiStatus] = useState('idle'); // idle | running | done | error
+  const [geminiResult, setGeminiResult] = useState(null);
+  const [geminiError, setGeminiError] = useState('');
+  const [claudeStatus, setClaudeStatus] = useState('idle'); // idle | waiting | running | done | error
+  const [claudeResult, setClaudeResult] = useState(null);
+  const [claudeError, setClaudeError] = useState('');
+
   const [saveStatus, setSaveStatus] = useState('idle');
   const [pendingInspection, setPendingInspection] = useState(false);
+  const [showLvFromFile, setShowLvFromFile] = useState(false);
 
   const activeDoc = activeIndex === -1 ? mainDoc : childDocs[activeIndex];
   const sections = activeDoc?.sections || [];
@@ -242,6 +252,55 @@ export default function App() {
     }
   }
 
+  // Dualer Checkup: Gemini startet sofort, Claude startet automatisch mit
+  // Geminis Ergebnis sobald Gemini fertig ist (kein zweiter Klick nötig).
+  async function runDualCheckup() {
+    setGeminiStatus('running');
+    setGeminiError('');
+    setGeminiResult(null);
+    setClaudeStatus('idle');
+    setClaudeError('');
+    setClaudeResult(null);
+
+    let gemini = null;
+    try {
+      const res = await fetch('/api/checkup/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sections, angebot: mainDoc.offer || null, branche: lvTitle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) throw new Error(data?.error || 'Unbekannter Fehler');
+      gemini = data;
+      setGeminiResult(data);
+      setGeminiStatus('done');
+    } catch (err) {
+      setGeminiError(err?.message || err?.toString() || 'Unbekannter Fehler');
+      setGeminiStatus('error');
+    }
+
+    setClaudeStatus('running');
+    try {
+      const res = await fetch('/api/checkup/claude', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sections,
+          angebot: mainDoc.offer || null,
+          branche: lvTitle,
+          gemini_ergebnis: gemini,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) throw new Error(data?.error || 'Unbekannter Fehler');
+      setClaudeResult(data);
+      setClaudeStatus('done');
+    } catch (err) {
+      setClaudeError(err?.message || err?.toString() || 'Unbekannter Fehler');
+      setClaudeStatus('error');
+    }
+  }
+
   // Auto-run the AI checkup 3s after the last edit to the LV.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -290,14 +349,27 @@ export default function App() {
 
   if (view === 'setup') {
     return (
+      <>
+      {showLvFromFile && (
+        <LvFromFileModal
+          onClose={() => setShowLvFromFile(false)}
+          onApply={(sections) => {
+            handleSetupGenerated({ sections, children: [], customer: null });
+            setShowLvFromFile(false);
+          }}
+        />
+      )}
+
       <QuickSetup
         heading={pendingInspection ? 'Besichtigung starten' : 'Neues Leistungsverzeichnis'}
         onGenerate={handleSetupGenerated}
+        onGenerateFromFile={() => setShowLvFromFile(true)}
         onCancel={() => {
           setPendingInspection(false);
           setView('overview');
         }}
       />
+      </>
     );
   }
 
@@ -442,6 +514,13 @@ export default function App() {
           setSections={setSections}
           onClose={() => setShowAICheckup(false)}
           onRecheck={runAICheck}
+          geminiStatus={geminiStatus}
+          geminiResult={geminiResult}
+          geminiError={geminiError}
+          claudeStatus={claudeStatus}
+          claudeResult={claudeResult}
+          claudeError={claudeError}
+          onRunDualCheckup={runDualCheckup}
         />
       )}
     </div>

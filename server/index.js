@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { randomUUID } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -191,6 +192,199 @@ Sei präzise und praxisnah. Max 15 Issues. Nur echte Probleme melden, keine Phan
     res.status(502).json({ error: err?.message || err?.toString() || 'KI Anfrage fehlgeschlagen' });
   }
 });
+
+// Races a promise against a timeout so a hanging AI provider can't block
+// the checkup flow forever.
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} hat nicht innerhalb von ${ms / 1000}s geantwortet`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+function extractJson(raw) {
+  const jsonMatch = (raw || '').match(/\{[\s\S]*\}/);
+  return JSON.parse(jsonMatch ? jsonMatch[0] : raw || '{}');
+}
+
+// Dual AI checkup, step 1: Gemini analyzes the LV + Angebot independently.
+// Body: { sections, angebot, branche }
+app.post('/api/checkup/gemini', async (req, res) => {
+  const { sections, angebot, branche } = req.body || {};
+  if (!sections) {
+    return res.status(400).json({ error: 'sections sind erforderlich' });
+  }
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY ist nicht konfiguriert' });
+  }
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+    const prompt = `Du bist ein Qualitätsprüfer für professionelle Gebäudereinigungsangebote.
+Prüfe das folgende Leistungsverzeichnis und Angebot (Branche: ${branche || 'unbekannt'}) auf:
+1. DUPLIKATE: Identisch oder nahezu identisch formulierte Positionen
+2. FEHLENDE POSITIONEN: Branchenübliche Standardleistungen die fehlen
+3. PROFESSIONALITÄT: Unprofessionelle oder unklare Formulierungen
+4. KONSISTENZ: Widersprüche zwischen LV-Leistungen und kalkuliertem Preis
+
+Leistungsverzeichnis:
+${JSON.stringify(sections, null, 2)}
+
+Angebot:
+${JSON.stringify(angebot || {}, null, 2)}
+
+Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
+{
+  "duplikate": [{"position_a": "...", "position_b": "...", "begruendung": "..."}],
+  "fehlende_positionen": [{"position": "...", "begruendung": "..."}],
+  "sprachliche_hinweise": [{"original": "...", "verbesserung": "...", "grund": "..."}],
+  "konsistenz_probleme": [{"beschreibung": "..."}],
+  "bewertung": 8,
+  "zusammenfassung": "..."
+}`;
+
+    const result = await withTimeout(model.generateContent(prompt), 30000, 'Gemini');
+    const raw = result?.response?.text() || '{}';
+    const parsed = extractJson(raw);
+    res.json(parsed);
+  } catch (err) {
+    res.status(502).json({ error: err?.message || err?.toString() || 'Gemini Anfrage fehlgeschlagen' });
+  }
+});
+
+// Dual AI checkup, step 2: Claude reviews the LV + Angebot independently
+// AND critiques Gemini's result.
+// Body: { sections, angebot, branche, gemini_ergebnis }
+app.post('/api/checkup/claude', async (req, res) => {
+  const { sections, angebot, branche, gemini_ergebnis } = req.body || {};
+  if (!sections) {
+    return res.status(400).json({ error: 'sections sind erforderlich' });
+  }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return res.status(500).json({ error: 'ANTHROPIC_API_KEY ist nicht konfiguriert' });
+  }
+  try {
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const prompt = `Du bist ein erfahrener Qualitätsprüfer für gewerbliche Reinigungsverträge (Branche: ${branche || 'unbekannt'}).
+
+AUFGABE 1 — Eigene Prüfung:
+Analysiere dieses Leistungsverzeichnis und Angebot unabhängig auf Vollständigkeit, Professionalität und Duplikate.
+
+Leistungsverzeichnis:
+${JSON.stringify(sections, null, 2)}
+
+Angebot:
+${JSON.stringify(angebot || {}, null, 2)}
+
+AUFGABE 2 — Gemini-Review:
+Hier ist das Ergebnis einer vorherigen KI-Analyse (Gemini). Bewerte es kritisch:
+- Was stimmt in der Gemini-Analyse?
+- Was ist falsch oder übertrieben?
+- Was hat Gemini übersehen?
+
+Gemini-Ergebnis:
+${JSON.stringify(gemini_ergebnis || {}, null, 2)}
+
+Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
+{
+  "eigene_pruefung": {
+    "duplikate": [{"position_a": "...", "position_b": "...", "begruendung": "..."}],
+    "fehlende_positionen": [{"position": "...", "begruendung": "..."}],
+    "hinweise": [{"hinweis": "..."}]
+  },
+  "gemini_bewertung": {
+    "korrekte_punkte": ["..."],
+    "fehler_oder_uebertreibungen": ["..."],
+    "uebersehene_punkte": ["..."]
+  },
+  "top_prioritaeten": ["1. ...", "2. ...", "3. ..."],
+  "freigabe": "bereit",
+  "freigabe_begruendung": "...",
+  "gesamtresumee": "..."
+}
+Für "freigabe" gilt ausschließlich "bereit" oder "ueberarbeitung".`;
+
+    const response = await withTimeout(
+      client.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+      45000,
+      'Claude'
+    );
+
+    const textBlock = response?.content?.find((b) => b.type === 'text');
+    const parsed = extractJson(textBlock?.text || '{}');
+    res.json(parsed);
+  } catch (err) {
+    res.status(502).json({ error: err?.message || err?.toString() || 'Claude Anfrage fehlgeschlagen' });
+  }
+});
+
+// LV aus Bild/PDF-Scan generieren (Gemini Vision). Body: raw image/pdf bytes,
+// mime type via query param since express.raw only sniffs one content-type.
+app.post(
+  '/api/lv/from-image',
+  express.raw({ type: () => true, limit: '20mb' }),
+  async (req, res) => {
+    const mimeType = req.query.mimeType;
+    if (!mimeType || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+      return res.status(400).json({ error: 'mimeType Query-Parameter und Datei-Body sind erforderlich' });
+    }
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY ist nicht konfiguriert' });
+    }
+    try {
+      const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+
+      const prompt = `Du analysierst ein Foto oder Scan eines bestehenden Leistungsverzeichnisses
+oder einer Reinigungsanforderung. Extrahiere alle Reinigungsleistungen und strukturiere
+sie für das Clean Connect LV-Tool.
+
+Antworte NUR als JSON im folgenden Format:
+{
+  "erkannte_branche": "buero | arztpraxis | treppenhaus | gewerbehalle | kanzlei | kindergarten | sonstiges",
+  "bereiche": [
+    {
+      "name": "Bereichsname (z.B. Büroräume, Empfang, Sanitär)",
+      "positionen": [
+        {
+          "leistung": "Beschreibung der Reinigungsleistung",
+          "intervall": "taeglich | 2x_woechentlich | woechentlich | 14taegig | monatlich | quartalsweise | nach_bedarf",
+          "wochentage": ["Mo", "Mi", "Fr"],
+          "bemerkung": ""
+        }
+      ]
+    }
+  ],
+  "erkannte_objektdaten": { "adresse": "", "flaeche_gesamt": 0, "stockwerke": 0 },
+  "konfidenz": 0.85,
+  "hinweise": ["Was nicht eindeutig erkannt werden konnte"]
+}
+
+Formuliere alle Leistungen im Clean Connect Stil: professionell, präzise, mit Bodenbelag-Angabe
+wenn erkennbar. Beispiel: "Hartböden feucht wischen (bis 180 cm Höhe alle Oberflächen abwischen)"`;
+
+      const result = await withTimeout(
+        model.generateContent([
+          prompt,
+          { inlineData: { data: req.body.toString('base64'), mimeType } },
+        ]),
+        30000,
+        'Gemini'
+      );
+      const raw = result?.response?.text() || '{}';
+      const parsed = extractJson(raw);
+      res.json(parsed);
+    } catch (err) {
+      res.status(502).json({ error: err?.message || err?.toString() || 'Gemini Vision Anfrage fehlgeschlagen' });
+    }
+  }
+);
 
 // Persisted LVs/Angebote. One JSON file per document under DOCUMENTS_DIR.
 async function ensureDocumentsDir() {

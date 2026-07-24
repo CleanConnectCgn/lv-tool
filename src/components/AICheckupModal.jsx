@@ -1,6 +1,20 @@
 import React, { useState } from 'react';
 
-export default function AICheckupModal({ status, issues, error, setSections, onClose, onRecheck }) {
+export default function AICheckupModal({
+  status,
+  issues,
+  error,
+  setSections,
+  onClose,
+  onRecheck,
+  geminiStatus = 'idle',
+  geminiResult,
+  geminiError,
+  claudeStatus = 'idle',
+  claudeResult,
+  claudeError,
+  onRunDualCheckup,
+}) {
   const [appliedIds, setAppliedIds] = useState({});
 
   function applyFix(issue) {
@@ -110,6 +124,157 @@ export default function AICheckupModal({ status, issues, error, setSections, onC
             ))}
           </>
         )}
+
+        <div className="ai-dual-checkup">
+          <div className="ai-dual-header">
+            <h3>Vollständiger Checkup (Gemini + Claude)</h3>
+            <button
+              type="button"
+              className="ai-btn-apply"
+              onClick={onRunDualCheckup}
+              disabled={geminiStatus === 'running' || claudeStatus === 'running'}
+            >
+              {geminiStatus === 'idle' ? 'Checkup starten' : 'Erneut prüfen'}
+            </button>
+          </div>
+
+          {geminiStatus !== 'idle' && (
+            <div className="ai-dual-status-row">
+              <span className={`ai-dual-status ai-dual-status-${geminiStatus}`}>
+                Gemini{' '}
+                {geminiStatus === 'running' && 'läuft...'}
+                {geminiStatus === 'done' && '✓ fertig'}
+                {geminiStatus === 'error' && '✗ Fehler'}
+              </span>
+              <span className={`ai-dual-status ai-dual-status-${claudeStatus}`}>
+                Claude{' '}
+                {claudeStatus === 'idle' && 'wartet'}
+                {claudeStatus === 'running' && 'läuft...'}
+                {claudeStatus === 'done' && '✓ fertig'}
+                {claudeStatus === 'error' && '✗ Fehler'}
+              </span>
+            </div>
+          )}
+
+          {geminiStatus === 'error' && <div className="modal-message error">Gemini: {geminiError}</div>}
+          {claudeStatus === 'error' && <div className="modal-message error">Claude: {claudeError}</div>}
+
+          {geminiResult && (
+            <div className="ai-dual-result">
+              <h4>Gemini-Analyse</h4>
+              {geminiResult.duplikate?.length > 0 && (
+                <div>
+                  <strong>Duplikate:</strong>
+                  <ul>
+                    {geminiResult.duplikate.map((d, i) => (
+                      <li key={i}>
+                        {d.position_a} ↔ {d.position_b} — {d.begruendung}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {geminiResult.fehlende_positionen?.length > 0 && (
+                <div>
+                  <strong>Fehlende Positionen:</strong>
+                  <ul>
+                    {geminiResult.fehlende_positionen.map((f, i) => (
+                      <li key={i}>
+                        {f.position} — {f.begruendung}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {geminiResult.sprachliche_hinweise?.length > 0 && (
+                <div>
+                  <strong>Sprachliche Hinweise:</strong>
+                  <ul>
+                    {geminiResult.sprachliche_hinweise.map((s, i) => (
+                      <li key={i}>
+                        „{s.original}" → „{s.verbesserung}" ({s.grund})
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {geminiResult.konsistenz_probleme?.length > 0 && (
+                <div>
+                  <strong>Konsistenzprobleme:</strong>
+                  <ul>
+                    {geminiResult.konsistenz_probleme.map((k, i) => (
+                      <li key={i}>{k.beschreibung}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p>
+                <strong>Bewertung:</strong> {geminiResult.bewertung}/10
+              </p>
+              {geminiResult.zusammenfassung && <p>{geminiResult.zusammenfassung}</p>}
+            </div>
+          )}
+
+          {claudeResult && (
+            <div className="ai-dual-result">
+              <h4>Claude-Review</h4>
+              {claudeResult.eigene_pruefung?.duplikate?.length > 0 && (
+                <div>
+                  <strong>Eigene Duplikat-Funde:</strong>
+                  <ul>
+                    {claudeResult.eigene_pruefung.duplikate.map((d, i) => (
+                      <li key={i}>
+                        {d.position_a} ↔ {d.position_b} — {d.begruendung}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {claudeResult.eigene_pruefung?.fehlende_positionen?.length > 0 && (
+                <div>
+                  <strong>Eigene fehlende Positionen:</strong>
+                  <ul>
+                    {claudeResult.eigene_pruefung.fehlende_positionen.map((f, i) => (
+                      <li key={i}>
+                        {f.position} — {f.begruendung}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {claudeResult.gemini_bewertung && (
+                <div>
+                  <strong>Abweichung zu Gemini:</strong>
+                  {claudeResult.gemini_bewertung.korrekte_punkte?.length > 0 && (
+                    <p>Korrekt: {claudeResult.gemini_bewertung.korrekte_punkte.join('; ')}</p>
+                  )}
+                  {claudeResult.gemini_bewertung.fehler_oder_uebertreibungen?.length > 0 && (
+                    <p>Fehler/übertrieben: {claudeResult.gemini_bewertung.fehler_oder_uebertreibungen.join('; ')}</p>
+                  )}
+                  {claudeResult.gemini_bewertung.uebersehene_punkte?.length > 0 && (
+                    <p>Übersehen: {claudeResult.gemini_bewertung.uebersehene_punkte.join('; ')}</p>
+                  )}
+                </div>
+              )}
+              {claudeResult.top_prioritaeten?.length > 0 && (
+                <div>
+                  <strong>Top 3 Prioritäten:</strong>
+                  <ul>
+                    {claudeResult.top_prioritaeten.map((p, i) => (
+                      <li key={i}>{p}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p>
+                <strong>Freigabeempfehlung:</strong>{' '}
+                {claudeResult.freigabe === 'bereit' ? '✓ Bereit' : '⚠ Überarbeitung empfohlen'}
+                {claudeResult.freigabe_begruendung && ` — ${claudeResult.freigabe_begruendung}`}
+              </p>
+              {claudeResult.gesamtresumee && <p>{claudeResult.gesamtresumee}</p>}
+            </div>
+          )}
+        </div>
 
         <div className="modal-actions">
           <button onClick={onClose}>Schließen</button>

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { TASK_CATEGORIES } from '../templates/inspectionTasks.js';
 import { LOGO_URI } from '../assets/logo.js';
+import WeekdaySelector, { weekdaysLabel } from './WeekdaySelector.jsx';
 
 const WOECHENTLICH_VALUES = ['1x', '2x', '3x', '4x', '5x', '6x', '7x'];
 const MONATLICH_VALUES = ['1x', '2x', '3x', '4x'];
@@ -22,6 +23,7 @@ function buildInitialTasks() {
         bedarf: false,
         note: '',
         noteForAll: false,
+        wochentage: [],
       });
     });
   });
@@ -36,6 +38,7 @@ function newRowFromTask(task) {
     intervalColumn: task.bedarf ? '' : task.col,
     intervalValue: task.bedarf ? '' : task.val,
     bemerkung: task.note || '',
+    wochentage: task.col === 'woechentlich' ? task.wochentage || [] : [],
   };
 }
 
@@ -47,6 +50,7 @@ export default function InspectionMode({ sections, setSections, onClose }) {
   const [objektNotizen, setObjektNotizen] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [newCat, setNewCat] = useState(TASK_CATEGORIES[0]?.name || '');
+  const [globalWeekdays, setGlobalWeekdays] = useState([]);
 
   const activeSection = sections.find((s) => s.id === activeSectionId);
   const selectedCount = tasks.filter((t) => t.selected).length;
@@ -64,6 +68,15 @@ export default function InspectionMode({ sections, setSections, onClose }) {
   function handleQuickButton(id, patch) {
     patchTask(id, { ...patch, selected: true });
     setFocusedTaskId(id);
+  }
+
+  // Übernimmt die global gewählten Wochentage auf alle bereits als
+  // "wöchentlich" markierten Tasks (Schnellsynchronisation).
+  function applyGlobalWeekdays(days) {
+    setGlobalWeekdays(days);
+    setTasks((prev) =>
+      prev.map((t) => (t.selected && t.col === 'woechentlich' ? { ...t, wochentage: days } : t))
+    );
   }
 
   function addNewTask() {
@@ -168,6 +181,9 @@ export default function InspectionMode({ sections, setSections, onClose }) {
         >
           Bei Bedarf
         </button>
+        {task.col === 'woechentlich' && task.wochentage?.length > 0 && (
+          <span className="inspection-weekday-badge">{weekdaysLabel(task.wochentage)}</span>
+        )}
       </div>
     );
   }
@@ -195,6 +211,10 @@ export default function InspectionMode({ sections, setSections, onClose }) {
 
       <div className="inspection-body">
         <div className="inspection-left">
+          <div className="inspection-global-sync">
+            <span className="inspection-global-sync-label">Alle Bereiche wöchentlich:</span>
+            <WeekdaySelector compact value={globalWeekdays} onChange={applyGlobalWeekdays} />
+          </div>
           <div className="inspection-cat-chips">
             {categoryNames.map((name) => (
               <button
@@ -256,6 +276,16 @@ export default function InspectionMode({ sections, setSections, onClose }) {
               {focusedTask.selected && (
                 <div className="inspection-detail-badge">
                   Wird zu allen Bereichen hinzugefügt{activeSection ? ` (aktiv: ${activeSection.title})` : ''}
+                </div>
+              )}
+              {focusedTask.col === 'woechentlich' && (
+                <div className="inspection-weekday-block">
+                  <span className="inspection-detail-subheading">Wochentage</span>
+                  <WeekdaySelector
+                    compact
+                    value={focusedTask.wochentage || []}
+                    onChange={(wochentage) => patchTask(focusedTask.id, { wochentage })}
+                  />
                 </div>
               )}
               <textarea
