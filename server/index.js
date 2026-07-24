@@ -220,7 +220,7 @@ app.post('/api/checkup/gemini', async (req, res) => {
   }
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
 
     const prompt = `Du bist ein Qualitätsprüfer für professionelle Gebäudereinigungsangebote.
 Prüfe das folgende Leistungsverzeichnis und Angebot (Branche: ${branche || 'unbekannt'}) auf:
@@ -339,7 +339,7 @@ app.post(
     }
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+      const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
 
       const prompt = `Du analysierst ein Foto oder Scan eines bestehenden Leistungsverzeichnisses
 oder einer Reinigungsanforderung. Extrahiere alle Reinigungsleistungen und strukturiere
