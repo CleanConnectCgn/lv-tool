@@ -13,6 +13,8 @@ import LvFromFileModal from './components/LvFromFileModal.jsx';
 import CrmCustomerList from './components/CrmCustomerList.jsx';
 import CrmCustomerProfile from './components/CrmCustomerProfile.jsx';
 import CrmAllAuftraege from './components/CrmAllAuftraege.jsx';
+import CrmMitarbeiter from './components/CrmMitarbeiter.jsx';
+import CrmAllObjekte from './components/CrmAllObjekte.jsx';
 import { cloneOptionalSection, newSection } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument, listDocuments } from './lib/documents.js';
 import { uploadLvPdf } from './lib/lvPdfs.js';
@@ -365,6 +367,8 @@ export default function App() {
           setView('crm-customer');
         }}
         onOpenAuftraege={() => setView('crm-auftraege')}
+        onOpenMitarbeiter={() => setView('crm-mitarbeiter')}
+        onOpenObjekte={() => setView('crm-objekte')}
       />
     );
   }
@@ -374,6 +378,23 @@ export default function App() {
       <CrmAllAuftraege
         onBack={() => setView('crm')}
         onOpenCustomer={(key) => {
+          setCrmCustomerKey(key);
+          setView('crm-customer');
+        }}
+      />
+    );
+  }
+
+  if (view === 'crm-mitarbeiter') {
+    return <CrmMitarbeiter onBack={() => setView('crm')} />;
+  }
+
+  if (view === 'crm-objekte') {
+    return (
+      <CrmAllObjekte
+        onBack={() => setView('crm')}
+        onOpenCustomer={(key) => {
+          if (!key) return;
           setCrmCustomerKey(key);
           setView('crm-customer');
         }}

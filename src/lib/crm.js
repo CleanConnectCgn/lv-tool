@@ -26,6 +26,17 @@ export const createAuftrag = (auftrag) => request('POST', '/api/crm/auftraege', 
 export const updateAuftrag = (id, patch) => request('PUT', `/api/crm/auftraege/${id}`, patch);
 export const deleteAuftrag = (id) => request('DELETE', `/api/crm/auftraege/${id}`);
 
+export const listMitarbeiter = () => request('GET', '/api/crm/mitarbeiter');
+export const createMitarbeiter = (m) => request('POST', '/api/crm/mitarbeiter', m);
+export const updateMitarbeiter = (id, patch) => request('PUT', `/api/crm/mitarbeiter/${id}`, patch);
+export const deleteMitarbeiter = (id) => request('DELETE', `/api/crm/mitarbeiter/${id}`);
+
+export const listObjekte = (customerKey) =>
+  request('GET', `/api/crm/objekte${customerKey ? `?customerKey=${encodeURIComponent(customerKey)}` : ''}`);
+export const createObjekt = (o) => request('POST', '/api/crm/objekte', o);
+export const updateObjekt = (id, patch) => request('PUT', `/api/crm/objekte/${id}`, patch);
+export const deleteObjekt = (id) => request('DELETE', `/api/crm/objekte/${id}`);
+
 export const getCalendarStatus = () => request('GET', '/api/calendar/status');
 export const disconnectCalendar = () => request('POST', '/api/calendar/disconnect');
 export const listCalendarEvents = (params = {}) => {

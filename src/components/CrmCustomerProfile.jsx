@@ -13,10 +13,32 @@ import {
   disconnectCalendar,
   mergeCustomer,
   listCustomers,
+  listObjekte,
+  createObjekt,
+  updateObjekt,
+  deleteObjekt,
+  listMitarbeiter,
 } from '../lib/crm.js';
+import WeekdaySelector from './WeekdaySelector.jsx';
 
 const VERTRAGSGENERATOR_URL = 'https://vertragsgenerator-production-7738.up.railway.app';
 const AUFTRAG_STATUS_OPTIONS = ['offen', 'in Arbeit', 'erledigt', 'storniert'];
+
+// Google Calendar RRULE erwartet BYDAY-Kürzel (MO,TU,...), unsere
+// WeekdaySelector-Komponente liefert deutsche Kürzel (Mo,Di,...).
+const WEEKDAY_TO_RRULE = { Mo: 'MO', Di: 'TU', Mi: 'WE', Do: 'TH', Fr: 'FR', Sa: 'SA', So: 'SU' };
+
+function buildWeeklyRecurrence(weekdays, untilDate) {
+  if (!weekdays?.length) return undefined;
+  const byday = weekdays.map((d) => WEEKDAY_TO_RRULE[d]).filter(Boolean).join(',');
+  if (!byday) return undefined;
+  let rrule = `RRULE:FREQ=WEEKLY;BYDAY=${byday}`;
+  if (untilDate) {
+    // UNTIL erwartet UTC im Format YYYYMMDDTHHMMSSZ.
+    rrule += `;UNTIL=${untilDate.replace(/-/g, '')}T235959Z`;
+  }
+  return [rrule];
+}
 
 function addressLine(c) {
   if (!c) return '';
@@ -45,6 +67,9 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
   const [newTitel, setNewTitel] = useState('');
   const [newDatum, setNewDatum] = useState('');
   const [newUhrzeit, setNewUhrzeit] = useState('09:00');
+  const [newWiederholt, setNewWiederholt] = useState(false);
+  const [newWiederholTage, setNewWiederholTage] = useState([]);
+  const [newWiederholBis, setNewWiederholBis] = useState('');
 
   const [calendarError, setCalendarError] = useState('');
   const [reschedulingEventId, setReschedulingEventId] = useState(null);
@@ -54,6 +79,15 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
   const [showMerge, setShowMerge] = useState(false);
   const [mergeCandidates, setMergeCandidates] = useState([]);
   const [mergeTargetKey, setMergeTargetKey] = useState('');
+
+  const [objekte, setObjekte] = useState([]);
+  const [alleMitarbeiter, setAlleMitarbeiter] = useState([]);
+  const [showNewObjekt, setShowNewObjekt] = useState(false);
+  const [objektName, setObjektName] = useState('');
+  const [objektStrasse, setObjektStrasse] = useState('');
+  const [objektPlz, setObjektPlz] = useState('');
+  const [objektOrt, setObjektOrt] = useState('');
+  const [objektMitarbeiterIds, setObjektMitarbeiterIds] = useState([]);
 
   function load() {
     setStatus('loading');
@@ -70,6 +104,15 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
   }
 
   useEffect(load, [customerKey]);
+
+  function loadObjekte() {
+    listObjekte(customerKey).then(setObjekte).catch(() => setObjekte([]));
+  }
+
+  useEffect(loadObjekte, [customerKey]);
+  useEffect(() => {
+    listMitarbeiter().then(setAlleMitarbeiter).catch(() => setAlleMitarbeiter([]));
+  }, []);
 
   useEffect(() => {
     if (!profile?.customer?.name) return;
@@ -141,10 +184,12 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
         const start = `${newDatum}T${newUhrzeit}:00`;
         const startDate = new Date(start);
         const end = new Date(startDate.getTime() + 60 * 60 * 1000).toISOString();
+        const recurrence = newWiederholt ? buildWeeklyRecurrence(newWiederholTage, newWiederholBis) : undefined;
         const event = await createCalendarEvent({
           summary: `${newTitel.trim()} — ${profile.customer?.name || ''}`,
           start: { dateTime: startDate.toISOString() },
           end: { dateTime: end },
+          recurrence,
           customerKey,
           auftragId: auftrag.id,
         });
@@ -153,6 +198,9 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
       setShowNewAuftrag(false);
       setNewTitel('');
       setNewDatum('');
+      setNewWiederholt(false);
+      setNewWiederholTage([]);
+      setNewWiederholBis('');
       load();
       loadEvents();
     } catch (err) {
@@ -254,6 +302,55 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
     }
   }
 
+  function toggleObjektMitarbeiter(id) {
+    setObjektMitarbeiterIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function handleCreateObjekt() {
+    if (!objektName.trim()) return;
+    try {
+      await createObjekt({
+        customerKey,
+        name: objektName.trim(),
+        strasse: objektStrasse,
+        plz: objektPlz,
+        ort: objektOrt,
+        mitarbeiterIds: objektMitarbeiterIds,
+      });
+      setShowNewObjekt(false);
+      setObjektName('');
+      setObjektStrasse('');
+      setObjektPlz('');
+      setObjektOrt('');
+      setObjektMitarbeiterIds([]);
+      loadObjekte();
+    } catch (err) {
+      alert(err?.message || 'Objekt konnte nicht angelegt werden');
+    }
+  }
+
+  async function handleToggleObjektMitarbeiterAssignment(objekt, mitarbeiterId) {
+    const next = objekt.mitarbeiterIds.includes(mitarbeiterId)
+      ? objekt.mitarbeiterIds.filter((id) => id !== mitarbeiterId)
+      : [...objekt.mitarbeiterIds, mitarbeiterId];
+    try {
+      await updateObjekt(objekt.id, { mitarbeiterIds: next });
+      loadObjekte();
+    } catch (err) {
+      alert(err?.message || 'Zuweisung konnte nicht geändert werden');
+    }
+  }
+
+  async function handleDeleteObjekt(objekt) {
+    if (!window.confirm(`Objekt "${objekt.name}" wirklich löschen?`)) return;
+    try {
+      await deleteObjekt(objekt.id);
+      loadObjekte();
+    } catch (err) {
+      alert(err?.message || 'Objekt konnte nicht gelöscht werden');
+    }
+  }
+
   if (status === 'loading') return <div className="overview-page"><p className="modal-hint">Lädt...</p></div>;
   if (status === 'error') return <div className="overview-page"><div className="modal-message error">{error}</div></div>;
 
@@ -336,6 +433,84 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
         ))}
 
         <hr className="modal-section-divider" />
+        <div className="modal-subheading">Objekte</div>
+        {objekte.length === 0 && <p className="modal-hint">Keine Objekte angelegt.</p>}
+        {objekte.map((o) => (
+          <div key={o.id} className="ai-issue-card">
+            <div className="ai-issue-header">
+              <span className="ai-issue-title">{o.name}</span>
+            </div>
+            <p className="ai-issue-desc">{addressLine(o)}</p>
+            <div>
+              <span className="modal-hint">Zugewiesene Mitarbeiter:</span>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                {alleMitarbeiter.length === 0 && <span className="modal-hint">Keine Mitarbeiter angelegt.</span>}
+                {alleMitarbeiter.map((m) => (
+                  <label key={m.id} className="checkbox-field" style={{ marginBottom: 0 }}>
+                    <input
+                      type="checkbox"
+                      checked={o.mitarbeiterIds.includes(m.id)}
+                      onChange={() => handleToggleObjektMitarbeiterAssignment(o, m.id)}
+                    />
+                    {m.name}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <button className="icon-btn" onClick={() => handleDeleteObjekt(o)} style={{ marginTop: 8 }}>
+              Objekt löschen
+            </button>
+          </div>
+        ))}
+
+        {!showNewObjekt && (
+          <button type="button" onClick={() => setShowNewObjekt(true)}>
+            + Objekt anlegen
+          </button>
+        )}
+        {showNewObjekt && (
+          <div className="import-box">
+            <label className="modal-field">
+              Bezeichnung
+              <input value={objektName} onChange={(e) => setObjektName(e.target.value)} placeholder="z.B. Hauptsitz, Filiale Nord" />
+            </label>
+            <div className="modal-field-row">
+              <label className="modal-field">
+                Straße
+                <input value={objektStrasse} onChange={(e) => setObjektStrasse(e.target.value)} />
+              </label>
+              <label className="modal-field">
+                PLZ
+                <input value={objektPlz} onChange={(e) => setObjektPlz(e.target.value)} />
+              </label>
+              <label className="modal-field">
+                Ort
+                <input value={objektOrt} onChange={(e) => setObjektOrt(e.target.value)} />
+              </label>
+            </div>
+            <span className="modal-hint">Mitarbeiter zuweisen:</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0 12px' }}>
+              {alleMitarbeiter.map((m) => (
+                <label key={m.id} className="checkbox-field" style={{ marginBottom: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={objektMitarbeiterIds.includes(m.id)}
+                    onChange={() => toggleObjektMitarbeiter(m.id)}
+                  />
+                  {m.name}
+                </label>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => setShowNewObjekt(false)}>Abbrechen</button>
+              <button className="primary" onClick={handleCreateObjekt}>
+                Anlegen
+              </button>
+            </div>
+          </div>
+        )}
+
+        <hr className="modal-section-divider" />
         <div className="modal-subheading">Aufträge</div>
         {!calendarStatus?.configured && (
           <p className="modal-hint">
@@ -400,6 +575,24 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
                   <input type="time" value={newUhrzeit} onChange={(e) => setNewUhrzeit(e.target.value)} />
                 </label>
               </div>
+            )}
+            {calendarStatus?.connected && newDatum && (
+              <>
+                <label className="checkbox-field">
+                  <input type="checkbox" checked={newWiederholt} onChange={(e) => setNewWiederholt(e.target.checked)} />
+                  Wiederkehrender Termin
+                </label>
+                {newWiederholt && (
+                  <div className="import-box" style={{ background: '#fafbfb' }}>
+                    <span className="modal-hint">An welchen Wochentagen wiederholen?</span>
+                    <WeekdaySelector value={newWiederholTage} onChange={setNewWiederholTage} />
+                    <label className="modal-field" style={{ marginTop: 8 }}>
+                      Wiederholen bis (optional, sonst unbegrenzt)
+                      <input type="date" value={newWiederholBis} onChange={(e) => setNewWiederholBis(e.target.value)} />
+                    </label>
+                  </div>
+                )}
+              </>
             )}
             <div className="modal-actions">
               <button onClick={() => setShowNewAuftrag(false)}>Abbrechen</button>

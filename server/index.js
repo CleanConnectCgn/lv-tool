@@ -31,6 +31,8 @@ const LV_PDFS_DIR = path.join(DATA_DIR, 'Leistungsverzeichnisse');
 const CRM_DIR = path.join(DATA_DIR, 'crm');
 const CUSTOMERS_DIR = path.join(CRM_DIR, 'customers');
 const AUFTRAEGE_DIR = path.join(CRM_DIR, 'auftraege');
+const MITARBEITER_DIR = path.join(CRM_DIR, 'mitarbeiter');
+const OBJEKTE_DIR = path.join(CRM_DIR, 'objekte');
 const CALENDAR_TOKEN_FILE = path.join(CRM_DIR, 'calendar-token.json');
 
 // Optionaler Basic-Auth-Schutz: nur aktiv, wenn APP_USERNAME/APP_PASSWORD
@@ -773,6 +775,159 @@ app.delete('/api/crm/auftraege/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(404).json({ error: 'Auftrag nicht gefunden' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Mitarbeiter: einfache Stammdatenverwaltung, damit Objekte ihnen zugewiesen
+// werden können.
+// ---------------------------------------------------------------------------
+
+async function ensureMitarbeiterDir() {
+  await fs.mkdir(MITARBEITER_DIR, { recursive: true });
+}
+
+app.get('/api/crm/mitarbeiter', async (req, res) => {
+  try {
+    await ensureMitarbeiterDir();
+    const files = await fs.readdir(MITARBEITER_DIR);
+    const all = await Promise.all(
+      files.filter((f) => f.endsWith('.json')).map((f) => fs.readFile(path.join(MITARBEITER_DIR, f), 'utf-8').then(JSON.parse))
+    );
+    res.json(all.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Mitarbeiter konnten nicht geladen werden' });
+  }
+});
+
+app.post('/api/crm/mitarbeiter', async (req, res) => {
+  try {
+    await ensureMitarbeiterDir();
+    const now = new Date().toISOString();
+    const mitarbeiter = {
+      name: req.body?.name || '',
+      telefon: req.body?.telefon || '',
+      email: req.body?.email || '',
+      notizen: req.body?.notizen || '',
+      aktiv: req.body?.aktiv !== false,
+      id: randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!mitarbeiter.name.trim()) {
+      return res.status(400).json({ error: 'Name ist erforderlich' });
+    }
+    await fs.writeFile(path.join(MITARBEITER_DIR, `${mitarbeiter.id}.json`), JSON.stringify(mitarbeiter, null, 2));
+    res.status(201).json(mitarbeiter);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Mitarbeiter konnte nicht gespeichert werden' });
+  }
+});
+
+app.put('/api/crm/mitarbeiter/:id', async (req, res) => {
+  try {
+    const filePath = path.join(MITARBEITER_DIR, `${req.params.id}.json`);
+    const existing = await fs.readFile(filePath, 'utf-8').then(JSON.parse).catch(() => null);
+    if (!existing) return res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
+    const merged = { ...existing, ...req.body, id: req.params.id, updatedAt: new Date().toISOString() };
+    await fs.writeFile(filePath, JSON.stringify(merged, null, 2));
+    res.json(merged);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Mitarbeiter konnte nicht aktualisiert werden' });
+  }
+});
+
+app.delete('/api/crm/mitarbeiter/:id', async (req, res) => {
+  try {
+    await fs.unlink(path.join(MITARBEITER_DIR, `${req.params.id}.json`));
+    // Zuweisungen bei betroffenen Objekten entfernen, damit keine toten
+    // Mitarbeiter-IDs übrig bleiben.
+    await ensureObjekteDir();
+    const files = await fs.readdir(OBJEKTE_DIR).catch(() => []);
+    for (const f of files.filter((f) => f.endsWith('.json'))) {
+      const filePath = path.join(OBJEKTE_DIR, f);
+      const o = await fs.readFile(filePath, 'utf-8').then(JSON.parse).catch(() => null);
+      if (o?.mitarbeiterIds?.includes(req.params.id)) {
+        o.mitarbeiterIds = o.mitarbeiterIds.filter((id) => id !== req.params.id);
+        o.updatedAt = new Date().toISOString();
+        await fs.writeFile(filePath, JSON.stringify(o, null, 2));
+      }
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(404).json({ error: 'Mitarbeiter nicht gefunden' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Objekte: Liegenschaften/Einsatzorte eines Kunden mit Adresse, verknüpft mit
+// zugewiesenen Mitarbeitern. Unabhängig vom freien `objekt`-Textfeld auf den
+// LV/Angebot-Dokumenten - Objekte sind die strukturierte CRM-Ergänzung dazu.
+// ---------------------------------------------------------------------------
+
+async function ensureObjekteDir() {
+  await fs.mkdir(OBJEKTE_DIR, { recursive: true });
+}
+
+app.get('/api/crm/objekte', async (req, res) => {
+  try {
+    await ensureObjekteDir();
+    const files = await fs.readdir(OBJEKTE_DIR);
+    const all = await Promise.all(
+      files.filter((f) => f.endsWith('.json')).map((f) => fs.readFile(path.join(OBJEKTE_DIR, f), 'utf-8').then(JSON.parse))
+    );
+    const filtered = req.query.customerKey ? all.filter((o) => o.customerKey === req.query.customerKey) : all;
+    res.json(filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Objekte konnten nicht geladen werden' });
+  }
+});
+
+app.post('/api/crm/objekte', async (req, res) => {
+  try {
+    await ensureObjekteDir();
+    const now = new Date().toISOString();
+    const objekt = {
+      customerKey: req.body?.customerKey || null,
+      name: req.body?.name || '',
+      strasse: req.body?.strasse || '',
+      plz: req.body?.plz || '',
+      ort: req.body?.ort || '',
+      notizen: req.body?.notizen || '',
+      mitarbeiterIds: Array.isArray(req.body?.mitarbeiterIds) ? req.body.mitarbeiterIds : [],
+      id: randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    if (!objekt.name.trim()) {
+      return res.status(400).json({ error: 'Name/Bezeichnung ist erforderlich' });
+    }
+    await fs.writeFile(path.join(OBJEKTE_DIR, `${objekt.id}.json`), JSON.stringify(objekt, null, 2));
+    res.status(201).json(objekt);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Objekt konnte nicht gespeichert werden' });
+  }
+});
+
+app.put('/api/crm/objekte/:id', async (req, res) => {
+  try {
+    const filePath = path.join(OBJEKTE_DIR, `${req.params.id}.json`);
+    const existing = await fs.readFile(filePath, 'utf-8').then(JSON.parse).catch(() => null);
+    if (!existing) return res.status(404).json({ error: 'Objekt nicht gefunden' });
+    const merged = { ...existing, ...req.body, id: req.params.id, updatedAt: new Date().toISOString() };
+    await fs.writeFile(filePath, JSON.stringify(merged, null, 2));
+    res.json(merged);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Objekt konnte nicht aktualisiert werden' });
+  }
+});
+
+app.delete('/api/crm/objekte/:id', async (req, res) => {
+  try {
+    await fs.unlink(path.join(OBJEKTE_DIR, `${req.params.id}.json`));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(404).json({ error: 'Objekt nicht gefunden' });
   }
 });
 

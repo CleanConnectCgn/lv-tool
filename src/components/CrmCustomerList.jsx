@@ -8,7 +8,7 @@ function addressLine(c) {
     .join(', ');
 }
 
-export default function CrmCustomerList({ onOpenCustomer, onBack, onOpenAuftraege }) {
+export default function CrmCustomerList({ onOpenCustomer, onBack, onOpenAuftraege, onOpenMitarbeiter, onOpenObjekte }) {
   const [customers, setCustomers] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -39,6 +39,8 @@ export default function CrmCustomerList({ onOpenCustomer, onBack, onOpenAuftraeg
         <div className="modal-actions" style={{ marginBottom: 16 }}>
           <button onClick={onBack}>Zurück zur Übersicht</button>
           <button onClick={onOpenAuftraege}>Alle Aufträge</button>
+          <button onClick={onOpenMitarbeiter}>Mitarbeiter</button>
+          <button onClick={onOpenObjekte}>Alle Objekte</button>
         </div>
 
         <input
