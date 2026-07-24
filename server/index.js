@@ -12,6 +12,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Railway terminiert TLS und leitet intern per HTTP weiter. Ohne trust proxy
+// meldet req.protocol fälschlich "http", wodurch die an Google gesendete
+// OAuth-Redirect-URI nicht mit der registrierten https://-URI übereinstimmt
+// (Fehler "redirect_uri_mismatch").
+app.set('trust proxy', true);
+
 // Where saved LV/Angebot documents are stored. On Railway this needs a
 // Volume mounted at this path, otherwise the directory is wiped on every
 // redeploy (the container filesystem is ephemeral).
