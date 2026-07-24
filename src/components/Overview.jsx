@@ -97,6 +97,9 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
         </button>
         {onInspect && <button onClick={onInspect}>Besichtigungsmodus</button>}
         {onOpenCrm && <button onClick={onOpenCrm}>👥 Kunden (CRM)</button>}
+        <a href="/api/backup" className="icon-btn" title="Backup aller Daten herunterladen">
+          💾 Backup
+        </a>
       </div>
 
       {status === 'loading' && <p className="modal-hint">Lädt...</p>}

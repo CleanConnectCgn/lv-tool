@@ -17,8 +17,10 @@ const PORT = process.env.PORT || 3001;
 // Railway terminiert TLS und leitet intern per HTTP weiter. Ohne trust proxy
 // meldet req.protocol fälschlich "http", wodurch die an Google gesendete
 // OAuth-Redirect-URI nicht mit der registrierten https://-URI übereinstimmt
-// (Fehler "redirect_uri_mismatch").
-app.set('trust proxy', true);
+// (Fehler "redirect_uri_mismatch"). "true" (alle Proxies vertrauen) ist mit
+// express-rate-limit unsicher/inkompatibel (IP-Spoofing möglich) - genau 1
+// Hop vertrauen reicht für Railways einzelnen Edge-Proxy und behebt beides.
+app.set('trust proxy', 1);
 
 // Where saved LV/Angebot documents are stored. On Railway this needs a
 // Volume mounted at this path, otherwise the directory is wiped on every
@@ -982,6 +984,47 @@ app.get('/api/lv-pdfs/:filename', (req, res) => {
   res.download(filePath, req.params.filename, (err) => {
     if (err && !res.headersSent) res.status(404).json({ error: 'PDF nicht gefunden' });
   });
+});
+
+// Gesamtes Datenverzeichnis (Dokumente, CRM: Kunden/Aufträge/Objekte/
+// Mitarbeiter) als eine JSON-Datei zum Download - einziges Backup gegen
+// Verlust/Beschädigung des Railway-Volumes. Der Google-Kalender-Token wird
+// bewusst ausgeschlossen, damit ein geteiltes Backup kein OAuth-Secret enthält.
+async function readJsonFilesRecursive(dir, baseDir) {
+  const result = {};
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return result;
+  }
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      Object.assign(result, await readJsonFilesRecursive(fullPath, baseDir));
+    } else if (entry.name.endsWith('.json') && entry.name !== 'calendar-token.json') {
+      const relPath = path.relative(baseDir, fullPath);
+      try {
+        result[relPath] = JSON.parse(await fs.readFile(fullPath, 'utf-8'));
+      } catch {
+        // Datei zwischen readdir und readFile gelöscht oder korrupt - überspringen.
+      }
+    }
+  }
+  return result;
+}
+
+app.get('/api/backup', async (req, res) => {
+  try {
+    const files = await readJsonFilesRecursive(DATA_DIR, DATA_DIR);
+    const backup = { createdAt: new Date().toISOString(), files };
+    const filename = `lv-tool-backup_${new Date().toISOString().slice(0, 10)}.json`;
+    res.set('Content-Type', 'application/json');
+    res.set('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(JSON.stringify(backup, null, 2));
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Backup konnte nicht erstellt werden' });
+  }
 });
 
 const distPath = path.join(__dirname, '..', 'dist');
