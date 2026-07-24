@@ -1,6 +1,6 @@
 // Interval columns used across the app
 export const INTERVAL_COLUMNS = ['woechentlich', 'monatlich', 'jaehrlich'];
-export const INTERVAL_VALUES = ['1x', '2x', '3x', 'Tägl.'];
+export const INTERVAL_VALUES = ['1x', '2x', '3x', '4x', '5x', '6x', '7x'];
 
 let idCounter = 1;
 const uid = () => `r${idCounter++}-${Math.random().toString(36).slice(2, 8)}`;
