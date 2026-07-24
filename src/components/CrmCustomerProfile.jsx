@@ -8,10 +8,15 @@ import {
   getCalendarStatus,
   listCalendarEvents,
   createCalendarEvent,
+  updateCalendarEvent,
   deleteCalendarEvent,
+  disconnectCalendar,
+  mergeCustomer,
+  listCustomers,
 } from '../lib/crm.js';
 
 const VERTRAGSGENERATOR_URL = 'https://vertragsgenerator-production-7738.up.railway.app';
+const AUFTRAG_STATUS_OPTIONS = ['offen', 'in Arbeit', 'erledigt', 'storniert'];
 
 function addressLine(c) {
   if (!c) return '';
@@ -40,6 +45,15 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
   const [newTitel, setNewTitel] = useState('');
   const [newDatum, setNewDatum] = useState('');
   const [newUhrzeit, setNewUhrzeit] = useState('09:00');
+
+  const [calendarError, setCalendarError] = useState('');
+  const [reschedulingEventId, setReschedulingEventId] = useState(null);
+  const [rescheduleDatum, setRescheduleDatum] = useState('');
+  const [rescheduleUhrzeit, setRescheduleUhrzeit] = useState('09:00');
+
+  const [showMerge, setShowMerge] = useState(false);
+  const [mergeCandidates, setMergeCandidates] = useState([]);
+  const [mergeTargetKey, setMergeTargetKey] = useState('');
 
   function load() {
     setStatus('loading');
@@ -72,10 +86,23 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
     getCalendarStatus().then(setCalendarStatus).catch(() => setCalendarStatus({ connected: false, configured: false }));
   }, []);
 
-  useEffect(() => {
+  function loadEvents() {
     if (!calendarStatus?.connected) return;
-    listCalendarEvents({ customerKey }).then(setEvents).catch(() => setEvents([]));
-  }, [calendarStatus, customerKey]);
+    setCalendarError('');
+    listCalendarEvents({ customerKey })
+      .then(setEvents)
+      .catch((err) => {
+        setEvents([]);
+        if (err?.reconnectRequired) {
+          setCalendarStatus((prev) => ({ ...prev, connected: false }));
+          setCalendarError('Die Google-Kalender-Verbindung ist abgelaufen oder wurde widerrufen. Bitte erneut verbinden.');
+        } else {
+          setCalendarError(err?.message || 'Kalendertermine konnten nicht geladen werden');
+        }
+      });
+  }
+
+  useEffect(loadEvents, [calendarStatus?.connected, customerKey]);
 
   async function handleSaveNotes() {
     setSavingNotes(true);
@@ -127,7 +154,7 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
       setNewTitel('');
       setNewDatum('');
       load();
-      if (calendarStatus?.connected) listCalendarEvents({ customerKey }).then(setEvents).catch(() => {});
+      loadEvents();
     } catch (err) {
       alert(err?.message || 'Auftrag konnte nicht angelegt werden');
     }
@@ -141,8 +168,89 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
         await deleteCalendarEvent(eventId).catch(() => {});
       }
       load();
+      loadEvents();
     } catch (err) {
       alert(err?.message || 'Auftrag konnte nicht gelöscht werden');
+    }
+  }
+
+  async function handleAuftragStatusChange(auftrag, newStatus) {
+    try {
+      await updateAuftrag(auftrag.id, { status: newStatus });
+      setProfile((prev) => ({
+        ...prev,
+        auftraege: prev.auftraege.map((a) => (a.id === auftrag.id ? { ...a, status: newStatus } : a)),
+      }));
+    } catch (err) {
+      alert(err?.message || 'Status konnte nicht geändert werden');
+    }
+  }
+
+  function startReschedule(event) {
+    const d = new Date(event.start?.dateTime || event.start?.date);
+    setReschedulingEventId(event.id);
+    setRescheduleDatum(d.toISOString().slice(0, 10));
+    setRescheduleUhrzeit(d.toISOString().slice(11, 16));
+  }
+
+  async function handleSaveReschedule(event) {
+    try {
+      const start = new Date(`${rescheduleDatum}T${rescheduleUhrzeit}:00`);
+      const durationMs =
+        new Date(event.end?.dateTime || event.end?.date).getTime() -
+        new Date(event.start?.dateTime || event.start?.date).getTime();
+      const end = new Date(start.getTime() + (durationMs > 0 ? durationMs : 60 * 60 * 1000));
+      await updateCalendarEvent(event.id, {
+        start: { dateTime: start.toISOString() },
+        end: { dateTime: end.toISOString() },
+      });
+      setReschedulingEventId(null);
+      loadEvents();
+    } catch (err) {
+      if (err?.reconnectRequired) {
+        setCalendarStatus((prev) => ({ ...prev, connected: false }));
+        setCalendarError('Die Google-Kalender-Verbindung ist abgelaufen. Bitte erneut verbinden.');
+      } else {
+        alert(err?.message || 'Termin konnte nicht verschoben werden');
+      }
+    }
+  }
+
+  async function handleDisconnectCalendar() {
+    if (!window.confirm('Google-Kalender-Verbindung wirklich trennen?')) return;
+    try {
+      await disconnectCalendar();
+      setCalendarStatus((prev) => ({ ...prev, connected: false }));
+      setEvents([]);
+    } catch (err) {
+      alert(err?.message || 'Verbindung konnte nicht getrennt werden');
+    }
+  }
+
+  async function openMergeDialog() {
+    setShowMerge(true);
+    try {
+      const all = await listCustomers();
+      setMergeCandidates(all.filter((c) => c.key !== customerKey));
+    } catch (err) {
+      setMergeCandidates([]);
+    }
+  }
+
+  async function handleMerge() {
+    if (!mergeTargetKey) return;
+    const targetName = mergeCandidates.find((c) => c.key === mergeTargetKey)?.customer?.name || '';
+    if (
+      !window.confirm(
+        `"${profile.customer?.name}" wirklich in "${targetName}" zusammenführen? Alle Dokumente und Aufträge werden übernommen, nichts wird gelöscht.`
+      )
+    )
+      return;
+    try {
+      await mergeCustomer(customerKey, mergeTargetKey);
+      onBack();
+    } catch (err) {
+      alert(err?.message || 'Zusammenführen fehlgeschlagen');
     }
   }
 
@@ -154,10 +262,37 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
       <div className="overview-page-card">
         <div className="modal-actions" style={{ marginBottom: 16 }}>
           <button onClick={onBack}>Zurück zu Kunden</button>
+          <button onClick={openMergeDialog}>Mit anderem Kunden zusammenführen</button>
         </div>
 
         <h2>{profile.customer?.name || 'Unbenannt'}</h2>
         <p className="modal-hint">{addressLine(profile.customer)}</p>
+
+        {showMerge && (
+          <div className="import-box">
+            <p className="modal-hint">
+              Führt diesen Kunden vollständig in einen anderen zusammen (z.B. bei doppelter Anlage wegen
+              Schreibfehlern). Alle Dokumente und Aufträge werden übernommen, nichts wird gelöscht.
+            </p>
+            <label className="modal-field">
+              Ziel-Kunde
+              <select value={mergeTargetKey} onChange={(e) => setMergeTargetKey(e.target.value)}>
+                <option value="">Bitte wählen</option>
+                {mergeCandidates.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.customer?.name || 'Unbenannt'}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="modal-actions">
+              <button onClick={() => setShowMerge(false)}>Abbrechen</button>
+              <button className="primary" onClick={handleMerge} disabled={!mergeTargetKey}>
+                Zusammenführen
+              </button>
+            </div>
+          </div>
+        )}
 
         <button type="button" className="lv-from-file-btn" onClick={handleCopyForContract}>
           📄 Vertrag für diesen Kunden erstellen (öffnet Vertragsgenerator)
@@ -207,10 +342,16 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
             Google Kalender ist noch nicht eingerichtet — Aufträge können ohne Kalendertermin angelegt werden.
           </p>
         )}
+        {calendarError && <div className="modal-message error">{calendarError}</div>}
         {calendarStatus?.configured && !calendarStatus?.connected && (
           <a className="import-toggle-btn" href="/api/calendar/oauth/start" style={{ display: 'block', textAlign: 'center' }}>
             🔗 Google Kalender verbinden
           </a>
+        )}
+        {calendarStatus?.connected && (
+          <button type="button" onClick={handleDisconnectCalendar} style={{ marginBottom: 12 }}>
+            Kalender-Verbindung trennen
+          </button>
         )}
 
         {profile.auftraege.map((a) => (
@@ -218,11 +359,22 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
             <div className="ai-issue-header">
               <span className="ai-issue-title">{a.titel}</span>
             </div>
-            <p className="ai-issue-desc">Status: {a.status}</p>
             {a.calendarEventIds?.length > 0 && <p className="ai-issue-desc">📅 Kalendertermin verknüpft</p>}
-            <button className="icon-btn" onClick={() => handleDeleteAuftrag(a)}>
-              Löschen
-            </button>
+            <div className="modal-field-row" style={{ alignItems: 'center', marginTop: 8 }}>
+              <label className="modal-field" style={{ maxWidth: 180 }}>
+                Status
+                <select value={a.status} onChange={(e) => handleAuftragStatusChange(a, e.target.value)}>
+                  {AUFTRAG_STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="icon-btn" onClick={() => handleDeleteAuftrag(a)}>
+                Löschen
+              </button>
+            </div>
           </div>
         ))}
 
@@ -264,11 +416,34 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
             <div className="modal-subheading">Anstehende Kalendertermine</div>
             {events.length === 0 && <p className="modal-hint">Keine anstehenden Termine für diesen Kunden.</p>}
             {events.map((e) => (
-              <div key={e.id} className="overview-row">
-                <div className="overview-row-main">
-                  <div className="overview-row-title">{e.summary}</div>
-                  <div className="overview-row-sub">{formatDateTimeDE(e.start?.dateTime || e.start?.date)}</div>
+              <div key={e.id} className="overview-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+                  <div className="overview-row-main">
+                    <div className="overview-row-title">{e.summary}</div>
+                    <div className="overview-row-sub">{formatDateTimeDE(e.start?.dateTime || e.start?.date)}</div>
+                  </div>
+                  {reschedulingEventId !== e.id && (
+                    <button className="icon-btn" onClick={() => startReschedule(e)}>
+                      Verschieben
+                    </button>
+                  )}
                 </div>
+                {reschedulingEventId === e.id && (
+                  <div className="modal-field-row" style={{ marginTop: 8 }}>
+                    <label className="modal-field">
+                      Datum
+                      <input type="date" value={rescheduleDatum} onChange={(ev) => setRescheduleDatum(ev.target.value)} />
+                    </label>
+                    <label className="modal-field">
+                      Uhrzeit
+                      <input type="time" value={rescheduleUhrzeit} onChange={(ev) => setRescheduleUhrzeit(ev.target.value)} />
+                    </label>
+                    <button onClick={() => setReschedulingEventId(null)}>Abbrechen</button>
+                    <button className="primary" onClick={() => handleSaveReschedule(e)}>
+                      Speichern
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </>

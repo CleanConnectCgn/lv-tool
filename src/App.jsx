@@ -12,6 +12,7 @@ import QuickSetup from './components/QuickSetup.jsx';
 import LvFromFileModal from './components/LvFromFileModal.jsx';
 import CrmCustomerList from './components/CrmCustomerList.jsx';
 import CrmCustomerProfile from './components/CrmCustomerProfile.jsx';
+import CrmAllAuftraege from './components/CrmAllAuftraege.jsx';
 import { cloneOptionalSection, newSection } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument, listDocuments } from './lib/documents.js';
 import { uploadLvPdf } from './lib/lvPdfs.js';
@@ -359,6 +360,19 @@ export default function App() {
     return (
       <CrmCustomerList
         onBack={() => setView('overview')}
+        onOpenCustomer={(key) => {
+          setCrmCustomerKey(key);
+          setView('crm-customer');
+        }}
+        onOpenAuftraege={() => setView('crm-auftraege')}
+      />
+    );
+  }
+
+  if (view === 'crm-auftraege') {
+    return (
+      <CrmAllAuftraege
+        onBack={() => setView('crm')}
         onOpenCustomer={(key) => {
           setCrmCustomerKey(key);
           setView('crm-customer');

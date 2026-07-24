@@ -7,6 +7,8 @@ import { randomUUID } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { google } from 'googleapis';
+import rateLimit from 'express-rate-limit';
+import { customerKeyFor } from '../src/lib/crmKeys.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -51,6 +53,28 @@ function basicAuthMiddleware(req, res, next) {
 
 app.use(basicAuthMiddleware);
 app.use(express.json({ limit: '5mb' }));
+
+// Verhindert unbeabsichtigte Kostenexplosion bei den KI-Endpoints (Gemini/
+// Claude/Vision) - z.B. durch versehentliches Mehrfachklicken oder einen
+// Bug im Frontend, der einen Endpoint in einer Schleife aufruft.
+const aiRateLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Zu viele KI-Anfragen in kurzer Zeit. Bitte in ein paar Minuten erneut versuchen.' },
+});
+
+// Google Calendar hat eigene Quotas, aber ein zu aggressiver Client könnte
+// diese ausschöpfen und andere Funktionen blockieren.
+const calendarRateLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Zu viele Kalender-Anfragen in kurzer Zeit. Bitte kurz warten.' },
+});
+app.use('/api/calendar', calendarRateLimiter);
 
 // Lets the frontend pre-fill the sevDesk token field so the user doesn't
 // have to type it in manually when a server-side default is configured.
@@ -174,7 +198,7 @@ app.get('/api/sevdesk/offer-pdf/:id', async (req, res) => {
 
 // AI quality checkup for the LV: sends the sections to Claude and returns
 // structured feedback (duplicates, typos, missing tasks, wording).
-app.post('/api/ai-check', async (req, res) => {
+app.post('/api/ai-check', aiRateLimiter, async (req, res) => {
   const { sections } = req.body || {};
   if (!sections) {
     return res.status(400).json({ error: 'sections sind erforderlich' });
@@ -251,7 +275,7 @@ function extractJson(raw) {
 
 // Dual AI checkup, step 1: Gemini analyzes the LV + Angebot independently.
 // Body: { sections, angebot, branche }
-app.post('/api/checkup/gemini', async (req, res) => {
+app.post('/api/checkup/gemini', aiRateLimiter, async (req, res) => {
   const { sections, angebot, branche } = req.body || {};
   if (!sections) {
     return res.status(400).json({ error: 'sections sind erforderlich' });
@@ -298,7 +322,7 @@ Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
 // Dual AI checkup, step 2: Claude reviews the LV + Angebot independently
 // AND critiques Gemini's result.
 // Body: { sections, angebot, branche, gemini_ergebnis }
-app.post('/api/checkup/claude', async (req, res) => {
+app.post('/api/checkup/claude', aiRateLimiter, async (req, res) => {
   const { sections, angebot, branche, gemini_ergebnis } = req.body || {};
   if (!sections) {
     return res.status(400).json({ error: 'sections sind erforderlich' });
@@ -369,6 +393,7 @@ Für "freigabe" gilt ausschließlich "bereit" oder "ueberarbeitung".`;
 // mime type via query param since express.raw only sniffs one content-type.
 app.post(
   '/api/lv/from-image',
+  aiRateLimiter,
   express.raw({ type: () => true, limit: '20mb' }),
   async (req, res) => {
     const mimeType = req.query.mimeType;
@@ -520,27 +545,6 @@ app.delete('/api/documents/:id', async (req, res) => {
 // und Aufträge (verknüpfen ein bestehendes Angebot/LV mit Kalendereinträgen).
 // ---------------------------------------------------------------------------
 
-function slugifyCustomerName(name) {
-  return (
-    (name || 'unbekannt')
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '') || 'unbekannt'
-  );
-}
-
-// Ein Kunde wird über die sevDesk-Kontakt-ID identifiziert, wenn vorhanden,
-// sonst über einen aus dem Namen abgeleiteten Slug - so werden Kunden über
-// mehrere Dokumente hinweg konsistent zusammengeführt, auch ohne sevDesk-ID.
-function customerKeyFor(customer) {
-  if (!customer) return null;
-  if (customer.id) return `sevdesk-${customer.id}`;
-  if (customer.name) return `name-${slugifyCustomerName(customer.name)}`;
-  return null;
-}
-
 async function ensureCrmDirs() {
   await fs.mkdir(CUSTOMERS_DIR, { recursive: true });
   await fs.mkdir(AUFTRAEGE_DIR, { recursive: true });
@@ -643,6 +647,70 @@ app.put('/api/crm/customers/:key', async (req, res) => {
     res.json(payload);
   } catch (err) {
     res.status(500).json({ error: err?.message || 'Notizen konnten nicht gespeichert werden' });
+  }
+});
+
+// Führt zwei Kundenprofile zusammen (z.B. weil ein Kunde ohne sevDesk-ID mit
+// leicht unterschiedlicher Schreibweise zweimal angelegt wurde). Alle
+// Dokumente und Aufträge des Quell-Kunden werden auf die Stammdaten und den
+// Schlüssel des Ziel-Kunden umgeschrieben; nichts wird gelöscht.
+app.post('/api/crm/customers/:key/merge', async (req, res) => {
+  const sourceKey = req.params.key;
+  const targetKey = req.body?.targetKey;
+  if (!targetKey || targetKey === sourceKey) {
+    return res.status(400).json({ error: 'targetKey ist erforderlich und muss sich vom Quell-Kunden unterscheiden' });
+  }
+  try {
+    const docs = await loadAllDocuments();
+    const targetDoc = docs.find((d) => customerKeyFor(d.customer) === targetKey);
+    if (!targetDoc) {
+      return res.status(404).json({ error: 'Ziel-Kunde nicht gefunden' });
+    }
+    const canonicalCustomer = targetDoc.customer;
+
+    const sourceDocs = docs.filter((d) => customerKeyFor(d.customer) === sourceKey);
+    for (const d of sourceDocs) {
+      const merged = { ...d, customer: canonicalCustomer, updatedAt: new Date().toISOString() };
+      await fs.writeFile(path.join(DOCUMENTS_DIR, `${d.id}.json`), JSON.stringify(merged, null, 2));
+    }
+
+    await ensureCrmDirs();
+    let auftraegeFiles = [];
+    try {
+      auftraegeFiles = await fs.readdir(AUFTRAEGE_DIR);
+    } catch {
+      auftraegeFiles = [];
+    }
+    for (const f of auftraegeFiles.filter((f) => f.endsWith('.json'))) {
+      const filePath = path.join(AUFTRAEGE_DIR, f);
+      const a = await fs.readFile(filePath, 'utf-8').then(JSON.parse);
+      if (a.customerKey === sourceKey) {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify(
+            { ...a, customerKey: targetKey, customerName: canonicalCustomer.name || a.customerName, updatedAt: new Date().toISOString() },
+            null,
+            2
+          )
+        );
+      }
+    }
+
+    // Notizen zusammenführen (beide Texte behalten, nichts verwerfen).
+    const sourceNotes = await loadCustomerNotes(sourceKey);
+    const targetNotes = await loadCustomerNotes(targetKey);
+    const mergedNotizen = [targetNotes.notizen, sourceNotes.notizen].filter(Boolean).join('\n---\n');
+    if (mergedNotizen) {
+      await fs.writeFile(
+        path.join(CUSTOMERS_DIR, `${targetKey}.json`),
+        JSON.stringify({ notizen: mergedNotizen, updatedAt: new Date().toISOString() }, null, 2)
+      );
+    }
+    await fs.unlink(path.join(CUSTOMERS_DIR, `${sourceKey}.json`)).catch(() => {});
+
+    res.json({ success: true, targetKey });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Kunden konnten nicht zusammengeführt werden' });
   }
 });
 
@@ -776,6 +844,30 @@ app.get('/api/calendar/status', async (req, res) => {
   res.json({ connected: !!tokens?.refresh_token, configured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) });
 });
 
+// Entfernt den gespeicherten Refresh-Token wieder (Kalender trennen). Widerruft
+// den Zugriff nicht bei Google selbst - das kann der Nutzer zusätzlich über
+// https://myaccount.google.com/permissions tun, falls gewünscht.
+app.post('/api/calendar/disconnect', async (req, res) => {
+  try {
+    await fs.unlink(CALENDAR_TOKEN_FILE);
+  } catch {
+    // Datei existierte ohnehin nicht - Ziel ist bereits erreicht.
+  }
+  res.json({ success: true });
+});
+
+// Erkennt einen widerrufenen/abgelaufenen Refresh-Token (Google meldet dann
+// "invalid_grant") und löscht den gespeicherten Token automatisch, damit die
+// UI klar "Verbindung erneuern" statt eines generischen Fehlers anzeigen kann.
+async function handleCalendarError(err, res, fallbackMessage) {
+  const message = err?.message || String(err);
+  if (message.includes('invalid_grant') || err?.code === 401 || err?.response?.status === 401) {
+    await fs.unlink(CALENDAR_TOKEN_FILE).catch(() => {});
+    return res.status(401).json({ error: 'invalid_grant', reconnectRequired: true });
+  }
+  res.status(502).json({ error: message || fallbackMessage });
+}
+
 app.get('/api/calendar/events', async (req, res) => {
   try {
     const calendar = await getCalendarClient(req);
@@ -791,7 +883,7 @@ app.get('/api/calendar/events', async (req, res) => {
     });
     res.json(data.items || []);
   } catch (err) {
-    res.status(502).json({ error: err?.message || 'Kalendertermine konnten nicht geladen werden' });
+    await handleCalendarError(err, res, 'Kalendertermine konnten nicht geladen werden');
   }
 });
 
@@ -816,7 +908,7 @@ app.post('/api/calendar/events', async (req, res) => {
     });
     res.status(201).json(data);
   } catch (err) {
-    res.status(502).json({ error: err?.message || 'Termin konnte nicht erstellt werden' });
+    await handleCalendarError(err, res, 'Termin konnte nicht erstellt werden');
   }
 });
 
@@ -831,7 +923,7 @@ app.put('/api/calendar/events/:id', async (req, res) => {
     });
     res.json(data);
   } catch (err) {
-    res.status(502).json({ error: err?.message || 'Termin konnte nicht aktualisiert werden' });
+    await handleCalendarError(err, res, 'Termin konnte nicht aktualisiert werden');
   }
 });
 
@@ -842,7 +934,7 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
     await calendar.events.delete({ calendarId: 'primary', eventId: req.params.id });
     res.json({ success: true });
   } catch (err) {
-    res.status(502).json({ error: err?.message || 'Termin konnte nicht gelöscht werden' });
+    await handleCalendarError(err, res, 'Termin konnte nicht gelöscht werden');
   }
 });
 
