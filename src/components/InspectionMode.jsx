@@ -42,7 +42,7 @@ function newRowFromTask(task) {
   };
 }
 
-export default function InspectionMode({ sections, setSections, onClose }) {
+export default function InspectionMode({ sections, setSections, internalNotes, setInternalNotes, onClose }) {
   const [tasks, setTasks] = useState(buildInitialTasks);
   // Bereichs-Tiles: welche Bereiche sind für diese Besichtigung aktiv
   // (bekommen die ausgewählten Leistungen). Standardmäßig alle aktiv.
@@ -50,7 +50,6 @@ export default function InspectionMode({ sections, setSections, onClose }) {
   const [sectionNotes, setSectionNotes] = useState({});
   const [activeCat, setActiveCat] = useState('Alle');
   const [focusedTaskId, setFocusedTaskId] = useState(null);
-  const [objektNotizen, setObjektNotizen] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [newCat, setNewCat] = useState(TASK_CATEGORIES[0]?.name || '');
   const [globalWeekdays, setGlobalWeekdays] = useState([]);
@@ -364,9 +363,9 @@ export default function InspectionMode({ sections, setSections, onClose }) {
           <div className="inspection-detail-heading">Objekt Notizen</div>
           <textarea
             className="inspection-note-textarea"
-            value={objektNotizen}
-            onChange={(e) => setObjektNotizen(e.target.value)}
-            placeholder="Allgemeine Anmerkungen zur Besichtigung (intern, wird nicht im LV angezeigt)..."
+            value={internalNotes}
+            onChange={(e) => setInternalNotes(e.target.value)}
+            placeholder="Allgemeine Anmerkungen zur Besichtigung (intern, wird nicht im LV angezeigt, aber mit gespeichert)..."
           />
         </div>
       </div>

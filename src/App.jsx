@@ -43,6 +43,7 @@ export default function App() {
   const [objekt, setObjekt] = useState('');
   const [datum, setDatum] = useState(todayISO());
   const [intervallInfo, setIntervallInfo] = useState('');
+  const [internalNotes, setInternalNotes] = useState('');
   const [customer, setCustomer] = useState(null);
   const [showSevDesk, setShowSevDesk] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -95,6 +96,7 @@ export default function App() {
     setObjekt(addressLine(newCustomer) || newCustomer?.name || '');
     setDatum(todayISO());
     setIntervallInfo('');
+    setInternalNotes('');
     setView('editor');
     if (pendingInspection) {
       setPendingInspection(false);
@@ -119,6 +121,7 @@ export default function App() {
         objekt,
         datum,
         intervallInfo,
+        internalNotes,
         sections: mainDoc.sections,
         customer,
         docType: 'main',
@@ -209,6 +212,7 @@ export default function App() {
         children.map((c) => ({ id: c.id, docType: c.docType, lvTitle: c.lvTitle, sections: c.sections }))
       );
       setObjekt(main.objekt);
+      setInternalNotes(main.internalNotes || '');
       setDatum(main.datum);
       setIntervallInfo(main.intervallInfo);
       setCustomer(main.customer || null);
@@ -502,6 +506,8 @@ export default function App() {
         <InspectionMode
           sections={sections}
           setSections={setSections}
+          internalNotes={internalNotes}
+          setInternalNotes={setInternalNotes}
           onClose={() => setShowInspection(false)}
         />
       )}

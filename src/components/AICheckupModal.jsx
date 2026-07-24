@@ -16,11 +16,13 @@ export default function AICheckupModal({
   onRunDualCheckup,
 }) {
   const [appliedIds, setAppliedIds] = useState({});
+  const [history, setHistory] = useState([]);
 
   function applyFix(issue) {
     if (!issue.fix && issue.fixType !== 'remove_row') return;
-    setSections((prev) =>
-      prev.map((s) => {
+    setSections((prev) => {
+      setHistory((h) => [...h, { snapshot: prev, issueId: issue.id }]);
+      return prev.map((s) => {
         if (issue.targetSection && s.title !== issue.targetSection) return s;
         if (issue.fixType === 'rename_section') {
           return issue.targetSection && s.title === issue.targetSection ? { ...s, title: issue.fix } : s;
@@ -36,8 +38,8 @@ export default function AICheckupModal({
           };
         }
         return s;
-      })
-    );
+      });
+    });
     setAppliedIds((prev) => ({ ...prev, [issue.id]: true }));
   }
 
@@ -45,6 +47,20 @@ export default function AICheckupModal({
     issues
       .filter((i) => i.type === type && !appliedIds[i.id] && (i.fix || i.fixType === 'remove_row'))
       .forEach((i) => applyFix(i));
+  }
+
+  function handleUndo() {
+    setHistory((h) => {
+      if (h.length === 0) return h;
+      const last = h[h.length - 1];
+      setSections(last.snapshot);
+      setAppliedIds((prev) => {
+        const next = { ...prev };
+        delete next[last.issueId];
+        return next;
+      });
+      return h.slice(0, -1);
+    });
   }
 
   const redIssues = issues.filter((i) => i.type === 'red');
@@ -84,9 +100,16 @@ export default function AICheckupModal({
       <div className="modal ai-checkup-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ai-modal-header">
           <h2>KI Qualitätsprüfung</h2>
-          <button type="button" className="ai-recheck-btn" onClick={onRecheck} disabled={status === 'pending'}>
-            {status === 'pending' ? 'Prüft...' : 'Neu prüfen'}
-          </button>
+          <div className="ai-modal-header-actions">
+            {history.length > 0 && (
+              <button type="button" className="ai-undo-btn" onClick={handleUndo}>
+                ↺ Rückgängig ({history.length})
+              </button>
+            )}
+            <button type="button" className="ai-recheck-btn" onClick={onRecheck} disabled={status === 'pending'}>
+              {status === 'pending' ? 'Prüft...' : 'Neu prüfen'}
+            </button>
+          </div>
         </div>
 
         {status === 'pending' && (

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { listDocuments, deleteDocument } from '../lib/documents.js';
+import { listDocuments, deleteDocument, getDocument } from '../lib/documents.js';
 import MiniGame from './MiniGame.jsx';
 import ExportedPdfsList from './ExportedPdfsList.jsx';
 
@@ -40,6 +40,38 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, variant = 
   function handleDeleteClick(e, id) {
     e.stopPropagation();
     setConfirmDeleteId(id);
+  }
+
+  const [copyStatus, setCopyStatus] = useState({});
+
+  // Kopiert die relevanten Felder eines Dokuments als JSON in die
+  // Zwischenablage, damit sie im Vertragsgenerator (separates Tool/Repo)
+  // per Einfügen importiert werden können, ohne die Daten neu abzutippen.
+  async function handleCopyForContract(e, id) {
+    e.stopPropagation();
+    try {
+      const doc = await getDocument(id);
+      const verguetungNetto = doc.offer?.amounts
+        ? Object.values(doc.offer.amounts).reduce((sum, v) => sum + (Number(v) || 0), 0)
+        : '';
+      const payload = {
+        kunde: {
+          firma: doc.customer?.name || '',
+          strasse: doc.customer?.street || '',
+          plz: doc.customer?.zip || '',
+          ort: doc.customer?.city || '',
+          ansprechpartner: doc.offer?.contactName || '',
+        },
+        objektAdresse: doc.objekt || '',
+        reinigungsintervall: doc.intervallInfo || '',
+        verguetungNetto: verguetungNetto || '',
+      };
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setCopyStatus((prev) => ({ ...prev, [id]: 'done' }));
+      setTimeout(() => setCopyStatus((prev) => ({ ...prev, [id]: null })), 2000);
+    } catch (err) {
+      setCopyStatus((prev) => ({ ...prev, [id]: 'error' }));
+    }
   }
 
   async function handleConfirmDelete(e, id) {
@@ -99,6 +131,15 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, variant = 
                   <span>Stand {formatDateDE(d.datum)}</span>
                   <span>Zuletzt bearbeitet {formatUpdatedAt(d.updatedAt)}</span>
                 </div>
+                {!nested && (
+                  <button
+                    className="icon-btn overview-copy-contract"
+                    title="Für Vertragsgenerator kopieren"
+                    onClick={(e) => handleCopyForContract(e, d.id)}
+                  >
+                    {copyStatus[d.id] === 'done' ? '✓' : copyStatus[d.id] === 'error' ? '✗' : '📋'}
+                  </button>
+                )}
                 {confirmDeleteId === d.id ? (
                   <button
                     className="overview-delete-confirm"

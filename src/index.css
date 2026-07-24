@@ -874,12 +874,27 @@ tr.drag-over td {
   margin: 0;
 }
 
+.ai-modal-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .ai-recheck-btn {
   background: #fff;
   color: var(--teal-dark);
   border: 1px solid var(--teal-line);
   font-size: 12px;
   padding: 5px 10px;
+}
+
+.ai-undo-btn {
+  background: #fff;
+  color: var(--gray);
+  border: 1px solid var(--line-strong);
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  cursor: pointer;
 }
 
 .ai-status-badge {

@@ -18,6 +18,27 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const DOCUMENTS_DIR = path.join(DATA_DIR, 'documents');
 const LV_PDFS_DIR = path.join(DATA_DIR, 'Leistungsverzeichnisse');
 
+// Optionaler Basic-Auth-Schutz: nur aktiv, wenn APP_USERNAME/APP_PASSWORD
+// gesetzt sind. Ohne diese Variablen bleibt das Verhalten unverändert
+// (offen), damit bestehende Deployments nicht versehentlich ausgesperrt
+// werden - Zugangsdaten müssen bewusst per `railway variables --set` gesetzt
+// werden.
+function basicAuthMiddleware(req, res, next) {
+  const user = process.env.APP_USERNAME;
+  const pass = process.env.APP_PASSWORD;
+  if (!user || !pass) return next();
+
+  const header = req.headers.authorization || '';
+  const [scheme, encoded] = header.split(' ');
+  if (scheme === 'Basic' && encoded) {
+    const [reqUser, reqPass] = Buffer.from(encoded, 'base64').toString('utf-8').split(':');
+    if (reqUser === user && reqPass === pass) return next();
+  }
+  res.set('WWW-Authenticate', 'Basic realm="LV-Tool"');
+  res.status(401).send('Zugang erforderlich');
+}
+
+app.use(basicAuthMiddleware);
 app.use(express.json({ limit: '5mb' }));
 
 // Lets the frontend pre-fill the sevDesk token field so the user doesn't

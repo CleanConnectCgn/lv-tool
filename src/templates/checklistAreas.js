@@ -16,6 +16,7 @@ function row(text, opts = {}) {
     intervalColumn: opts.bedarf ? '' : opts.column || '',
     intervalValue: opts.bedarf ? '' : opts.value || '',
     bemerkung: opts.bemerkung || '',
+    wochentage: opts.wochentage || [],
   };
 }
 
@@ -220,7 +221,7 @@ export function buildSectionsFromSetup(setup) {
     const built = AREA_DEFINITIONS[key].build();
     built.rows = built.rows.map((r) =>
       r.intervalColumn === 'woechentlich' && !r.intervalValue
-        ? { ...r, intervalValue: setup.frequency }
+        ? { ...r, intervalValue: setup.frequency, wochentage: setup.wochentage || [] }
         : r
     );
     main.push(built);

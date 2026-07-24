@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { searchContacts, createContact, getContactAddress } from '../lib/sevdesk.js';
 import { AREA_DEFINITIONS, AREA_ORDER, buildSectionsFromSetup } from '../templates/checklistAreas.js';
+import WeekdaySelector from './WeekdaySelector.jsx';
 
 const TOKEN_KEY = 'lv-tool:sevdesk-token';
 const FREQUENCIES = ['1x', '2x', '3x', '4x', '5x', '6x', '7x'];
@@ -30,6 +31,7 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
 
   // Schritt 1-3
   const [frequency, setFrequency] = useState('2x');
+  const [wochentage, setWochentage] = useState([]);
   const [areas, setAreas] = useState(() =>
     Object.fromEntries(AREA_ORDER.map((k) => [k, false]))
   );
@@ -90,6 +92,7 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
   async function handleGenerate() {
     const { main, children } = buildSectionsFromSetup({
       frequency,
+      wochentage,
       areas,
       glas: { enabled: glasEnabled, rahmen, lamellen, lamellenFreq },
       grundreinigung,
@@ -228,6 +231,16 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
               </option>
             ))}
           </select>
+        </label>
+        <label className="modal-field">
+          An welchen Wochentagen? (optional)
+          <WeekdaySelector
+            value={wochentage}
+            onChange={(days) => {
+              setWochentage(days);
+              if (days.length > 0) setFrequency(`${days.length}x`);
+            }}
+          />
         </label>
 
         <hr className="modal-section-divider" />
