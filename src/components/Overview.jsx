@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { listDocuments, deleteDocument, getDocument } from '../lib/documents.js';
 import MiniGame from './MiniGame.jsx';
 import ExportedPdfsList from './ExportedPdfsList.jsx';
+import CrmDashboardWidget from './CrmDashboardWidget.jsx';
 
 function formatDateDE(isoStr) {
   if (!isoStr) return '';
@@ -185,7 +186,12 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
   );
 
   if (variant === 'page') {
-    return <div className="overview-page">{content}</div>;
+    return (
+      <div className="overview-page">
+        {onOpenCrm && <CrmDashboardWidget onOpenCrm={onOpenCrm} />}
+        {content}
+      </div>
+    );
   }
 
   return (

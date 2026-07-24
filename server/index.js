@@ -630,8 +630,12 @@ app.get('/api/crm/customers/:key', async (req, res) => {
         lvTitle: d.lvTitle,
         objekt: d.objekt,
         datum: d.datum,
+        intervallInfo: d.intervallInfo || '',
         updatedAt: d.updatedAt,
         offerNumber: d.offer?.offerNumber || null,
+        verguetungNetto: d.offer?.amounts
+          ? Object.values(d.offer.amounts).reduce((sum, v) => sum + (Number(v) || 0), 0)
+          : null,
       })),
       notizen: notes.notizen || '',
       auftraege,

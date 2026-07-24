@@ -246,8 +246,14 @@ button.icon-btn:hover {
   outline: none;
 }
 
+.lv-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+}
+
 .lv-table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
 }
 
@@ -1762,6 +1768,72 @@ body.exporting-pdf .print-view {
   border: none;
   border-top: 1px solid var(--line);
   margin: 20px 0;
+}
+
+.crm-dashboard-widget h2 {
+  margin-top: 0;
+}
+
+.crm-dashboard-widget .modal-subheading {
+  margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .overview-page-card,
+  .modal,
+  .quick-setup-card {
+    padding: 16px;
+    max-width: 100%;
+  }
+
+  .modal-field-row,
+  .field-row {
+    flex-direction: column;
+  }
+
+  .overview-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .overview-row-meta {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .overview-actions {
+    flex-direction: column;
+  }
+
+  .overview-actions button,
+  .overview-actions a {
+    width: 100%;
+    text-align: center;
+  }
+
+  .modal-actions {
+    flex-wrap: wrap;
+  }
+
+  .inspection-body {
+    flex-direction: column;
+  }
+
+  .inspection-left,
+  .inspection-right {
+    flex: 1 1 auto;
+    width: 100%;
+  }
+
+  .ai-modal-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .drag-handle {
+    display: none;
+  }
 }
 
 @media print {

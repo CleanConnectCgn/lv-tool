@@ -159,6 +159,10 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
   }
 
   async function handleCopyForContract() {
+    // Nimmt das zuletzt aktualisierte Dokument als Quelle für Intervall und
+    // Vergütung, damit der bereits in sevDesk kalkulierte Angebotspreis nicht
+    // manuell neu eingetippt werden muss.
+    const sourceDoc = [...profile.documents].sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))[0];
     const payload = {
       kunde: {
         firma: profile.customer?.name || '',
@@ -166,7 +170,9 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
         plz: profile.customer?.plz || profile.customer?.zip || '',
         ort: profile.customer?.ort || profile.customer?.city || '',
       },
-      objektAdresse: profile.documents[0]?.objekt || '',
+      objektAdresse: sourceDoc?.objekt || '',
+      reinigungsintervall: sourceDoc?.intervallInfo || '',
+      verguetungNetto: sourceDoc?.verguetungNetto || '',
     };
     await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
     window.open(VERTRAGSGENERATOR_URL, '_blank');

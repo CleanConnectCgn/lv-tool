@@ -20,6 +20,7 @@ export default function LVEditor({ sections, setSections }) {
   }
 
   return (
+    <div className="lv-table-scroll">
     <table className="lv-table">
       <thead>
         <tr>
@@ -45,5 +46,6 @@ export default function LVEditor({ sections, setSections }) {
         ))}
       </tbody>
     </table>
+    </div>
   );
 }
