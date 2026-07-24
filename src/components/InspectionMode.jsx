@@ -44,15 +44,28 @@ function newRowFromTask(task) {
 
 export default function InspectionMode({ sections, setSections, onClose }) {
   const [tasks, setTasks] = useState(buildInitialTasks);
-  const [activeSectionId, setActiveSectionId] = useState(sections[0]?.id || '');
+  // Bereichs-Tiles: welche Bereiche sind für diese Besichtigung aktiv
+  // (bekommen die ausgewählten Leistungen). Standardmäßig alle aktiv.
+  const [activeSectionIds, setActiveSectionIds] = useState(() => new Set(sections.map((s) => s.id)));
+  const [sectionNotes, setSectionNotes] = useState({});
   const [activeCat, setActiveCat] = useState('Alle');
   const [focusedTaskId, setFocusedTaskId] = useState(null);
   const [objektNotizen, setObjektNotizen] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [newCat, setNewCat] = useState(TASK_CATEGORIES[0]?.name || '');
   const [globalWeekdays, setGlobalWeekdays] = useState([]);
+  const [focusedSectionId, setFocusedSectionId] = useState(null);
 
-  const activeSection = sections.find((s) => s.id === activeSectionId);
+  function toggleSectionActive(id) {
+    setActiveSectionIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  const activeSectionsCount = activeSectionIds.size;
   const selectedCount = tasks.filter((t) => t.selected).length;
   const focusedTask = tasks.find((t) => t.id === focusedTaskId);
 
@@ -99,14 +112,26 @@ export default function InspectionMode({ sections, setSections, onClose }) {
 
   function handleFinish() {
     const selectedTasks = tasks.filter((t) => t.selected);
-    if (selectedTasks.length > 0) {
-      setSections((prev) =>
-        prev.map((s) => ({
-          ...s,
-          rows: [...selectedTasks.map((t) => newRowFromTask(t)), ...s.rows],
-        }))
-      );
-    }
+    setSections((prev) =>
+      prev.map((s) => {
+        if (!activeSectionIds.has(s.id)) return s;
+        const newRows = selectedTasks.map((t) => newRowFromTask(t));
+        const note = sectionNotes[s.id]?.trim();
+        if (note) {
+          newRows.push({
+            id: `insp-note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            text: note,
+            bedarf: true,
+            intervalColumn: '',
+            intervalValue: '',
+            bemerkung: '',
+            wochentage: [],
+          });
+        }
+        if (newRows.length === 0) return s;
+        return { ...s, rows: [...newRows, ...s.rows] };
+      })
+    );
     onClose();
   }
 
@@ -193,16 +218,6 @@ export default function InspectionMode({ sections, setSections, onClose }) {
       <div className="inspection-topbar">
         <img src={LOGO_URI} alt="Clean Connect" className="inspection-logo" />
         <h2>Besichtigungsmodus</h2>
-        <label className="inspection-section-select">
-          Bereich
-          <select value={activeSectionId} onChange={(e) => setActiveSectionId(e.target.value)}>
-            {sections.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-          </select>
-        </label>
         <span className="inspection-count-badge">{selectedCount} ausgewählt</span>
         <button className="inspection-close" onClick={handleFinish}>
           Fertig ✓
@@ -211,6 +226,43 @@ export default function InspectionMode({ sections, setSections, onClose }) {
 
       <div className="inspection-body">
         <div className="inspection-left">
+          <div className="inspection-section-tiles">
+            <span className="inspection-global-sync-label">
+              Bereiche für diese Besichtigung ({activeSectionsCount}/{sections.length} aktiv):
+            </span>
+            <div className="inspection-tile-row">
+              {sections.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`inspection-section-tile${activeSectionIds.has(s.id) ? ' active' : ''}`}
+                  onClick={() => toggleSectionActive(s.id)}
+                  onDoubleClick={() => setFocusedSectionId(s.id)}
+                  title="Klick: aktivieren/deaktivieren · Doppelklick: Schnellnotiz"
+                >
+                  {s.title}
+                </button>
+              ))}
+            </div>
+            {focusedSectionId && sections.some((s) => s.id === focusedSectionId) && (
+              <div className="inspection-section-note">
+                <span className="inspection-detail-subheading">
+                  Schnellnotiz — {sections.find((s) => s.id === focusedSectionId)?.title}
+                </span>
+                <textarea
+                  className="inspection-note-textarea"
+                  value={sectionNotes[focusedSectionId] || ''}
+                  onChange={(e) =>
+                    setSectionNotes((prev) => ({ ...prev, [focusedSectionId]: e.target.value }))
+                  }
+                  placeholder="Besonderheiten für diesen Bereich..."
+                />
+                <button type="button" className="inspection-note-close" onClick={() => setFocusedSectionId(null)}>
+                  Schließen
+                </button>
+              </div>
+            )}
+          </div>
           <div className="inspection-global-sync">
             <span className="inspection-global-sync-label">Alle Bereiche wöchentlich:</span>
             <WeekdaySelector compact value={globalWeekdays} onChange={applyGlobalWeekdays} />
@@ -275,7 +327,7 @@ export default function InspectionMode({ sections, setSections, onClose }) {
             <>
               {focusedTask.selected && (
                 <div className="inspection-detail-badge">
-                  Wird zu allen Bereichen hinzugefügt{activeSection ? ` (aktiv: ${activeSection.title})` : ''}
+                  Wird zu {activeSectionsCount} aktiven Bereich{activeSectionsCount === 1 ? '' : 'en'} hinzugefügt
                 </div>
               )}
               {focusedTask.col === 'woechentlich' && (

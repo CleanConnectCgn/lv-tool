@@ -1479,6 +1479,46 @@ body.exporting-pdf .print-view {
   white-space: nowrap;
 }
 
+.inspection-section-tiles {
+  margin-bottom: 12px;
+}
+
+.inspection-tile-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.inspection-section-tile {
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  color: var(--gray);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.inspection-section-tile.active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+
+.inspection-section-note {
+  margin-top: 10px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.inspection-note-close {
+  margin-top: 6px;
+}
+
 .inspection-global-sync {
   display: flex;
   align-items: center;
