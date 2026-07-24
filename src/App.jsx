@@ -10,6 +10,8 @@ import AIStatusBadge from './components/AIStatusBadge.jsx';
 import Overview from './components/Overview.jsx';
 import QuickSetup from './components/QuickSetup.jsx';
 import LvFromFileModal from './components/LvFromFileModal.jsx';
+import CrmCustomerList from './components/CrmCustomerList.jsx';
+import CrmCustomerProfile from './components/CrmCustomerProfile.jsx';
 import { cloneOptionalSection, newSection } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument, listDocuments } from './lib/documents.js';
 import { uploadLvPdf } from './lib/lvPdfs.js';
@@ -32,6 +34,7 @@ function blankMainDoc() {
 export default function App() {
   // 'overview' (Startseite) | 'setup' (Quick-Setup-Assistent) | 'editor'
   const [view, setView] = useState('overview');
+  const [crmCustomerKey, setCrmCustomerKey] = useState(null);
 
   // Ein Kunde/Objekt kann mehrere verknüpfte Leistungsverzeichnisse haben
   // (z. B. Unterhaltsreinigung + eigenständige Glasreinigung/Winterdienst-LVs).
@@ -347,6 +350,29 @@ export default function App() {
         onOpen={handleOpenDocument}
         onNew={handleNewDocument}
         onInspect={handleStartInspection}
+        onOpenCrm={() => setView('crm')}
+      />
+    );
+  }
+
+  if (view === 'crm') {
+    return (
+      <CrmCustomerList
+        onBack={() => setView('overview')}
+        onOpenCustomer={(key) => {
+          setCrmCustomerKey(key);
+          setView('crm-customer');
+        }}
+      />
+    );
+  }
+
+  if (view === 'crm-customer') {
+    return (
+      <CrmCustomerProfile
+        customerKey={crmCustomerKey}
+        onBack={() => setView('crm')}
+        onOpenDocument={(id) => handleOpenDocument(id)}
       />
     );
   }

@@ -16,7 +16,7 @@ function formatUpdatedAt(iso) {
   return d.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export default function Overview({ onClose, onOpen, onNew, onInspect, variant = 'modal' }) {
+export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm, variant = 'modal' }) {
   const [docs, setDocs] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -96,6 +96,7 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, variant = 
           + Neues Leistungsverzeichnis
         </button>
         {onInspect && <button onClick={onInspect}>Besichtigungsmodus</button>}
+        {onOpenCrm && <button onClick={onOpenCrm}>👥 Kunden (CRM)</button>}
       </div>
 
       {status === 'loading' && <p className="modal-hint">Lädt...</p>}

@@ -6,6 +6,7 @@ import fs from 'fs/promises';
 import { randomUUID } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { google } from 'googleapis';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -17,6 +18,10 @@ const PORT = process.env.PORT || 3001;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const DOCUMENTS_DIR = path.join(DATA_DIR, 'documents');
 const LV_PDFS_DIR = path.join(DATA_DIR, 'Leistungsverzeichnisse');
+const CRM_DIR = path.join(DATA_DIR, 'crm');
+const CUSTOMERS_DIR = path.join(CRM_DIR, 'customers');
+const AUFTRAEGE_DIR = path.join(CRM_DIR, 'auftraege');
+const CALENDAR_TOKEN_FILE = path.join(CRM_DIR, 'calendar-token.json');
 
 // Optionaler Basic-Auth-Schutz: nur aktiv, wenn APP_USERNAME/APP_PASSWORD
 // gesetzt sind. Ohne diese Variablen bleibt das Verhalten unverändert
@@ -446,6 +451,7 @@ app.get('/api/documents', async (req, res) => {
         updatedAt: d.updatedAt,
         offerNumber: d.offer?.offerNumber || null,
         contactName: d.offer?.contactName || null,
+        customer: d.customer || null,
       }))
       .sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1));
     res.json(summaries);
@@ -499,6 +505,338 @@ app.delete('/api/documents/:id', async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     res.status(404).json({ error: 'Dokument nicht gefunden' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// CRM: Kundenprofile (aggregiert aus documents' customer-Feld, keine eigene
+// Kopie der Stammdaten - nur Notizen/Zusatzinfo werden separat gespeichert)
+// und Aufträge (verknüpfen ein bestehendes Angebot/LV mit Kalendereinträgen).
+// ---------------------------------------------------------------------------
+
+function slugifyCustomerName(name) {
+  return (
+    (name || 'unbekannt')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '') || 'unbekannt'
+  );
+}
+
+// Ein Kunde wird über die sevDesk-Kontakt-ID identifiziert, wenn vorhanden,
+// sonst über einen aus dem Namen abgeleiteten Slug - so werden Kunden über
+// mehrere Dokumente hinweg konsistent zusammengeführt, auch ohne sevDesk-ID.
+function customerKeyFor(customer) {
+  if (!customer) return null;
+  if (customer.id) return `sevdesk-${customer.id}`;
+  if (customer.name) return `name-${slugifyCustomerName(customer.name)}`;
+  return null;
+}
+
+async function ensureCrmDirs() {
+  await fs.mkdir(CUSTOMERS_DIR, { recursive: true });
+  await fs.mkdir(AUFTRAEGE_DIR, { recursive: true });
+}
+
+async function loadAllDocuments() {
+  await ensureDocumentsDir();
+  const files = await fs.readdir(DOCUMENTS_DIR);
+  return Promise.all(
+    files
+      .filter((f) => f.endsWith('.json'))
+      .map((f) => fs.readFile(path.join(DOCUMENTS_DIR, f), 'utf-8').then(JSON.parse))
+  );
+}
+
+async function loadCustomerNotes(key) {
+  try {
+    const raw = await fs.readFile(path.join(CUSTOMERS_DIR, `${key}.json`), 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    return { notizen: '' };
+  }
+}
+
+// GET /api/crm/customers - Liste aller Kunden, aggregiert aus den
+// vorhandenen LV/Angebot-Dokumenten (keine Datenduplizierung).
+app.get('/api/crm/customers', async (req, res) => {
+  try {
+    const docs = await loadAllDocuments();
+    const byKey = new Map();
+    for (const d of docs) {
+      const key = customerKeyFor(d.customer);
+      if (!key) continue;
+      if (!byKey.has(key)) {
+        byKey.set(key, { key, customer: d.customer, documentCount: 0, lastUpdatedAt: null });
+      }
+      const entry = byKey.get(key);
+      entry.documentCount += 1;
+      if (!entry.lastUpdatedAt || d.updatedAt > entry.lastUpdatedAt) {
+        entry.lastUpdatedAt = d.updatedAt;
+        entry.customer = d.customer; // neueste Version der Stammdaten gewinnt
+      }
+    }
+    const list = Array.from(byKey.values()).sort((a, b) => (a.lastUpdatedAt < b.lastUpdatedAt ? 1 : -1));
+    res.json(list);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Kunden konnten nicht geladen werden' });
+  }
+});
+
+// GET /api/crm/customers/:key - Profil eines Kunden: Stammdaten, alle
+// LVs/Angebote, Notizen, verknüpfte Aufträge.
+app.get('/api/crm/customers/:key', async (req, res) => {
+  try {
+    const docs = await loadAllDocuments();
+    const matching = docs.filter((d) => customerKeyFor(d.customer) === req.params.key);
+    if (matching.length === 0) {
+      return res.status(404).json({ error: 'Kunde nicht gefunden' });
+    }
+    const newest = matching.reduce((a, b) => (a.updatedAt > b.updatedAt ? a : b));
+    await ensureCrmDirs();
+    const notes = await loadCustomerNotes(req.params.key);
+    let auftraege = [];
+    try {
+      const files = await fs.readdir(AUFTRAEGE_DIR);
+      const all = await Promise.all(
+        files.filter((f) => f.endsWith('.json')).map((f) => fs.readFile(path.join(AUFTRAEGE_DIR, f), 'utf-8').then(JSON.parse))
+      );
+      auftraege = all.filter((a) => a.customerKey === req.params.key);
+    } catch {
+      auftraege = [];
+    }
+    res.json({
+      key: req.params.key,
+      customer: newest.customer,
+      documents: matching.map((d) => ({
+        id: d.id,
+        docType: d.docType || 'main',
+        lvTitle: d.lvTitle,
+        objekt: d.objekt,
+        datum: d.datum,
+        updatedAt: d.updatedAt,
+        offerNumber: d.offer?.offerNumber || null,
+      })),
+      notizen: notes.notizen || '',
+      auftraege,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Kundenprofil konnte nicht geladen werden' });
+  }
+});
+
+// PUT /api/crm/customers/:key - nur Notizen (CRM-eigene Zusatzdaten, ändert
+// nie die sevDesk-/Dokument-Stammdaten selbst).
+app.put('/api/crm/customers/:key', async (req, res) => {
+  try {
+    await ensureCrmDirs();
+    const payload = { notizen: req.body?.notizen || '', updatedAt: new Date().toISOString() };
+    await fs.writeFile(path.join(CUSTOMERS_DIR, `${req.params.key}.json`), JSON.stringify(payload, null, 2));
+    res.json(payload);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Notizen konnten nicht gespeichert werden' });
+  }
+});
+
+// Aufträge: verknüpfen einen Kunden + optional ein bestehendes Angebot/LV
+// mit Kalendereinträgen (siehe /api/calendar/*).
+app.get('/api/crm/auftraege', async (req, res) => {
+  try {
+    await ensureCrmDirs();
+    const files = await fs.readdir(AUFTRAEGE_DIR);
+    const all = await Promise.all(
+      files.filter((f) => f.endsWith('.json')).map((f) => fs.readFile(path.join(AUFTRAEGE_DIR, f), 'utf-8').then(JSON.parse))
+    );
+    res.json(all.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)));
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Aufträge konnten nicht geladen werden' });
+  }
+});
+
+app.post('/api/crm/auftraege', async (req, res) => {
+  try {
+    await ensureCrmDirs();
+    const now = new Date().toISOString();
+    const auftrag = {
+      customerKey: req.body?.customerKey || null,
+      customerName: req.body?.customerName || '',
+      titel: req.body?.titel || '',
+      documentId: req.body?.documentId || null,
+      status: req.body?.status || 'offen',
+      notizen: req.body?.notizen || '',
+      calendarEventIds: req.body?.calendarEventIds || [],
+      id: randomUUID(),
+      createdAt: now,
+      updatedAt: now,
+    };
+    await fs.writeFile(path.join(AUFTRAEGE_DIR, `${auftrag.id}.json`), JSON.stringify(auftrag, null, 2));
+    res.status(201).json(auftrag);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Auftrag konnte nicht gespeichert werden' });
+  }
+});
+
+app.put('/api/crm/auftraege/:id', async (req, res) => {
+  try {
+    const filePath = path.join(AUFTRAEGE_DIR, `${req.params.id}.json`);
+    const existing = await fs.readFile(filePath, 'utf-8').then(JSON.parse).catch(() => null);
+    if (!existing) return res.status(404).json({ error: 'Auftrag nicht gefunden' });
+    const merged = { ...existing, ...req.body, id: req.params.id, updatedAt: new Date().toISOString() };
+    await fs.writeFile(filePath, JSON.stringify(merged, null, 2));
+    res.json(merged);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Auftrag konnte nicht aktualisiert werden' });
+  }
+});
+
+app.delete('/api/crm/auftraege/:id', async (req, res) => {
+  try {
+    await fs.unlink(path.join(AUFTRAEGE_DIR, `${req.params.id}.json`));
+    res.json({ success: true });
+  } catch (err) {
+    res.status(404).json({ error: 'Auftrag nicht gefunden' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Google Calendar (Firmen-Account) - OAuth-Flow + Termin-CRUD, ausschließlich
+// für unseren eigenen Kalender, nicht für sevDesk. Der Refresh-Token wird
+// verschlüsselt-über-Volume (nicht im Git) unter CALENDAR_TOKEN_FILE abgelegt.
+// ---------------------------------------------------------------------------
+
+function oauth2ClientFor(req) {
+  const redirectUri = `${req.protocol}://${req.get('host')}/api/calendar/oauth/callback`;
+  return new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, redirectUri);
+}
+
+async function loadCalendarTokens() {
+  try {
+    return JSON.parse(await fs.readFile(CALENDAR_TOKEN_FILE, 'utf-8'));
+  } catch {
+    return null;
+  }
+}
+
+async function saveCalendarTokens(tokens) {
+  await fs.mkdir(CRM_DIR, { recursive: true });
+  await fs.writeFile(CALENDAR_TOKEN_FILE, JSON.stringify(tokens, null, 2));
+}
+
+// Baut einen authentifizierten Calendar-Client auf Basis des gespeicherten
+// Refresh-Tokens. googleapis erneuert den Access-Token automatisch.
+async function getCalendarClient(req) {
+  const tokens = await loadCalendarTokens();
+  if (!tokens?.refresh_token) return null;
+  const client = oauth2ClientFor(req);
+  client.setCredentials(tokens);
+  client.on('tokens', async (newTokens) => {
+    await saveCalendarTokens({ ...tokens, ...newTokens });
+  });
+  return google.calendar({ version: 'v3', auth: client });
+}
+
+app.get('/api/calendar/oauth/start', (req, res) => {
+  if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+    return res.status(500).send('GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET sind nicht konfiguriert.');
+  }
+  const client = oauth2ClientFor(req);
+  const url = client.generateAuthUrl({
+    access_type: 'offline',
+    prompt: 'consent', // erzwingt Ausstellung eines refresh_token auch bei erneuter Autorisierung
+    scope: ['https://www.googleapis.com/auth/calendar'],
+  });
+  res.redirect(url);
+});
+
+app.get('/api/calendar/oauth/callback', async (req, res) => {
+  try {
+    const client = oauth2ClientFor(req);
+    const { tokens } = await client.getToken(req.query.code);
+    if (!tokens.refresh_token) {
+      const existing = await loadCalendarTokens();
+      if (existing?.refresh_token) tokens.refresh_token = existing.refresh_token;
+    }
+    await saveCalendarTokens(tokens);
+    res.redirect('/?calendar=connected');
+  } catch (err) {
+    res.status(500).send(`Kalender-Verbindung fehlgeschlagen: ${err?.message || err}`);
+  }
+});
+
+app.get('/api/calendar/status', async (req, res) => {
+  const tokens = await loadCalendarTokens();
+  res.json({ connected: !!tokens?.refresh_token, configured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) });
+});
+
+app.get('/api/calendar/events', async (req, res) => {
+  try {
+    const calendar = await getCalendarClient(req);
+    if (!calendar) return res.status(409).json({ error: 'Kalender nicht verbunden' });
+    const { data } = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: req.query.timeMin || new Date().toISOString(),
+      timeMax: req.query.timeMax || undefined,
+      maxResults: 250,
+      singleEvents: true,
+      orderBy: 'startTime',
+      privateExtendedProperty: req.query.customerKey ? [`customerKey=${req.query.customerKey}`] : undefined,
+    });
+    res.json(data.items || []);
+  } catch (err) {
+    res.status(502).json({ error: err?.message || 'Kalendertermine konnten nicht geladen werden' });
+  }
+});
+
+app.post('/api/calendar/events', async (req, res) => {
+  try {
+    const calendar = await getCalendarClient(req);
+    if (!calendar) return res.status(409).json({ error: 'Kalender nicht verbunden' });
+    const { summary, description, start, end, recurrence, customerKey, auftragId } = req.body || {};
+    if (!summary || !start || !end) {
+      return res.status(400).json({ error: 'summary, start und end sind erforderlich' });
+    }
+    const { data } = await calendar.events.insert({
+      calendarId: 'primary',
+      requestBody: {
+        summary,
+        description,
+        start,
+        end,
+        recurrence,
+        extendedProperties: { private: { customerKey: customerKey || '', auftragId: auftragId || '' } },
+      },
+    });
+    res.status(201).json(data);
+  } catch (err) {
+    res.status(502).json({ error: err?.message || 'Termin konnte nicht erstellt werden' });
+  }
+});
+
+app.put('/api/calendar/events/:id', async (req, res) => {
+  try {
+    const calendar = await getCalendarClient(req);
+    if (!calendar) return res.status(409).json({ error: 'Kalender nicht verbunden' });
+    const { data } = await calendar.events.patch({
+      calendarId: 'primary',
+      eventId: req.params.id,
+      requestBody: req.body || {},
+    });
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: err?.message || 'Termin konnte nicht aktualisiert werden' });
+  }
+});
+
+app.delete('/api/calendar/events/:id', async (req, res) => {
+  try {
+    const calendar = await getCalendarClient(req);
+    if (!calendar) return res.status(409).json({ error: 'Kalender nicht verbunden' });
+    await calendar.events.delete({ calendarId: 'primary', eventId: req.params.id });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(502).json({ error: err?.message || 'Termin konnte nicht gelöscht werden' });
   }
 });
 
