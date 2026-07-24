@@ -60,11 +60,20 @@ function extractSevDeskError(responseBody) {
 
 // Generic proxy to the sevDesk API to avoid CORS issues from the browser.
 // Body: { token, method, path, body } where path is relative, e.g. "/Contact" or "/Offer".
+// Nur lesende und hinzufügende sevDesk-Aufrufe sind erlaubt (GET/POST). Das
+// Tool darf in sevDesk niemals Dokumente ändern oder löschen können - PUT/
+// PATCH/DELETE werden serverseitig hart abgelehnt, unabhängig davon, was das
+// Frontend anfragt.
+const SEVDESK_ALLOWED_METHODS = new Set(['GET', 'POST']);
+
 app.post('/api/sevdesk/request', async (req, res) => {
   const { method = 'GET', path: sevPath, body } = req.body || {};
   const token = req.body?.token || process.env.SEVDESK_TOKEN;
   if (!token || !sevPath) {
     return res.status(400).json({ error: 'token und path sind erforderlich' });
+  }
+  if (!SEVDESK_ALLOWED_METHODS.has(String(method).toUpperCase())) {
+    return res.status(403).json({ error: `Methode ${method} ist für sevDesk-Zugriffe nicht erlaubt (nur GET/POST).` });
   }
   try {
     const sevRes = await fetch(`https://my.sevdesk.de/api/v1${sevPath}`, {
