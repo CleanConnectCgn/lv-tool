@@ -1,0 +1,455 @@
+// Prisma-Schema, Block 2 (Datenbank). Bewusste Entscheidungen, die über den
+// wörtlichen Auftragstext hinausgehen, sind unten kommentiert:
+//
+// - Modellname "Property" statt "Object" für die Tabelle `objects`: "Object"
+//   kollidiert im generierten TS/JS-Client mit dem globalen `Object`-Typ
+//   (z.B. `Object.keys()`), das erzeugt verwirrende Typfehler in jeder Datei,
+//   die beides nutzt. Der SQL-Tabellenname bleibt exakt "objects" (@@map).
+// - room_area_id sitzt auf service_spec_items, nicht auf service_catalog
+//   (Rückfrage beantwortet: Katalog bleibt raumbereichsneutral wiederverwendbar,
+//   die Raumbereich-Zuordnung passiert erst beim Aufbau eines konkreten LVs).
+// - objects.street ist EIN Feld (Straße inkl. Hausnummer), keine separate
+//   Hausnummer-Spalte - identisch zur bestehenden Kundenadresse im
+//   Datei-basierten Bestand (`street`, `zip`, `city`), damit Block 9 die
+//   vorhandenen Adressen 1:1 übernehmen kann statt sie aufzutrennen. Das
+//   "Label aus Straße und Hausnummer" (Block 5) entsteht als reine App-Logik
+//   beim Anlegen, nicht als eigene DB-Spalte.
+// - Customer.email: im Auftragstext nicht explizit gelistet, aber notwendig
+//   für Block 6 (Domain-Abgleich mit sevDesk-Kontakten) und bereits Teil der
+//   bestehenden Kundendaten (siehe CustomerModal.jsx) - ergänzt.
+// - calendar_events.startAt/endAt: im Auftragstext nicht explizit gelistet,
+//   aber ein Kalendertermin ohne Zeit ist nicht sinnvoll nutzbar - ergänzt.
+// - tasks/uploads "Bezug zu customer ODER object": beide Felder sind optional,
+//   die Regel "mindestens eines gesetzt" wird zusätzlich als DB-CHECK-
+//   Constraint in der Migration ergänzt (siehe migration.sql), nicht nur als
+//   Kommentar.
+// - Jedes Modell bekommt ownerId (nullable - z.B. Katalog-Stammdaten können
+//   system-seeded ohne User sein) und createdAt, wie gefordert.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Geschlossene Wertebereiche
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  MITARBEITER
+}
+
+// Verbliste: geschlossen, nicht durch KI erweiterbar. Neue Verben nur durch
+// eine Schema-Änderung (also durch einen Menschen), niemals zur Laufzeit.
+enum ServiceVerb {
+  ENTSTAUBEN
+  ABSAUGEN
+  FEUCHT_WISCHEN
+  NASS_WISCHEN
+  FEUCHT_REINIGEN
+  DESINFIZIEREND_REINIGEN
+  FLECKENFREI_REINIGEN
+  GRIFFSPUREN_ENTFERNEN
+  ENTLEEREN_UND_ENTSORGEN
+  ENTKALKEN
+}
+
+enum DocumentType {
+  ANGEBOT
+  LV
+  VERTRAG
+}
+
+enum RecurringJobStatus {
+  AKTIV
+  PAUSIERT
+  BEENDET
+}
+
+enum CalendarEventType {
+  BESICHTIGUNG
+  ERSTREINIGUNG
+  ABNAHME
+}
+
+enum Weekday {
+  MO
+  DI
+  MI
+  DO
+  FR
+  SA
+  SO
+}
+
+// ---------------------------------------------------------------------------
+// Stammdaten
+// ---------------------------------------------------------------------------
+
+model User {
+  id              String   @id @default(uuid())
+  googleId        String   @unique @map("google_id")
+  email           String   @unique
+  name            String?
+  pictureUrl      String?  @map("picture_url")
+  // Verschlüsselt (AES-GCM, Anwendungsebene) - siehe Block 3. Niemals im
+  // Klartext ablegen, auch nicht im Backup.
+  accessTokenEnc  String?  @map("access_token_enc")
+  refreshTokenEnc String?  @map("refresh_token_enc")
+  role            Role     @default(MITARBEITER)
+  ownerId         String?  @map("owner_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tasksCreated  Task[] @relation("TaskOwner")
+  tasksAssigned Task[] @relation("TaskAssignee")
+
+  @@map("users")
+}
+
+model Customer {
+  id               String   @id @default(uuid())
+  name             String // Firmenname
+  street           String?
+  zip              String?
+  city             String?
+  // Nicht im Auftragstext gelistet, aber für Block 6 (Domain-Abgleich)
+  // notwendig - siehe Kopfkommentar.
+  email            String?
+  contactPerson    String?  @map("contact_person") // Ansprechpartner
+  paymentTermDays  Int?     @map("payment_term_days") // Zahlungsziel in Tagen
+  instantlyLeadId  String?  @unique @map("instantly_lead_id")
+  sevdeskContactId String?  @unique @map("sevdesk_contact_id")
+  ownerId          String?  @map("owner_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  objects   Property[]
+  documents Document[]
+  contracts Contract[]
+  tasks     Task[]
+  uploads   Upload[]
+
+  @@map("customers")
+}
+
+// SQL-Tabellenname bleibt "objects" (@@map), Modellname "Property" wegen der
+// TS/JS-Kollision mit dem globalen `Object` - siehe Kopfkommentar.
+model Property {
+  id         String   @id @default(uuid())
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+
+  street              String // inkl. Hausnummer, siehe Kopfkommentar
+  zip                 String
+  city                String
+  // Kurzname, beim Anlegen aus `street` vorbelegt (Anwendungslogik) und
+  // danach frei überschreibbar.
+  label               String
+  contactPersonOnSite String?  @map("contact_person_on_site") // Ansprechpartner vor Ort
+  accessNote          String?  @map("access_note") // Zugangsnotiz
+  sortOrder           Int      @default(0) @map("sort_order")
+  ownerId             String?  @map("owner_id")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  serviceSpecs    ServiceSpec[]
+  documentObjects DocumentObject[]
+  recurringJobs   RecurringJob[]
+  calendarEvents  CalendarEvent[]
+  tasks           Task[]
+  uploads         Upload[]
+
+  @@index([customerId])
+  @@map("objects")
+}
+
+// ---------------------------------------------------------------------------
+// Leistungskatalog, dreistufig: room_areas / element_groups / service_catalog
+// ---------------------------------------------------------------------------
+
+model RoomArea {
+  id        String   @id @default(uuid())
+  name      String
+  sortOrder Int      @map("sort_order")
+  ownerId   String?  @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  specItems ServiceSpecItem[]
+
+  @@map("room_areas")
+}
+
+model ElementGroup {
+  id        String   @id @default(uuid())
+  name      String // Boden, Wand, Abfall, Inventar - feste Reihenfolge via sortOrder
+  sortOrder Int      @map("sort_order")
+  ownerId   String?  @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  catalogItems ServiceCatalogItem[]
+
+  @@map("element_groups")
+}
+
+model ServiceCatalogItem {
+  id             String       @id @default(uuid())
+  elementGroupId String       @map("element_group_id")
+  elementGroup   ElementGroup @relation(fields: [elementGroupId], references: [id])
+
+  gegenstand String // Gegenstand
+  verb       ServiceVerb
+  zusatz     String? // optionaler Zusatz
+  synonyme   String[] // für Block 7 (Auslesung/Zuordnung von Freitext)
+  aktiv      Boolean     @default(true)
+  ownerId    String?     @map("owner_id")
+  createdAt  DateTime    @default(now()) @map("created_at")
+
+  specItems ServiceSpecItem[]
+
+  @@index([elementGroupId])
+  @@map("service_catalog")
+}
+
+// ---------------------------------------------------------------------------
+// Leistungsverzeichnis
+// ---------------------------------------------------------------------------
+
+model ServiceSpec {
+  id       String   @id @default(uuid())
+  objectId String   @map("object_id")
+  object   Property @relation(fields: [objectId], references: [id])
+
+  version      Int      @default(1)
+  standDatum   DateTime @map("stand_datum")
+  leistungsart String // z.B. Unterhaltsreinigung, Glasreinigung, Winterdienst - bewusst
+  // offener String statt Enum: neue Leistungsarten entstehen im laufenden
+  // Betrieb (siehe bestehende docType-Werte im Datei-Bestand), ein Enum
+  // würde bei jeder neuen Art eine Schema-Migration erzwingen.
+  ownerId      String?  @map("owner_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  items ServiceSpecItem[]
+
+  @@index([objectId])
+  @@map("service_specs")
+}
+
+model ServiceSpecItem {
+  id            String      @id @default(uuid())
+  serviceSpecId String      @map("service_spec_id")
+  serviceSpec   ServiceSpec @relation(fields: [serviceSpecId], references: [id])
+
+  // Pflichtverweis - "Ein Item ohne Katalogverweis ist nicht speicherbar".
+  catalogItemId String             @map("catalog_item_id")
+  catalogItem   ServiceCatalogItem @relation(fields: [catalogItemId], references: [id])
+
+  // Raumbereich-Zuordnung sitzt hier (siehe Kopfkommentar / Rückfrage),
+  // nicht am Katalogeintrag.
+  roomAreaId String   @map("room_area_id")
+  roomArea   RoomArea @relation(fields: [roomAreaId], references: [id])
+
+  nachBedarf   Boolean  @default(false) @map("nach_bedarf")
+  woechentlich Int? // Häufigkeit im Zeitraum, z.B. 5 = fünfmal pro Woche
+  monatlich    Int?
+  jaehrlich    Int? // z.B. 4 = quartalsweise
+  // NUR Rhythmus/Bedingungen (z.B. "erster Dienstag im Monat", "wenn
+  // vorhanden") - niemals Leistungstext, siehe Auftrag.
+  bemerkung    String?
+  sortOrder    Int      @default(0) @map("sort_order")
+  ownerId      String?  @map("owner_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([serviceSpecId])
+  @@index([catalogItemId])
+  @@index([roomAreaId])
+  @@map("service_spec_items")
+}
+
+// ---------------------------------------------------------------------------
+// Dokumente
+// ---------------------------------------------------------------------------
+
+model Document {
+  id         String       @id @default(uuid())
+  type       DocumentType
+  version    Int          @default(1)
+  customerId String       @map("customer_id")
+  customer   Customer     @relation(fields: [customerId], references: [id])
+
+  // Das strukturierte JSON, aus dem das Dokument gerendert wurde (fester
+  // Template-Code liest daraus, siehe Grundprinzip des Auftrags).
+  renderedData       Json     @map("rendered_data")
+  sevdeskOrderId     String?  @map("sevdesk_order_id")
+  sevdeskOrderNumber String?  @map("sevdesk_order_number")
+  ownerId            String?  @map("owner_id")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  documentObjects DocumentObject[]
+  contracts       Contract[]
+
+  @@index([customerId])
+  @@map("documents")
+}
+
+// n:m zwischen documents und objects, mit Position und objektbezogenem Preis
+// (ein Angebot/LV kann mehrere Objekte umfassen, je Objekt eigene Preiszeile).
+model DocumentObject {
+  id         String   @id @default(uuid())
+  documentId String   @map("document_id")
+  document   Document @relation(fields: [documentId], references: [id])
+  objectId   String   @map("object_id")
+  object     Property @relation(fields: [objectId], references: [id])
+
+  position  Int
+  price     Decimal? @db.Decimal(10, 2)
+  ownerId   String?  @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([documentId, objectId])
+  @@map("document_objects")
+}
+
+model Contract {
+  id         String   @id @default(uuid())
+  customerId String   @map("customer_id")
+  customer   Customer @relation(fields: [customerId], references: [id])
+  documentId String   @map("document_id")
+  document   Document @relation(fields: [documentId], references: [id])
+
+  ownerId   String?  @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  recurringJobs RecurringJob[]
+
+  @@index([customerId])
+  @@index([documentId])
+  @@map("contracts")
+}
+
+// ---------------------------------------------------------------------------
+// Betrieb (Tabellen vorbereitet, Logik teils außerhalb dieses Auftrags -
+// siehe "Nicht in diesem Auftrag": Kalender-Serien aus Verträgen und
+// Instantly-Webhooks werden hier nur als Schema angelegt, D4 bestätigt)
+// ---------------------------------------------------------------------------
+
+// Ein Slot = ein Wochentag mit fester Start-/Endzeit. Eine mehrtägige
+// Reinigungsvereinbarung (z.B. Mo/Mi/Fr) besteht aus mehreren Zeilen, jede
+// mit eigener RRULE/Start-/Endzeit - passt zu "Startzeit, Dauer" (Singular)
+// im Auftragstext.
+model RecurringJob {
+  id         String   @id @default(uuid())
+  contractId String   @map("contract_id")
+  contract   Contract @relation(fields: [contractId], references: [id])
+  objectId   String   @map("object_id")
+  object     Property @relation(fields: [objectId], references: [id])
+
+  rrule           String
+  weekday         Weekday
+  startTime       String             @map("start_time") // "HH:mm"
+  durationMinutes Int                @map("duration_minutes")
+  startDate       DateTime           @map("start_date")
+  endDate         DateTime?          @map("end_date")
+  googleEventId   String?            @map("google_event_id")
+  status          RecurringJobStatus @default(AKTIV)
+  ownerId         String?            @map("owner_id")
+  createdAt       DateTime           @default(now()) @map("created_at")
+
+  @@index([contractId])
+  @@index([objectId])
+  @@map("recurring_jobs")
+}
+
+model CalendarEvent {
+  id       String   @id @default(uuid())
+  objectId String   @map("object_id")
+  object   Property @relation(fields: [objectId], references: [id])
+
+  type          CalendarEventType
+  googleEventId String?           @map("google_event_id")
+  // Nicht im Auftragstext gelistet, aber notwendig - siehe Kopfkommentar.
+  startAt       DateTime          @map("start_at")
+  endAt         DateTime          @map("end_at")
+  ownerId       String?           @map("owner_id")
+  createdAt     DateTime          @default(now()) @map("created_at")
+
+  @@index([objectId])
+  @@map("calendar_events")
+}
+
+model Lead {
+  id              String    @id @default(uuid())
+  instantlyLeadId String    @unique @map("instantly_lead_id")
+  interestStatus  String?   @map("interest_status")
+  campaignId      String?   @map("campaign_id")
+  lastReplyAt     DateTime? @map("last_reply_at")
+  syncedAt        DateTime? @map("synced_at")
+  ownerId         String?   @map("owner_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@map("leads")
+}
+
+model WebhookEvent {
+  id              String    @id @default(uuid())
+  source          String
+  externalEventId String    @unique @map("external_event_id")
+  payload         Json
+  receivedAt      DateTime  @map("received_at")
+  processedAt     DateTime? @map("processed_at")
+  error           String?
+  ownerId         String?   @map("owner_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@map("webhook_events")
+}
+
+// Bezug zu customer ODER object - beide optional, "mindestens eines gesetzt"
+// wird zusätzlich per DB-CHECK-Constraint erzwungen (siehe Migration).
+model Task {
+  id      String    @id @default(uuid())
+  title   String
+  dueDate DateTime? @map("due_date")
+
+  customerId String?   @map("customer_id")
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  objectId   String?   @map("object_id")
+  object     Property? @relation(fields: [objectId], references: [id])
+
+  assigneeId String? @map("assignee_id") // Zuständiger
+  assignee   User?   @relation("TaskAssignee", fields: [assigneeId], references: [id])
+
+  ownerId   String?  @map("owner_id")
+  owner     User?    @relation("TaskOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([customerId])
+  @@index([objectId])
+  @@index([assigneeId])
+  @@map("tasks")
+}
+
+// Bezug zu customer ODER object - gleiche Regel/Constraint wie bei Task.
+// ownerId dient hier zugleich als "Hochlader".
+model Upload {
+  id       String  @id @default(uuid())
+  fileUrl  String  @map("file_url")
+  fileType String? @map("file_type") // z.B. "pdf" | "image"
+
+  customerId String?   @map("customer_id")
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  objectId   String?   @map("object_id")
+  object     Property? @relation(fields: [objectId], references: [id])
+
+  // Ergebnis der Auslesung (Block 7): ausschließlich Katalog-IDs +
+  // Intervallspalten + Bemerkung, siehe Block 7.
+  extractionResult Json?    @map("extraction_result")
+  ownerId          String?  @map("owner_id")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([customerId])
+  @@index([objectId])
+  @@map("uploads")
+}
