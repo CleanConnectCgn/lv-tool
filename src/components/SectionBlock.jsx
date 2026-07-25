@@ -61,7 +61,7 @@ export default function SectionBlock({ section, index, onChange, onRemove, onMov
             value={section.title}
             onChange={(e) => renameTitle(e.target.value)}
           />
-          <button className="icon-btn no-print section-remove-btn" title="Bereich entfernen" onClick={onRemove}>
+          <button className="icon-btn no-print section-remove-btn" title="Bereich entfernen" aria-label="Bereich entfernen" onClick={onRemove}>
             ✕
           </button>
         </td>

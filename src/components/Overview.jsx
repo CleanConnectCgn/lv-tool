@@ -140,6 +140,7 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
                   <button
                     className="icon-btn overview-copy-contract"
                     title="Für Vertragsgenerator kopieren"
+                    aria-label="Für Vertragsgenerator kopieren"
                     onClick={(e) => handleCopyForContract(e, d.id)}
                   >
                     {copyStatus[d.id] === 'done' ? '✓' : copyStatus[d.id] === 'error' ? '✗' : '📋'}
@@ -154,7 +155,11 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
                     Wirklich löschen?
                   </button>
                 ) : (
-                  <button className="icon-btn overview-delete" onClick={(e) => handleDeleteClick(e, d.id)}>
+                  <button
+                    className="icon-btn overview-delete"
+                    aria-label="Dokument löschen"
+                    onClick={(e) => handleDeleteClick(e, d.id)}
+                  >
                     ✕
                   </button>
                 )}

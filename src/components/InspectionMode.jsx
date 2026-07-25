@@ -342,7 +342,17 @@ export default function InspectionMode({ sections, setSections, internalNotes, s
               <textarea
                 className="inspection-note-textarea"
                 value={focusedTask.note}
-                onChange={(e) => patchTask(focusedTask.id, { note: e.target.value })}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  if (focusedTask.noteForAll) {
+                    // Notiz auf alle ausgewählten Leistungen übertragen, nicht
+                    // nur auf die gerade fokussierte - die Checkbox war zuvor
+                    // wirkungslos (gesetzt, aber nie ausgewertet).
+                    setTasks((prev) => prev.map((t) => (t.selected ? { ...t, note: value } : t)));
+                  } else {
+                    patchTask(focusedTask.id, { note: value });
+                  }
+                }}
                 placeholder="Anmerkungen zu dieser Leistung..."
               />
               <label className="inspection-note-toggle">
@@ -351,7 +361,7 @@ export default function InspectionMode({ sections, setSections, internalNotes, s
                   checked={focusedTask.noteForAll}
                   onChange={(e) => patchTask(focusedTask.id, { noteForAll: e.target.checked })}
                 />
-                Notiz für alle Bereiche
+                Notiz für alle ausgewählten Leistungen übernehmen
               </label>
             </>
           ) : (

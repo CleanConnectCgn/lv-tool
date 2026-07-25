@@ -157,7 +157,7 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
         />
       </td>
       <td className="col-actions no-print">
-        <button className="icon-btn" title="Zeile entfernen" onClick={onRemove}>
+        <button className="icon-btn" title="Zeile entfernen" aria-label="Zeile entfernen" onClick={onRemove}>
           ✕
         </button>
       </td>

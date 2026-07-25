@@ -27,7 +27,7 @@ function ColumnHead() {
   );
 }
 
-function IntervalCell({ column, value }) {
+function IntervalCell({ value }) {
   return (
     <td className="pv-col-interval">
       {value ? <span className="pv-interval-chip">{value}</span> : ''}

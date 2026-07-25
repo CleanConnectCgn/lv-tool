@@ -97,14 +97,18 @@ export async function createContact(token, { name, street, zip, city, email }) {
   return contact;
 }
 
-let cachedSevUserId = null;
+// Nach Token gecacht statt global - sonst bleibt beim Wechsel auf einen
+// anderen sevDesk-Account (z.B. beim Testen) die SevUser-ID des vorherigen
+// Tokens hängen.
+const sevUserIdCache = new Map();
 
 async function getSevUserId(token) {
-  if (cachedSevUserId) return cachedSevUserId;
+  if (sevUserIdCache.has(token)) return sevUserIdCache.get(token);
   const data = await sevRequest(token, 'GET', '/SevUser?limit=1');
   const user = (data?.objects ?? data ?? [])[0];
-  cachedSevUserId = user?.id || null;
-  return cachedSevUserId;
+  const id = user?.id || null;
+  sevUserIdCache.set(token, id);
+  return id;
 }
 
 // Staff members selectable as "Ihr Ansprechpartner" on the offer.

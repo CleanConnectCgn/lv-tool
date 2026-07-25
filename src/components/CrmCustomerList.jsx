@@ -64,7 +64,9 @@ export default function CrmCustomerList({ onOpenCustomer, onBack, onOpenAuftraeg
                   <div className="overview-row-sub">{addressLine(c.customer)}</div>
                 </div>
                 <div className="overview-row-meta">
-                  <span>{c.documentCount} Dokument{c.documentCount === 1 ? '' : 'e'}</span>
+                  <span>
+                    {c.orphan ? 'Kein Dokument (nur Aufträge/Objekte)' : `${c.documentCount} Dokument${c.documentCount === 1 ? '' : 'e'}`}
+                  </span>
                 </div>
               </div>
             ))}

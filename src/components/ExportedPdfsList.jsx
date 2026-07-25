@@ -9,6 +9,7 @@ function formatDate(iso) {
 export default function ExportedPdfsList() {
   const [pdfs, setPdfs] = useState([]);
   const [status, setStatus] = useState('loading');
+  const [error, setError] = useState('');
 
   useEffect(() => {
     listLvPdfs()
@@ -16,10 +17,22 @@ export default function ExportedPdfsList() {
         setPdfs(list);
         setStatus('done');
       })
-      .catch(() => setStatus('error'));
+      .catch((err) => {
+        setError(err?.message || 'Unbekannter Fehler');
+        setStatus('error');
+      });
   }, []);
 
-  if (status !== 'done' || pdfs.length === 0) return null;
+  if (status === 'loading') return null;
+  if (status === 'error') {
+    return (
+      <div className="exported-pdfs">
+        <div className="modal-subheading">Exportierte Leistungsverzeichnisse</div>
+        <div className="modal-message error">Liste konnte nicht geladen werden: {error}</div>
+      </div>
+    );
+  }
+  if (pdfs.length === 0) return null;
 
   return (
     <div className="exported-pdfs">

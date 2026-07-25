@@ -35,6 +35,11 @@ describe('POST /api/crm/customers/:key/merge', () => {
       .send({ customerKey: sourceKey, customerName: 'Merge Quell Kunde', titel: 'Test-Auftrag' })
       .expect(201);
 
+    const objekt = await request(app)
+      .post('/api/crm/objekte')
+      .send({ customerKey: sourceKey, name: 'Merge Test Objekt' })
+      .expect(201);
+
     await request(app).put(`/api/crm/customers/${sourceKey}`).send({ notizen: 'Quell-Notiz' }).expect(200);
     await request(app).put(`/api/crm/customers/${targetKey}`).send({ notizen: 'Ziel-Notiz' }).expect(200);
 
@@ -48,6 +53,11 @@ describe('POST /api/crm/customers/:key/merge', () => {
     expect(docIds).toContain(docA.body.id);
     expect(docIds).toContain(docB.body.id);
     expect(targetProfile.body.auftraege.some((a) => a.id === auftrag.body.id)).toBe(true);
+
+    const targetObjekte = await request(app).get(`/api/crm/objekte?customerKey=${targetKey}`).expect(200);
+    expect(targetObjekte.body.some((o) => o.id === objekt.body.id)).toBe(true);
+    const sourceObjekte = await request(app).get(`/api/crm/objekte?customerKey=${sourceKey}`).expect(200);
+    expect(sourceObjekte.body.length).toBe(0);
     expect(targetProfile.body.notizen).toContain('Ziel-Notiz');
     expect(targetProfile.body.notizen).toContain('Quell-Notiz');
 
@@ -66,6 +76,30 @@ describe('POST /api/crm/customers/:key/merge', () => {
       .post('/api/crm/customers/name-nonexistent-source/merge')
       .send({ targetKey: 'name-nonexistent-target' });
     expect(res.status).toBe(404);
+  });
+});
+
+describe('Kunde ohne Dokumente bleibt über Aufträge/Objekte erreichbar', () => {
+  it('does not 404 a customer whose last document was deleted but who still has an Auftrag', async () => {
+    const doc = await request(app)
+      .post('/api/documents')
+      .send({ lvTitle: 'Verwaister Kunde LV', objekt: 'Objekt X', customer: { name: 'Verwaister Kunde' } })
+      .expect(201);
+    const key = 'name-verwaister-kunde';
+
+    const auftrag = await request(app)
+      .post('/api/crm/auftraege')
+      .send({ customerKey: key, customerName: 'Verwaister Kunde', titel: 'Verwaister Auftrag' })
+      .expect(201);
+
+    await request(app).delete(`/api/documents/${doc.body.id}`).expect(200);
+
+    const profile = await request(app).get(`/api/crm/customers/${key}`).expect(200);
+    expect(profile.body.documents.length).toBe(0);
+    expect(profile.body.auftraege.some((a) => a.id === auftrag.body.id)).toBe(true);
+
+    const list = await request(app).get('/api/crm/customers').expect(200);
+    expect(list.body.some((c) => c.key === key)).toBe(true);
   });
 });
 

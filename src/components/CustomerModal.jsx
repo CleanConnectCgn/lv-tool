@@ -38,6 +38,7 @@ export default function CustomerModal({ initialCustomer, onSave, onClose }) {
   const [ncStadt, setNcStadt] = useState('');
   const [ncEmail, setNcEmail] = useState('');
   const [saving, setSaving] = useState(false);
+  const [validationError, setValidationError] = useState('');
   const searchTimer = useRef(null);
 
   function handleKundeChange(value) {
@@ -71,6 +72,11 @@ export default function CustomerModal({ initialCustomer, onSave, onClose }) {
   }
 
   async function handleSave() {
+    setValidationError('');
+    if (showNewContact && !ncFirma.trim()) {
+      setValidationError('Firmenname ist erforderlich, um einen neuen Kunden anzulegen.');
+      return;
+    }
     setSaving(true);
     try {
       if (showNewContact && ncFirma.trim()) {
@@ -179,6 +185,8 @@ export default function CustomerModal({ initialCustomer, onSave, onClose }) {
             </label>
           </>
         )}
+
+        {validationError && <div className="modal-message error">{validationError}</div>}
 
         <div className="modal-actions">
           <button onClick={onClose}>Abbrechen</button>

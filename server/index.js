@@ -86,6 +86,19 @@ app.get('/api/sevdesk/token', (req, res) => {
   res.json({ token: process.env.SEVDESK_TOKEN || '' });
 });
 
+// Liest+parst eine JSON-Datei, gibt bei defektem/korruptem Inhalt null
+// zurück statt die gesamte Liste (Promise.all) mitzureißen - eine einzelne
+// beschädigte Datei darf nicht dazu führen, dass Dokumente/Kunden/Aufträge/
+// Backup komplett unzugänglich werden.
+async function readJsonFileSafe(filePath) {
+  try {
+    return JSON.parse(await fs.readFile(filePath, 'utf-8'));
+  } catch (err) {
+    console.error(`Konnte ${filePath} nicht lesen/parsen, überspringe:`, err?.message || err);
+    return null;
+  }
+}
+
 function extractSevDeskError(responseBody) {
   if (!responseBody) return 'Unbekannter Fehler';
   if (typeof responseBody === 'string') return responseBody;
@@ -470,11 +483,11 @@ app.get('/api/documents', async (req, res) => {
   try {
     await ensureDocumentsDir();
     const files = await fs.readdir(DOCUMENTS_DIR);
-    const docs = await Promise.all(
-      files
-        .filter((f) => f.endsWith('.json'))
-        .map((f) => fs.readFile(path.join(DOCUMENTS_DIR, f), 'utf-8').then(JSON.parse))
-    );
+    const docs = (
+      await Promise.all(
+        files.filter((f) => f.endsWith('.json')).map((f) => readJsonFileSafe(path.join(DOCUMENTS_DIR, f)))
+      )
+    ).filter(Boolean);
     const summaries = docs
       .map((d) => ({
         id: d.id,
@@ -557,11 +570,10 @@ async function ensureCrmDirs() {
 async function loadAllDocuments() {
   await ensureDocumentsDir();
   const files = await fs.readdir(DOCUMENTS_DIR);
-  return Promise.all(
-    files
-      .filter((f) => f.endsWith('.json'))
-      .map((f) => fs.readFile(path.join(DOCUMENTS_DIR, f), 'utf-8').then(JSON.parse))
+  const docs = await Promise.all(
+    files.filter((f) => f.endsWith('.json')).map((f) => readJsonFileSafe(path.join(DOCUMENTS_DIR, f)))
   );
+  return docs.filter(Boolean);
 }
 
 async function loadCustomerNotes(key) {
@@ -575,6 +587,35 @@ async function loadCustomerNotes(key) {
 
 // GET /api/crm/customers - Liste aller Kunden, aggregiert aus den
 // vorhandenen LV/Angebot-Dokumenten (keine Datenduplizierung).
+// Kunden werden primär aus Dokumenten aggregiert. Wird das letzte Dokument
+// eines Kunden gelöscht, dürfen dessen Notizen/Aufträge/Objekte aber nicht
+// unerreichbar werden - diese Funktion findet solche verwaisten Kunden-Keys
+// anhand ihrer Aufträge/Objekte und liefert einen Minimal-"customer" zurück,
+// den GET /customers und GET /customers/:key beide nutzen.
+async function findOrphanCustomers(knownKeys) {
+  await ensureCrmDirs();
+  await ensureObjekteDir();
+  const orphans = new Map();
+
+  const auftraegeFiles = await fs.readdir(AUFTRAEGE_DIR).catch(() => []);
+  for (const f of auftraegeFiles.filter((f) => f.endsWith('.json'))) {
+    const a = await readJsonFileSafe(path.join(AUFTRAEGE_DIR, f));
+    if (a?.customerKey && !knownKeys.has(a.customerKey) && !orphans.has(a.customerKey)) {
+      orphans.set(a.customerKey, { name: a.customerName || a.customerKey });
+    }
+  }
+
+  const objekteFiles = await fs.readdir(OBJEKTE_DIR).catch(() => []);
+  for (const f of objekteFiles.filter((f) => f.endsWith('.json'))) {
+    const o = await readJsonFileSafe(path.join(OBJEKTE_DIR, f));
+    if (o?.customerKey && !knownKeys.has(o.customerKey) && !orphans.has(o.customerKey)) {
+      orphans.set(o.customerKey, { name: o.customerKey });
+    }
+  }
+
+  return orphans;
+}
+
 app.get('/api/crm/customers', async (req, res) => {
   try {
     const docs = await loadAllDocuments();
@@ -592,6 +633,12 @@ app.get('/api/crm/customers', async (req, res) => {
         entry.customer = d.customer; // neueste Version der Stammdaten gewinnt
       }
     }
+
+    const orphans = await findOrphanCustomers(new Set(byKey.keys()));
+    for (const [key, customer] of orphans) {
+      byKey.set(key, { key, customer, documentCount: 0, lastUpdatedAt: null, orphan: true });
+    }
+
     const list = Array.from(byKey.values()).sort((a, b) => (a.lastUpdatedAt < b.lastUpdatedAt ? 1 : -1));
     res.json(list);
   } catch (err) {
@@ -605,25 +652,34 @@ app.get('/api/crm/customers/:key', async (req, res) => {
   try {
     const docs = await loadAllDocuments();
     const matching = docs.filter((d) => customerKeyFor(d.customer) === req.params.key);
-    if (matching.length === 0) {
-      return res.status(404).json({ error: 'Kunde nicht gefunden' });
+    let customer;
+    if (matching.length > 0) {
+      customer = matching.reduce((a, b) => (a.updatedAt > b.updatedAt ? a : b)).customer;
+    } else {
+      // Kein Dokument (mehr) vorhanden - prüfen, ob der Kunde über Aufträge/
+      // Objekte noch existiert, statt fälschlich 404 zu melden und seine
+      // übrigen CRM-Daten unerreichbar zu machen.
+      const orphans = await findOrphanCustomers(new Set());
+      if (!orphans.has(req.params.key)) {
+        return res.status(404).json({ error: 'Kunde nicht gefunden' });
+      }
+      customer = orphans.get(req.params.key);
     }
-    const newest = matching.reduce((a, b) => (a.updatedAt > b.updatedAt ? a : b));
     await ensureCrmDirs();
     const notes = await loadCustomerNotes(req.params.key);
     let auftraege = [];
     try {
       const files = await fs.readdir(AUFTRAEGE_DIR);
-      const all = await Promise.all(
-        files.filter((f) => f.endsWith('.json')).map((f) => fs.readFile(path.join(AUFTRAEGE_DIR, f), 'utf-8').then(JSON.parse))
-      );
+      const all = (
+        await Promise.all(files.filter((f) => f.endsWith('.json')).map((f) => readJsonFileSafe(path.join(AUFTRAEGE_DIR, f))))
+      ).filter(Boolean);
       auftraege = all.filter((a) => a.customerKey === req.params.key);
     } catch {
       auftraege = [];
     }
     res.json({
       key: req.params.key,
-      customer: newest.customer,
+      customer,
       documents: matching.map((d) => ({
         id: d.id,
         docType: d.docType || 'main',
@@ -691,8 +747,8 @@ app.post('/api/crm/customers/:key/merge', async (req, res) => {
     }
     for (const f of auftraegeFiles.filter((f) => f.endsWith('.json'))) {
       const filePath = path.join(AUFTRAEGE_DIR, f);
-      const a = await fs.readFile(filePath, 'utf-8').then(JSON.parse);
-      if (a.customerKey === sourceKey) {
+      const a = await readJsonFileSafe(filePath);
+      if (a?.customerKey === sourceKey) {
         await fs.writeFile(
           filePath,
           JSON.stringify(
@@ -702,6 +758,54 @@ app.post('/api/crm/customers/:key/merge', async (req, res) => {
           )
         );
       }
+    }
+
+    // Objekte des Quell-Kunden auf den Ziel-Kunden umschreiben, sonst werden
+    // sie nach dem Merge unter dem verschwundenen Quell-Schlüssel unerreichbar.
+    await ensureObjekteDir();
+    let objekteFiles = [];
+    try {
+      objekteFiles = await fs.readdir(OBJEKTE_DIR);
+    } catch {
+      objekteFiles = [];
+    }
+    for (const f of objekteFiles.filter((f) => f.endsWith('.json'))) {
+      const filePath = path.join(OBJEKTE_DIR, f);
+      const o = await readJsonFileSafe(filePath);
+      if (o?.customerKey === sourceKey) {
+        await fs.writeFile(
+          filePath,
+          JSON.stringify({ ...o, customerKey: targetKey, updatedAt: new Date().toISOString() }, null, 2)
+        );
+      }
+    }
+
+    // Google-Kalendertermine, die noch den alten customerKey tragen, auf den
+    // Ziel-Kunden umschreiben, sonst tauchen sie im Zielprofil nicht mehr auf.
+    try {
+      const calendar = await getCalendarClient(req);
+      if (calendar) {
+        const { data } = await calendar.events.list({
+          calendarId: 'primary',
+          singleEvents: false,
+          privateExtendedProperty: [`customerKey=${sourceKey}`],
+        });
+        for (const event of data.items || []) {
+          await calendar.events.patch({
+            calendarId: 'primary',
+            eventId: event.id,
+            requestBody: {
+              extendedProperties: {
+                private: { ...event.extendedProperties?.private, customerKey: targetKey },
+              },
+            },
+          });
+        }
+      }
+    } catch (err) {
+      // Kalender-Migration ist ein Best-Effort-Schritt - ein Fehler hier soll
+      // den restlichen (bereits durchgeführten) Merge nicht rückgängig machen.
+      console.error('Kalendertermine konnten beim Merge nicht umgeschrieben werden:', err?.message || err);
     }
 
     // Notizen zusammenführen (beide Texte behalten, nichts verwerfen).
@@ -728,9 +832,9 @@ app.get('/api/crm/auftraege', async (req, res) => {
   try {
     await ensureCrmDirs();
     const files = await fs.readdir(AUFTRAEGE_DIR);
-    const all = await Promise.all(
-      files.filter((f) => f.endsWith('.json')).map((f) => fs.readFile(path.join(AUFTRAEGE_DIR, f), 'utf-8').then(JSON.parse))
-    );
+    const all = (
+      await Promise.all(files.filter((f) => f.endsWith('.json')).map((f) => readJsonFileSafe(path.join(AUFTRAEGE_DIR, f))))
+    ).filter(Boolean);
     res.json(all.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1)));
   } catch (err) {
     res.status(500).json({ error: err?.message || 'Aufträge konnten nicht geladen werden' });
@@ -795,9 +899,9 @@ app.get('/api/crm/mitarbeiter', async (req, res) => {
   try {
     await ensureMitarbeiterDir();
     const files = await fs.readdir(MITARBEITER_DIR);
-    const all = await Promise.all(
-      files.filter((f) => f.endsWith('.json')).map((f) => fs.readFile(path.join(MITARBEITER_DIR, f), 'utf-8').then(JSON.parse))
-    );
+    const all = (
+      await Promise.all(files.filter((f) => f.endsWith('.json')).map((f) => readJsonFileSafe(path.join(MITARBEITER_DIR, f))))
+    ).filter(Boolean);
     res.json(all.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
   } catch (err) {
     res.status(500).json({ error: err?.message || 'Mitarbeiter konnten nicht geladen werden' });
@@ -877,9 +981,9 @@ app.get('/api/crm/objekte', async (req, res) => {
   try {
     await ensureObjekteDir();
     const files = await fs.readdir(OBJEKTE_DIR);
-    const all = await Promise.all(
-      files.filter((f) => f.endsWith('.json')).map((f) => fs.readFile(path.join(OBJEKTE_DIR, f), 'utf-8').then(JSON.parse))
-    );
+    const all = (
+      await Promise.all(files.filter((f) => f.endsWith('.json')).map((f) => readJsonFileSafe(path.join(OBJEKTE_DIR, f))))
+    ).filter(Boolean);
     const filtered = req.query.customerKey ? all.filter((o) => o.customerKey === req.query.customerKey) : all;
     res.json(filtered.sort((a, b) => (a.name || '').localeCompare(b.name || '')));
   } catch (err) {

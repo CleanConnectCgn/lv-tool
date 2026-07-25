@@ -116,7 +116,9 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
 
   useEffect(() => {
     if (!profile?.customer?.name) return;
-    fetch(`${VERTRAGSGENERATOR_URL}/api/contracts`)
+    fetch(`${VERTRAGSGENERATOR_URL}/api/contracts`, {
+      headers: import.meta.env.VITE_CRM_SYNC_TOKEN ? { 'X-Crm-Sync-Token': import.meta.env.VITE_CRM_SYNC_TOKEN } : undefined,
+    })
       .then((r) => (r.ok ? r.json() : []))
       .then((all) => {
         const name = profile.customer.name.toLowerCase();
