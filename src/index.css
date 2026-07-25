@@ -1331,6 +1331,23 @@ textarea::placeholder {
   opacity: 0.55;
 }
 
+/* Block 5: Leistungsverzeichnis-Karte in der (dunklen) Objektansicht -
+   eigene Klasse statt .ai-issue-card, das für den hellen Modal-Kontext
+   gedacht ist und auf dunklem Grund unlesbar wäre. */
+.db-spec-card {
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-3);
+  background: var(--brand-surface-2);
+  border: 1px solid var(--brand-line);
+  border-left: 3px solid var(--teal);
+}
+
+.db-spec-card .ai-issue-header,
+.db-spec-card li {
+  color: var(--brand-text);
+}
+
 .ai-issue-header {
   display: flex;
   align-items: center;

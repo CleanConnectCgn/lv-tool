@@ -14,6 +14,12 @@ Läuft live unter https://lv-tool-production.up.railway.app
 - **Postgres/Prisma**: schrittweise Ablösung der dateibasierten Persistenz
   (`prisma/schema.prisma` - Kunden, Objekte, dreistufiger Leistungskatalog,
   Dokumente, Verträge, Betrieb)
+- **Kunden (Postgres, neu) - Block 5**: neuer, parallel zum bestehenden CRM
+  laufender Bereich auf `/api/db/*`: Kundenformular mit "Rechnungsadresse
+  gleich Objektadresse" (legt immer mindestens ein Objekt an, transaktional
+  erzwungen), Sammelanlage (mehrere Objekte aus einem mehrzeiligen
+  Adressfeld), Leistungsverzeichnis auf andere Objekte übertragen
+  (unabhängige Kopien, danach je Objekt einzeln bearbeitbar)
 - LV-Editor: Bereiche/Zeilen hinzufügen, entfernen, per Drag & Drop
   neu anordnen, Intervall-Spalten (wöchentlich/monatlich/jährlich) plus
   optionale Wochentagsauswahl, Zusatzleistungen (Glasreinigung,
@@ -112,7 +118,8 @@ server/index.js       Express-Server: Auth-Gate, sevDesk-Proxy, KI-Checkup,
 server/lib/           auth.js (Google-Login, Session-Cookie, ALLOWED_EMAILS),
                       crypto.js (AES-256-GCM für gespeicherte OAuth-Tokens),
                       mailer.js (geteilt mit worker/), drive.js (Google-Drive-
-                      Upload je gespeichertem Dokument), prisma.js
+                      Upload je gespeichertem Dokument), dbCrm.js (Block 5,
+                      Kunden/Objekte/Leistungsverzeichnis-Endpoints), prisma.js
 worker/               Backup-Worker (Block 4), eigener Railway-Dienst:
                       backup.js (pg_dump/gzip/Scheduler), storage.js
                       (austauschbarer Speicher-Adapter), index.js (Prozess-
@@ -121,4 +128,7 @@ scripts/start.js      Ein Codebase, zwei Rollen: startet server/index.js
                       oder worker/index.js je nach SERVICE_ROLE
 prisma/schema.prisma  Postgres-Schema (Block 2) - noch nicht der primäre
                       Datenspeicher, das ist bis Block 9 weiterhin DATA_DIR
+prisma/seed.js        Feste Raumbereiche/Elementgruppen + Start-Katalog
+                      (Block 5). Ausführen mit: npx prisma db seed
+                      (idempotent, kann gefahrlos mehrfach laufen)
 ```

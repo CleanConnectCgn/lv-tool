@@ -16,6 +16,10 @@ import CrmAllAuftraege from './components/CrmAllAuftraege.jsx';
 import CrmMitarbeiter from './components/CrmMitarbeiter.jsx';
 import CrmMitarbeiterProfile from './components/CrmMitarbeiterProfile.jsx';
 import CrmAllObjekte from './components/CrmAllObjekte.jsx';
+import DbCustomerList from './components/db/DbCustomerList.jsx';
+import DbCustomerForm from './components/db/DbCustomerForm.jsx';
+import DbCustomerDetail from './components/db/DbCustomerDetail.jsx';
+import DbObjectDetail from './components/db/DbObjectDetail.jsx';
 import { cloneOptionalSection, newSection } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument, listDocuments } from './lib/documents.js';
 import { uploadLvPdf } from './lib/lvPdfs.js';
@@ -40,6 +44,8 @@ export default function App() {
   const [view, setView] = useState('overview');
   const [crmCustomerKey, setCrmCustomerKey] = useState(null);
   const [crmMitarbeiterId, setCrmMitarbeiterId] = useState(null);
+  const [dbCustomerId, setDbCustomerId] = useState(null);
+  const [dbObjectId, setDbObjectId] = useState(null);
 
   // Ein Kunde/Objekt kann mehrere verknüpfte Leistungsverzeichnisse haben
   // (z. B. Unterhaltsreinigung + eigenständige Glasreinigung/Winterdienst-LVs).
@@ -356,8 +362,51 @@ export default function App() {
         onNew={handleNewDocument}
         onInspect={handleStartInspection}
         onOpenCrm={() => setView('crm')}
+        onOpenDbCrm={() => setView('db-crm')}
       />
     );
+  }
+
+  if (view === 'db-crm') {
+    return (
+      <DbCustomerList
+        onBack={() => setView('overview')}
+        onNewCustomer={() => setView('db-crm-new')}
+        onOpenCustomer={(id) => {
+          setDbCustomerId(id);
+          setView('db-crm-customer');
+        }}
+      />
+    );
+  }
+
+  if (view === 'db-crm-new') {
+    return (
+      <DbCustomerForm
+        onBack={() => setView('db-crm')}
+        onCreated={(id) => {
+          setDbCustomerId(id);
+          setView('db-crm-customer');
+        }}
+      />
+    );
+  }
+
+  if (view === 'db-crm-customer') {
+    return (
+      <DbCustomerDetail
+        customerId={dbCustomerId}
+        onBack={() => setView('db-crm')}
+        onOpenObject={(id) => {
+          setDbObjectId(id);
+          setView('db-crm-object');
+        }}
+      />
+    );
+  }
+
+  if (view === 'db-crm-object') {
+    return <DbObjectDetail objectId={dbObjectId} onBack={() => setView('db-crm-customer')} />;
   }
 
   if (view === 'crm') {

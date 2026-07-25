@@ -12,6 +12,7 @@ import { customerKeyFor } from '../src/lib/crmKeys.js';
 import { registerAuthRoutes, requireAuth } from './lib/auth.js';
 import { mailTransporter } from './lib/mailer.js';
 import { uploadDocumentToDrive, DRIVE_UPLOAD_SCOPE } from './lib/drive.js';
+import { registerDbCrmRoutes } from './lib/dbCrm.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -50,6 +51,10 @@ app.use(express.json({ limit: '5mb' }));
 // bewusst ungegated - sie zeigt sonst nicht einmal den Login-Button an.
 registerAuthRoutes(app);
 app.use('/api', requireAuth);
+
+// Block 5: Kundenmaske/Objekte gegen die neue Postgres-Datenbank, eigenes
+// Präfix /api/db/* - siehe server/lib/dbCrm.js.
+registerDbCrmRoutes(app);
 
 // Verhindert unbeabsichtigte Kostenexplosion bei den KI-Endpoints (Gemini/
 // Claude/Vision) - z.B. durch versehentliches Mehrfachklicken oder einen
