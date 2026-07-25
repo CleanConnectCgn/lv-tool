@@ -70,6 +70,7 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
   const [newWiederholt, setNewWiederholt] = useState(false);
   const [newWiederholTage, setNewWiederholTage] = useState([]);
   const [newWiederholBis, setNewWiederholBis] = useState('');
+  const [newObjektId, setNewObjektId] = useState('');
 
   const [calendarError, setCalendarError] = useState('');
   const [reschedulingEventId, setReschedulingEventId] = useState(null);
@@ -187,6 +188,7 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
         customerKey,
         customerName: profile.customer?.name || '',
         titel: newTitel.trim(),
+        objektId: newObjektId || null,
       });
       if (calendarStatus?.connected && newDatum) {
         const start = `${newDatum}T${newUhrzeit}:00`;
@@ -209,6 +211,7 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
       setNewWiederholt(false);
       setNewWiederholTage([]);
       setNewWiederholBis('');
+      setNewObjektId('');
       load();
       loadEvents();
     } catch (err) {
@@ -542,6 +545,9 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
             <div className="ai-issue-header">
               <span className="ai-issue-title">{a.titel}</span>
             </div>
+            {a.objektId && (
+              <p className="ai-issue-desc">📍 {objekte.find((o) => o.id === a.objektId)?.name || 'Objekt gelöscht'}</p>
+            )}
             {a.calendarEventIds?.length > 0 && <p className="ai-issue-desc">📅 Kalendertermin verknüpft</p>}
             <div className="modal-field-row" style={{ alignItems: 'center', marginTop: 8 }}>
               <label className="modal-field" style={{ maxWidth: 180 }}>
@@ -572,6 +578,19 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
               Titel
               <input value={newTitel} onChange={(e) => setNewTitel(e.target.value)} placeholder="z.B. Unterhaltsreinigung" />
             </label>
+            {objekte.length > 0 && (
+              <label className="modal-field">
+                Objekt (optional, falls mehrere Standorte)
+                <select value={newObjektId} onChange={(e) => setNewObjektId(e.target.value)}>
+                  <option value="">Kein bestimmtes Objekt</option>
+                  {objekte.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             {calendarStatus?.connected && (
               <div className="modal-field-row">
                 <label className="modal-field">

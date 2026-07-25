@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { listObjekte, listMitarbeiter } from '../lib/crm.js';
+import { listObjekte, listMitarbeiter, listCustomers } from '../lib/crm.js';
 
 function addressLine(o) {
   if (!o) return '';
@@ -9,15 +9,17 @@ function addressLine(o) {
 export default function CrmAllObjekte({ onBack, onOpenCustomer }) {
   const [objekte, setObjekte] = useState([]);
   const [mitarbeiter, setMitarbeiter] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
 
   useEffect(() => {
     setStatus('loading');
-    Promise.all([listObjekte(), listMitarbeiter()])
-      .then(([o, m]) => {
+    Promise.all([listObjekte(), listMitarbeiter(), listCustomers()])
+      .then(([o, m, c]) => {
         setObjekte(o);
         setMitarbeiter(m);
+        setCustomers(c);
         setStatus('done');
       })
       .catch((err) => {
@@ -28,6 +30,10 @@ export default function CrmAllObjekte({ onBack, onOpenCustomer }) {
 
   function mitarbeiterNamen(ids) {
     return ids.map((id) => mitarbeiter.find((m) => m.id === id)?.name).filter(Boolean).join(', ');
+  }
+
+  function customerName(key) {
+    return customers.find((c) => c.key === key)?.customer?.name || 'Unbekannter Kunde';
   }
 
   return (
@@ -48,7 +54,7 @@ export default function CrmAllObjekte({ onBack, onOpenCustomer }) {
               <div className="overview-row-main">
                 <div className="overview-row-title">{o.name}</div>
                 <div className="overview-row-sub">
-                  {addressLine(o)}
+                  {customerName(o.customerKey)} · {addressLine(o) || 'keine Adresse'}
                   {o.mitarbeiterIds.length > 0 ? ` · ${mitarbeiterNamen(o.mitarbeiterIds)}` : ' · keine Zuweisung'}
                 </div>
               </div>

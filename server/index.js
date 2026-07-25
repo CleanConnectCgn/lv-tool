@@ -850,6 +850,7 @@ app.post('/api/crm/auftraege', async (req, res) => {
       customerName: req.body?.customerName || '',
       titel: req.body?.titel || '',
       documentId: req.body?.documentId || null,
+      objektId: req.body?.objektId || null,
       status: req.body?.status || 'offen',
       notizen: req.body?.notizen || '',
       calendarEventIds: req.body?.calendarEventIds || [],
