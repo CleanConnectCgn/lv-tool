@@ -32,6 +32,12 @@ Läuft live unter https://lv-tool-production.up.railway.app
   (wiederkehrende Termine, Verschieben, pro Kunde gefiltert)
 - Backup-Export (`/api/backup`) - lädt alle Dokumente/CRM-Daten als eine
   JSON-Datei herunter
+- **Sicherung (Block 4)**: separater `backup-worker`-Railway-Dienst
+  (`worker/`), täglich 03:00 Europe/Berlin `pg_dump` (komprimiert, 30 Tage
+  Aufbewahrung, Mail an den Betreiber bei Fehlschlag), zusätzlich per
+  „🗄️ Jetzt sichern" sofort auslösbar. Jedes gespeicherte Dokument landet
+  außerdem automatisch als JSON in einem Google-Drive-Ordner
+  ("LV-Tool Dokumente"), sobald die Firmenkalender-Verbindung steht
 - Verlinkt mit dem separaten [vertragsgenerator](https://github.com/muecreates/vertragsgenerator)
   (Vertrag direkt aus dem Kundenprofil erstellen)
 
@@ -71,8 +77,15 @@ Siehe `.env.example`. Wichtig:
   `ALLOWED_EMAILS` gelisteten Google-Konten kommen rein
 - `DATA_DIR` - Pfad für persistente Daten; auf Railway muss hier ein Volume
   gemountet sein, sonst gehen Dokumente/CRM-Daten bei jedem Redeploy verloren
+- `SERVICE_ROLE`, `BACKUP_DIR`, `WORKER_INTERNAL_TOKEN`,
+  `BACKUP_WORKER_INTERNAL_URL` - Block 4 (Sicherung), siehe Kommentare in
+  `.env.example`
 
 ## Deployment auf Railway
+
+Zwei Dienste aus diesem einen Repo (siehe `scripts/start.js`):
+`lv-tool` (Web, Standard) und `backup-worker` (`SERVICE_ROLE=backup-worker`,
+eigenes Volume unter `/backups`, kein öffentliches Domain).
 
 1. Neues Projekt auf [railway.app](https://railway.app) erstellen.
 2. Deploy erfolgt hier nicht über GitHub-Autodeploy, sondern per
@@ -98,7 +111,14 @@ server/index.js       Express-Server: Auth-Gate, sevDesk-Proxy, KI-Checkup,
                       CRM-/Kalender-Endpoints, Dokument-Speicherung, Backup
 server/lib/           auth.js (Google-Login, Session-Cookie, ALLOWED_EMAILS),
                       crypto.js (AES-256-GCM für gespeicherte OAuth-Tokens),
-                      prisma.js (geteilter PrismaClient)
+                      mailer.js (geteilt mit worker/), drive.js (Google-Drive-
+                      Upload je gespeichertem Dokument), prisma.js
+worker/               Backup-Worker (Block 4), eigener Railway-Dienst:
+                      backup.js (pg_dump/gzip/Scheduler), storage.js
+                      (austauschbarer Speicher-Adapter), index.js (Prozess-
+                      Einstieg + interner /run-now-Endpoint)
+scripts/start.js      Ein Codebase, zwei Rollen: startet server/index.js
+                      oder worker/index.js je nach SERVICE_ROLE
 prisma/schema.prisma  Postgres-Schema (Block 2) - noch nicht der primäre
                       Datenspeicher, das ist bis Block 9 weiterhin DATA_DIR
 ```

@@ -11,6 +11,7 @@ import rateLimit from 'express-rate-limit';
 import { customerKeyFor } from '../src/lib/crmKeys.js';
 import { registerAuthRoutes, requireAuth } from './lib/auth.js';
 import { mailTransporter } from './lib/mailer.js';
+import { uploadDocumentToDrive, DRIVE_UPLOAD_SCOPE } from './lib/drive.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -515,6 +516,7 @@ app.post('/api/documents', async (req, res) => {
     const doc = { ...req.body, id: randomUUID(), createdAt: now, updatedAt: now };
     await fs.writeFile(path.join(DOCUMENTS_DIR, `${doc.id}.json`), JSON.stringify(doc, null, 2));
     res.status(201).json(doc);
+    uploadDocumentToDriveIfConnected(req, doc); // fire-and-forget, siehe Kommentar an der Funktion
   } catch (err) {
     res.status(500).json({ error: err?.message || 'Dokument konnte nicht gespeichert werden' });
   }
@@ -534,6 +536,7 @@ app.put('/api/documents/:id', async (req, res) => {
     await ensureDocumentsDir();
     await fs.writeFile(path.join(DOCUMENTS_DIR, `${req.params.id}.json`), JSON.stringify(merged, null, 2));
     res.json(merged);
+    uploadDocumentToDriveIfConnected(req, merged); // fire-and-forget, siehe Kommentar an der Funktion
   } catch (err) {
     res.status(500).json({ error: err?.message || 'Dokument konnte nicht aktualisiert werden' });
   }
@@ -1064,9 +1067,11 @@ async function saveCalendarTokens(tokens) {
   await fs.writeFile(CALENDAR_TOKEN_FILE, JSON.stringify(tokens, null, 2));
 }
 
-// Baut einen authentifizierten Calendar-Client auf Basis des gespeicherten
-// Refresh-Tokens. googleapis erneuert den Access-Token automatisch.
-async function getCalendarClient(req) {
+// Baut den rohen authentifizierten OAuth2-Client auf Basis des gespeicherten
+// Refresh-Tokens (googleapis erneuert den Access-Token automatisch) - wird
+// sowohl für den Calendar-Client als auch für den Drive-Upload (Block 4)
+// genutzt, da beide dieselbe Firmenverbindung/denselben Token teilen.
+async function getGoogleOAuthClient(req) {
   const tokens = await loadCalendarTokens();
   if (!tokens?.refresh_token) return null;
   const client = oauth2ClientFor(req);
@@ -1074,7 +1079,34 @@ async function getCalendarClient(req) {
   client.on('tokens', async (newTokens) => {
     await saveCalendarTokens({ ...tokens, ...newTokens });
   });
+  return client;
+}
+
+async function getCalendarClient(req) {
+  const client = await getGoogleOAuthClient(req);
+  if (!client) return null;
   return google.calendar({ version: 'v3', auth: client });
+}
+
+// Best-effort: lädt das Dokument als JSON-Snapshot in den Drive-Ordner hoch,
+// bei jedem Speichern (Auftrag Block 4). Wird bewusst NICHT awaited beim
+// Aufrufer, damit ein langsamer/fehlschlagender Drive-Upload das Speichern
+// selbst nie verzögert oder blockiert.
+async function uploadDocumentToDriveIfConnected(req, doc) {
+  try {
+    const oauthClient = await getGoogleOAuthClient(req);
+    if (!oauthClient) return;
+    const safeName = (doc.objekt || doc.lvTitle || 'Dokument').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '_');
+    const filename = `${doc.docType || 'main'}_${safeName}_${doc.id}.json`;
+    await uploadDocumentToDrive({
+      oauthClient,
+      crmDir: CRM_DIR,
+      filename,
+      jsonContent: JSON.stringify(doc, null, 2),
+    });
+  } catch (err) {
+    console.error('Drive-Upload-Hook fehlgeschlagen:', err?.message || err);
+  }
 }
 
 app.get('/api/calendar/oauth/start', (req, res) => {
@@ -1085,7 +1117,11 @@ app.get('/api/calendar/oauth/start', (req, res) => {
   const url = client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent', // erzwingt Ausstellung eines refresh_token auch bei erneuter Autorisierung
-    scope: ['https://www.googleapis.com/auth/calendar'],
+    // drive.file (Block 4): nur Dateien, die diese App selbst anlegt - kein
+    // Zugriff auf das übrige Drive. Wer VOR diesem Update schon verbunden
+    // war, muss einmal neu verbinden ("Kalender trennen" + erneut
+    // verbinden), damit der neue Scope im Token ankommt.
+    scope: ['https://www.googleapis.com/auth/calendar', DRIVE_UPLOAD_SCOPE],
   });
   res.redirect(url);
 });
