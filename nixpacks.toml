@@ -3,10 +3,20 @@
 # deployt werden - für den Web-Server ist das Paket ungenutzt, aber
 # unschädlich (kein Laufzeit-Overhead, nur etwas größeres Image).
 #
-# Explizit postgresql_18 statt der generischen "postgresql"-Referenz: die
-# generische Referenz löste im von Nixpacks gepinnten Nixpkgs-Snapshot auf
-# Version 17.2 auf, während der Railway-Postgres-Dienst 18.4 läuft - pg_dump
-# verweigert den Dump gegen eine neuere Server-Version als sich selbst
-# ("server version mismatch"), live per Fehlermeldung gefunden.
+# Eigene Phase mit neuerer, separat gepinnter Nixpkgs-Revision statt die
+# "setup"-Phase selbst umzustellen: die von Nixpacks per default gepinnte
+# Revision kennt noch kein postgresql_18 (Railway-Postgres läuft auf 18.4,
+# pg_dump verweigert den Dump gegen eine neuere Server-Version als sich
+# selbst - live per Fehlermeldung gefunden), eine neuere Revision wiederum
+# hat nodejs_18 bereits entfernt (End-of-Life) - würde also die Node-
+# Toolchain der "setup"-Phase brechen. Deshalb zwei getrennte Nix-Umgebungen:
+# "setup" bleibt unverändert auf der bewährten Standard-Revision, diese neue
+# "pgclient"-Phase holt nur postgresql_18 aus einer aktuellen
+# nixos-unstable-Revision (2026-07-23) - beide landen im selben Image/PATH.
 [phases.setup]
-nixPkgs = ["...", "postgresql_18"]
+nixPkgs = ["..."]
+
+[phases.pgclient]
+dependsOn = ["setup"]
+nixPkgs = ["postgresql_18"]
+nixpkgsArchive = "e2587caef70cea85dd97d7daab492899902dbf5d"
