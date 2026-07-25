@@ -8,6 +8,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { google } from 'googleapis';
 import rateLimit from 'express-rate-limit';
+import nodemailer from 'nodemailer';
 import { customerKeyFor } from '../src/lib/crmKeys.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,7 @@ const AUFTRAEGE_DIR = path.join(CRM_DIR, 'auftraege');
 const MITARBEITER_DIR = path.join(CRM_DIR, 'mitarbeiter');
 const OBJEKTE_DIR = path.join(CRM_DIR, 'objekte');
 const CALENDAR_TOKEN_FILE = path.join(CRM_DIR, 'calendar-token.json');
+const LAST_DIGEST_FILE = path.join(CRM_DIR, 'last-digest.json');
 
 // Optionaler Basic-Auth-Schutz: nur aktiv, wenn APP_USERNAME/APP_PASSWORD
 // gesetzt sind. Ohne diese Variablen bleibt das Verhalten unverändert
@@ -1046,8 +1048,16 @@ app.delete('/api/crm/objekte/:id', async (req, res) => {
 // verschlüsselt-über-Volume (nicht im Git) unter CALENDAR_TOKEN_FILE abgelegt.
 // ---------------------------------------------------------------------------
 
+// req ist optional: für Aufrufe außerhalb eines echten HTTP-Requests (z.B.
+// der automatische tägliche E-Mail-Digest per setInterval) gibt es keinen
+// req - dann wird Railways automatisch gesetzte RAILWAY_PUBLIC_DOMAIN als
+// Fallback für die Redirect-URI verwendet. Diese wird für reine
+// Token-Refreshs ohnehin nicht wirklich gebraucht, nur für den eigentlichen
+// OAuth-Consent-Flow.
 function oauth2ClientFor(req) {
-  const redirectUri = `${req.protocol}://${req.get('host')}/api/calendar/oauth/callback`;
+  const host = req ? req.get('host') : process.env.RAILWAY_PUBLIC_DOMAIN;
+  const protocol = req ? req.protocol : 'https';
+  const redirectUri = host ? `${protocol}://${host}/api/calendar/oauth/callback` : undefined;
   return new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, redirectUri);
 }
 
@@ -1204,6 +1214,99 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// E-Mail-Erinnerungen (Gmail SMTP): täglich max. eine Zusammenfassung mit
+// lange offenen Aufträgen und Terminen der nächsten 24h. Nur aktiv, wenn
+// SMTP_USER/SMTP_APP_PASSWORD gesetzt sind.
+// ---------------------------------------------------------------------------
+
+const OFFEN_TAGE_SCHWELLE = 14;
+
+function mailTransporter() {
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_APP_PASSWORD;
+  if (!user || !pass) return null;
+  return nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
+}
+
+async function buildDigestContent(req) {
+  const grenzwert = Date.now() - OFFEN_TAGE_SCHWELLE * 24 * 60 * 60 * 1000;
+  await ensureCrmDirs();
+  const auftraegeFiles = await fs.readdir(AUFTRAEGE_DIR).catch(() => []);
+  const auftraege = (
+    await Promise.all(auftraegeFiles.filter((f) => f.endsWith('.json')).map((f) => readJsonFileSafe(path.join(AUFTRAEGE_DIR, f))))
+  ).filter(Boolean);
+  const langeOffen = auftraege.filter((a) => a.status === 'offen' && new Date(a.createdAt).getTime() < grenzwert);
+
+  let termine = [];
+  try {
+    const calendar = await getCalendarClient(req);
+    if (calendar) {
+      const timeMax = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+      const { data } = await calendar.events.list({
+        calendarId: 'primary',
+        timeMin: new Date().toISOString(),
+        timeMax,
+        singleEvents: true,
+        orderBy: 'startTime',
+      });
+      termine = data.items || [];
+    }
+  } catch {
+    termine = [];
+  }
+
+  if (langeOffen.length === 0 && termine.length === 0) return null;
+
+  const lines = ['Tägliche Übersicht - Clean Connect LV-Tool', ''];
+  if (langeOffen.length > 0) {
+    lines.push(`${langeOffen.length} Auftrag(e) seit über ${OFFEN_TAGE_SCHWELLE} Tagen offen:`);
+    langeOffen.forEach((a) => lines.push(`  - ${a.titel} (${a.customerName || 'unbekannt'})`));
+    lines.push('');
+  }
+  if (termine.length > 0) {
+    lines.push(`${termine.length} Termin(e) in den nächsten 24 Stunden:`);
+    termine.forEach((e) => {
+      const start = e.start?.dateTime || e.start?.date;
+      lines.push(`  - ${e.summary} (${new Date(start).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' })})`);
+    });
+  }
+  return { subject: `LV-Tool: ${langeOffen.length + termine.length} Hinweis(e)`, text: lines.join('\n') };
+}
+
+async function sendDigestIfDue(req) {
+  const transporter = mailTransporter();
+  if (!transporter) return { sent: false, reason: 'not_configured' };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const last = await readJsonFileSafe(LAST_DIGEST_FILE);
+  if (last?.date === today) return { sent: false, reason: 'already_sent_today' };
+
+  const content = await buildDigestContent(req);
+  await fs.mkdir(CRM_DIR, { recursive: true });
+  await fs.writeFile(LAST_DIGEST_FILE, JSON.stringify({ date: today }, null, 2));
+  if (!content) return { sent: false, reason: 'nothing_to_report' };
+
+  const to = process.env.NOTIFY_EMAIL || process.env.SMTP_USER;
+  await transporter.sendMail({ from: process.env.SMTP_USER, to, subject: content.subject, text: content.text });
+  return { sent: true };
+}
+
+app.get('/api/notifications/status', (req, res) => {
+  res.json({ configured: Boolean(process.env.SMTP_USER && process.env.SMTP_APP_PASSWORD) });
+});
+
+// Manuell auslösbar zum Testen, läuft aber auch automatisch (siehe
+// setInterval unten) - schickt höchstens eine E-Mail pro Kalendertag.
+app.post('/api/notifications/send-digest', async (req, res) => {
+  try {
+    const result = await sendDigestIfDue(req);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'Digest konnte nicht gesendet werden' });
+  }
+});
+
 // Exportierte Leistungsverzeichnis-PDFs landen zusätzlich zum Browser-
 // Download hier im "Leistungsverzeichnisse"-Ordner auf dem Volume, damit
 // man sie später über die Übersicht erneut abrufen kann.
@@ -1310,6 +1413,13 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   process.on('SIGTERM', () => {
     server.close(() => process.exit(0));
   });
+
+  // Prüft stündlich, ob der tägliche E-Mail-Digest fällig ist (sendDigestIfDue
+  // verhindert selbst Mehrfachversand pro Tag). Nur wirksam, wenn SMTP_USER/
+  // SMTP_APP_PASSWORD gesetzt sind - sonst no-op.
+  setInterval(() => {
+    sendDigestIfDue().catch((err) => console.error('E-Mail-Digest fehlgeschlagen:', err?.message || err));
+  }, 60 * 60 * 1000);
 }
 
 export default app;
