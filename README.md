@@ -9,6 +9,11 @@ Läuft live unter https://lv-tool-production.up.railway.app
 
 ## Features
 
+- **Anmeldung**: Google OAuth als einziger Anmeldeweg, Zugang nur für in
+  `ALLOWED_EMAILS` freigeschaltete Konten, 30-Tage-Session-Cookie
+- **Postgres/Prisma**: schrittweise Ablösung der dateibasierten Persistenz
+  (`prisma/schema.prisma` - Kunden, Objekte, dreistufiger Leistungskatalog,
+  Dokumente, Verträge, Betrieb)
 - LV-Editor: Bereiche/Zeilen hinzufügen, entfernen, per Drag & Drop
   neu anordnen, Intervall-Spalten (wöchentlich/monatlich/jährlich) plus
   optionale Wochentagsauswahl, Zusatzleistungen (Glasreinigung,
@@ -54,13 +59,16 @@ npm test            # Vitest: Unit-Tests + Server-Endpoint-Tests (supertest)
 
 Siehe `.env.example`. Wichtig:
 
+- `DATABASE_URL` - Postgres-Verbindung (Prisma). Auf Railway per
+  Referenzvariable an den Postgres-Service gebunden.
 - `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` - für KI-Checkup und LV-aus-Bild
 - `SEVDESK_TOKEN` - optional, sonst manuell im Formular eintragbar
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - für die Google-Kalender-
-  Anbindung (OAuth-Client in der Google Cloud Console anlegen, Redirect-URI
-  `<domain>/api/calendar/oauth/callback` eintragen)
-- `APP_USERNAME` / `APP_PASSWORD` - optionaler Basic-Auth-Schutz für die
-  gesamte App, standardmäßig **nicht** aktiv (offen)
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - EIN OAuth-Client in der
+  Google Cloud Console mit ZWEI Redirect-URIs: `<domain>/api/auth/google/callback`
+  (Anmeldung) und `<domain>/api/calendar/oauth/callback` (Firmenkalender)
+- `ALLOWED_EMAILS`, `SESSION_SECRET`, `TOKEN_ENCRYPTION_KEY` - Google OAuth
+  ist der einzige Anmeldeweg (kein Basic-Auth mehr); nur die in
+  `ALLOWED_EMAILS` gelisteten Google-Konten kommen rein
 - `DATA_DIR` - Pfad für persistente Daten; auf Railway muss hier ein Volume
   gemountet sein, sonst gehen Dokumente/CRM-Daten bei jedem Redeploy verloren
 
@@ -79,12 +87,18 @@ Siehe `.env.example`. Wichtig:
 src/                 React-Frontend
   components/        LVEditor, SectionBlock, RowEditor, SevDeskModal,
                       Crm* (Kundenliste/-profil/Aufträge/Mitarbeiter/Objekte),
-                      InspectionMode (Besichtigungsmodus), ErrorBoundary
+                      InspectionMode (Besichtigungsmodus), ErrorBoundary,
+                      AuthGate/LoginScreen (Block 3, Google-Anmeldung)
   lib/                documents.js, sevdesk.js, crm.js, crmKeys.js,
-                      lvFromImage.js, lvPdfExport.js
+                      lvFromImage.js, lvPdfExport.js, auth.js
   templates/          checklistAreas.js (aktive Bereichs-Vorlagen),
                       templates.js (nur noch winterdienst + optionalServices
                       aktiv genutzt)
-server/index.js       Express-Server: sevDesk-Proxy, KI-Checkup, CRM-/
-                      Kalender-Endpoints, Dokument-Speicherung, Backup
+server/index.js       Express-Server: Auth-Gate, sevDesk-Proxy, KI-Checkup,
+                      CRM-/Kalender-Endpoints, Dokument-Speicherung, Backup
+server/lib/           auth.js (Google-Login, Session-Cookie, ALLOWED_EMAILS),
+                      crypto.js (AES-256-GCM für gespeicherte OAuth-Tokens),
+                      prisma.js (geteilter PrismaClient)
+prisma/schema.prisma  Postgres-Schema (Block 2) - noch nicht der primäre
+                      Datenspeicher, das ist bis Block 9 weiterhin DATA_DIR
 ```

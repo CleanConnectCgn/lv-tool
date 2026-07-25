@@ -10,6 +10,7 @@ import { google } from 'googleapis';
 import rateLimit from 'express-rate-limit';
 import nodemailer from 'nodemailer';
 import { customerKeyFor } from '../src/lib/crmKeys.js';
+import { registerAuthRoutes, requireAuth } from './lib/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -37,28 +38,17 @@ const OBJEKTE_DIR = path.join(CRM_DIR, 'objekte');
 const CALENDAR_TOKEN_FILE = path.join(CRM_DIR, 'calendar-token.json');
 const LAST_DIGEST_FILE = path.join(CRM_DIR, 'last-digest.json');
 
-// Optionaler Basic-Auth-Schutz: nur aktiv, wenn APP_USERNAME/APP_PASSWORD
-// gesetzt sind. Ohne diese Variablen bleibt das Verhalten unverändert
-// (offen), damit bestehende Deployments nicht versehentlich ausgesperrt
-// werden - Zugangsdaten müssen bewusst per `railway variables --set` gesetzt
-// werden.
-function basicAuthMiddleware(req, res, next) {
-  const user = process.env.APP_USERNAME;
-  const pass = process.env.APP_PASSWORD;
-  if (!user || !pass) return next();
-
-  const header = req.headers.authorization || '';
-  const [scheme, encoded] = header.split(' ');
-  if (scheme === 'Basic' && encoded) {
-    const [reqUser, reqPass] = Buffer.from(encoded, 'base64').toString('utf-8').split(':');
-    if (reqUser === user && reqPass === pass) return next();
-  }
-  res.set('WWW-Authenticate', 'Basic realm="LV-Tool"');
-  res.status(401).send('Zugang erforderlich');
-}
-
-app.use(basicAuthMiddleware);
 app.use(express.json({ limit: '5mb' }));
+
+// Block 3: Google OAuth als einziger Anmeldeweg (ersetzt den früheren
+// optionalen Basic-Auth-Schutz, der bei fehlenden APP_USERNAME/APP_PASSWORD
+// die App offen ließ). Die Auth-Routen selbst müssen VOR dem Gate
+// registriert werden, sonst kann sich niemand mehr anmelden. Alles unter
+// /api/* außer /api/auth/* ist danach angemeldet erforderlich; die
+// statisch ausgelieferte SPA-Hülle (siehe distPath weiter unten) bleibt
+// bewusst ungegated - sie zeigt sonst nicht einmal den Login-Button an.
+registerAuthRoutes(app);
+app.use('/api', requireAuth);
 
 // Verhindert unbeabsichtigte Kostenexplosion bei den KI-Endpoints (Gemini/
 // Claude/Vision) - z.B. durch versehentliches Mehrfachklicken oder einen

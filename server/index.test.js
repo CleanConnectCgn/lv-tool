@@ -12,6 +12,11 @@ let dataDir;
 beforeAll(async () => {
   dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lv-tool-test-'));
   process.env.DATA_DIR = dataDir;
+  // Diese Tests prüfen die dateibasierten CRUD-Endpoints, nicht Block 3
+  // (Anmeldung) - Auth-Gate hier bewusst umgangen, siehe requireAuth in
+  // server/lib/auth.js. Die Anmeldung selbst wird in server/lib/auth.test.js
+  // und server/lib/crypto.test.js separat getestet.
+  process.env.DISABLE_AUTH_FOR_TESTS = '1';
   const mod = await import('./index.js');
   app = mod.default;
 });
