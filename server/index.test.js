@@ -128,3 +128,11 @@ describe('POST /api/calendar/disconnect', () => {
     await request(app).post('/api/calendar/disconnect').expect(200);
   });
 });
+
+describe('POST /api/backup/run-now', () => {
+  it('meldet 502, wenn der Backup-Worker nicht erreichbar ist', async () => {
+    const res = await request(app).post('/api/backup/run-now');
+    expect(res.status).toBe(502);
+    expect(res.body.error).toBeTruthy();
+  });
+});

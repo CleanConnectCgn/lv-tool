@@ -1,0 +1,6 @@
+# Stellt sicher, dass `pg_dump` im Build-Image verfügbar ist (Block 4,
+# Backup-Worker). Gilt für beide Railway-Dienste, die aus diesem Repo
+# deployt werden - für den Web-Server ist das Paket ungenutzt, aber
+# unschädlich (kein Laufzeit-Overhead, nur etwas größeres Image).
+[phases.setup]
+nixPkgs = ["...", "postgresql"]

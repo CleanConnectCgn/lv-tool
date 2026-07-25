@@ -22,6 +22,25 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [backupStatus, setBackupStatus] = useState('idle'); // idle | running | done | error
+  const [backupMessage, setBackupMessage] = useState('');
+
+  async function handleRunBackupNow() {
+    setBackupStatus('running');
+    setBackupMessage('');
+    try {
+      const res = await fetch('/api/backup/run-now', { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) throw new Error(data?.error || `Fehler (${res.status})`);
+      setBackupStatus('done');
+      setBackupMessage(`Gesichert: ${data.filename}`);
+    } catch (err) {
+      setBackupStatus('error');
+      setBackupMessage(err?.message || 'Sofort-Backup fehlgeschlagen');
+    } finally {
+      setTimeout(() => setBackupStatus('idle'), 5000);
+    }
+  }
 
   function load() {
     setStatus('loading');
@@ -107,7 +126,20 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
         <a href="/api/backup" className="icon-btn" title="Backup aller Daten herunterladen">
           💾 Backup
         </a>
+        <button
+          type="button"
+          className="icon-btn"
+          onClick={handleRunBackupNow}
+          disabled={backupStatus === 'running'}
+          title="Sofortige Postgres-Sicherung über den Backup-Worker anstoßen"
+        >
+          {backupStatus === 'running' ? '⏳ Sichert...' : '🗄️ Jetzt sichern'}
+        </button>
       </div>
+
+      {backupMessage && (
+        <div className={`modal-message ${backupStatus === 'error' ? 'error' : 'success'}`}>{backupMessage}</div>
+      )}
 
       {status === 'loading' && <p className="modal-hint">Lädt...</p>}
       {status === 'error' && <div className="modal-message error">{error}</div>}

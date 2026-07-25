@@ -8,9 +8,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { google } from 'googleapis';
 import rateLimit from 'express-rate-limit';
-import nodemailer from 'nodemailer';
 import { customerKeyFor } from '../src/lib/crmKeys.js';
 import { registerAuthRoutes, requireAuth } from './lib/auth.js';
+import { mailTransporter } from './lib/mailer.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -1212,13 +1212,6 @@ app.delete('/api/calendar/events/:id', async (req, res) => {
 
 const OFFEN_TAGE_SCHWELLE = 14;
 
-function mailTransporter() {
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_APP_PASSWORD;
-  if (!user || !pass) return null;
-  return nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
-}
-
 async function buildDigestContent(req) {
   const grenzwert = Date.now() - OFFEN_TAGE_SCHWELLE * 24 * 60 * 60 * 1000;
   await ensureCrmDirs();
@@ -1384,6 +1377,26 @@ app.get('/api/backup', async (req, res) => {
   }
 });
 
+// Block 4: "zusätzlich ein geschützter Endpunkt, um sofort zu sichern" -
+// geschützt durch das bestehende Google-Login-Gate (requireAuth, siehe oben)
+// statt eines eigenen Geheimnisses. Stößt den separaten Backup-Worker-Dienst
+// über Railways privates Netzwerk an (der Worker hat kein öffentliches
+// Domain, ist von außen gar nicht erreichbar).
+app.post('/api/backup/run-now', async (req, res) => {
+  const baseUrl = process.env.BACKUP_WORKER_INTERNAL_URL || 'http://backup-worker.railway.internal:8080';
+  try {
+    const workerRes = await fetch(`${baseUrl}/run-now`, {
+      method: 'POST',
+      headers: { 'X-Worker-Token': process.env.WORKER_INTERNAL_TOKEN || '' },
+    });
+    const data = await workerRes.json().catch(() => ({}));
+    if (!workerRes.ok) return res.status(workerRes.status).json(data);
+    res.json(data);
+  } catch (err) {
+    res.status(502).json({ error: err?.message || 'Backup-Worker nicht erreichbar' });
+  }
+});
+
 const distPath = path.join(__dirname, '..', 'dist');
 app.use(express.static(distPath));
 
@@ -1391,9 +1404,13 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// Nur beim direkten Start lauschen (nicht beim Import in Tests, z.B. via
-// supertest, das die App ohne offenen Port ansprechen kann).
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// Explizite Start-Funktion statt argv-Selbsterkennung (`process.argv[1] ===
+// fileURLToPath(import.meta.url)`) - die brach, sobald der Server über
+// scripts/start.js (Block 4, SERVICE_ROLE-Dispatcher) statt direkt per
+// `node server/index.js` gestartet wird, weil dann server/index.js nicht
+// mehr das Hauptmodul ist. Tests importieren weiterhin nur `app` (default
+// export) und rufen startServer() nie auf, öffnen also keinen Port.
+export function startServer() {
   const server = app.listen(PORT, () => {
     console.log(`LV-Tool server läuft auf Port ${PORT}`);
   });
@@ -1410,6 +1427,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   setInterval(() => {
     sendDigestIfDue().catch((err) => console.error('E-Mail-Digest fehlgeschlagen:', err?.message || err));
   }, 60 * 60 * 1000);
+
+  return server;
 }
 
 export default app;
