@@ -14,6 +14,7 @@ import CrmCustomerList from './components/CrmCustomerList.jsx';
 import CrmCustomerProfile from './components/CrmCustomerProfile.jsx';
 import CrmAllAuftraege from './components/CrmAllAuftraege.jsx';
 import CrmMitarbeiter from './components/CrmMitarbeiter.jsx';
+import CrmMitarbeiterProfile from './components/CrmMitarbeiterProfile.jsx';
 import CrmAllObjekte from './components/CrmAllObjekte.jsx';
 import { cloneOptionalSection, newSection } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument, listDocuments } from './lib/documents.js';
@@ -38,6 +39,7 @@ export default function App() {
   // 'overview' (Startseite) | 'setup' (Quick-Setup-Assistent) | 'editor'
   const [view, setView] = useState('overview');
   const [crmCustomerKey, setCrmCustomerKey] = useState(null);
+  const [crmMitarbeiterId, setCrmMitarbeiterId] = useState(null);
 
   // Ein Kunde/Objekt kann mehrere verknüpfte Leistungsverzeichnisse haben
   // (z. B. Unterhaltsreinigung + eigenständige Glasreinigung/Winterdienst-LVs).
@@ -386,7 +388,29 @@ export default function App() {
   }
 
   if (view === 'crm-mitarbeiter') {
-    return <CrmMitarbeiter onBack={() => setView('crm')} />;
+    return (
+      <CrmMitarbeiter
+        onBack={() => setView('crm')}
+        onOpenMitarbeiter={(id) => {
+          setCrmMitarbeiterId(id);
+          setView('crm-mitarbeiter-profil');
+        }}
+      />
+    );
+  }
+
+  if (view === 'crm-mitarbeiter-profil') {
+    return (
+      <CrmMitarbeiterProfile
+        mitarbeiterId={crmMitarbeiterId}
+        onBack={() => setView('crm-mitarbeiter')}
+        onOpenCustomer={(key) => {
+          if (!key) return;
+          setCrmCustomerKey(key);
+          setView('crm-customer');
+        }}
+      />
+    );
   }
 
   if (view === 'crm-objekte') {

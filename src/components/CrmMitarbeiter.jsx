@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { listMitarbeiter, createMitarbeiter, updateMitarbeiter, deleteMitarbeiter } from '../lib/crm.js';
 
-export default function CrmMitarbeiter({ onBack }) {
+export default function CrmMitarbeiter({ onBack, onOpenMitarbeiter }) {
   const [mitarbeiter, setMitarbeiter] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -71,7 +71,7 @@ export default function CrmMitarbeiter({ onBack }) {
 
         {status === 'done' &&
           mitarbeiter.map((m) => (
-            <div key={m.id} className="overview-row">
+            <div key={m.id} className="overview-row" onClick={() => onOpenMitarbeiter(m.id)}>
               <div className="overview-row-main">
                 <div className="overview-row-title">{m.name}</div>
                 <div className="overview-row-sub">
@@ -79,7 +79,7 @@ export default function CrmMitarbeiter({ onBack }) {
                   {!m.aktiv && ' · inaktiv'}
                 </div>
               </div>
-              <div className="overview-row-meta">
+              <div className="overview-row-meta" onClick={(e) => e.stopPropagation()}>
                 <button className="icon-btn" onClick={() => handleToggleAktiv(m)}>
                   {m.aktiv ? 'Deaktivieren' : 'Aktivieren'}
                 </button>

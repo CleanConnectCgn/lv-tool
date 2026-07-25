@@ -275,6 +275,34 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
     }
   }
 
+  // Bei einer Instanz einer wiederkehrenden Serie zeigt Google
+  // `recurringEventId` auf den Master-Termin. Löschen über die Instanz-ID
+  // entfernt nur diesen einen Termin, Löschen über die Master-ID die gesamte
+  // Serie.
+  async function handleDeleteEvent(event) {
+    const isRecurring = Boolean(event.recurringEventId);
+    let deleteWholeSeries = false;
+    if (isRecurring) {
+      deleteWholeSeries = window.confirm(
+        'Dieser Termin gehört zu einer wiederkehrenden Serie.\n\nOK = ganze Serie löschen\nAbbrechen = nur diesen einen Termin löschen'
+      );
+      if (!deleteWholeSeries && !window.confirm(`Nur "${event.summary}" an diesem Termin löschen?`)) return;
+    } else if (!window.confirm(`Termin "${event.summary}" wirklich löschen?`)) {
+      return;
+    }
+    try {
+      await deleteCalendarEvent(deleteWholeSeries ? event.recurringEventId : event.id);
+      loadEvents();
+    } catch (err) {
+      if (err?.reconnectRequired) {
+        setCalendarStatus((prev) => ({ ...prev, connected: false }));
+        setCalendarError('Die Google-Kalender-Verbindung ist abgelaufen. Bitte erneut verbinden.');
+      } else {
+        alert(err?.message || 'Termin konnte nicht gelöscht werden');
+      }
+    }
+  }
+
   async function handleDisconnectCalendar() {
     if (!window.confirm('Google-Kalender-Verbindung wirklich trennen?')) return;
     try {
@@ -639,13 +667,20 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
               <div key={e.id} className="overview-row" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
                   <div className="overview-row-main">
-                    <div className="overview-row-title">{e.summary}</div>
+                    <div className="overview-row-title">
+                      {e.summary} {e.recurringEventId && <span className="modal-hint">↻ wiederkehrend</span>}
+                    </div>
                     <div className="overview-row-sub">{formatDateTimeDE(e.start?.dateTime || e.start?.date)}</div>
                   </div>
                   {reschedulingEventId !== e.id && (
-                    <button className="icon-btn" onClick={() => startReschedule(e)}>
-                      Verschieben
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="icon-btn" onClick={() => startReschedule(e)}>
+                        Verschieben
+                      </button>
+                      <button className="icon-btn" aria-label="Termin löschen" onClick={() => handleDeleteEvent(e)}>
+                        Löschen
+                      </button>
+                    </div>
                   )}
                 </div>
                 {reschedulingEventId === e.id && (
@@ -662,6 +697,11 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
                     <button className="primary" onClick={() => handleSaveReschedule(e)}>
                       Speichern
                     </button>
+                    {e.recurringEventId && (
+                      <span className="modal-hint" style={{ width: '100%' }}>
+                        Verschiebt nur diesen einen Termin, nicht die ganze Serie.
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
