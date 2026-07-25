@@ -1,17 +1,56 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&display=swap');
 
 :root {
+  /* Farbe: Teal bleibt der Markenanker (identisch zu Logo/PDF-Fußzeile),
+     ergänzt um ein wärmeres Off-White statt des vorherigen kühlen Grautons
+     und formalisierte Status-Farben statt Ad-hoc-Werten pro Komponente. */
   --teal: #00c5c4;
   --teal-dark: #007f7e;
   --teal-bg: rgba(0, 197, 196, 0.09);
   --teal-line: rgba(0, 197, 196, 0.3);
   --ink: #111111;
   --gray: #6b7280;
+  --gray-light: #9aa3ab;
   --line: #e5e7eb;
   --line-strong: #cdd3d7;
   --sec-bg: #f5f8f8;
+  --bg: #f7f8f6;
+  --success: #1c7a3d;
+  --success-bg: #e3f7e9;
+  --warning: #8a6300;
+  --warning-bg: #fff4d6;
+  --danger: #a5271f;
+  --danger-bg: #fbe4e2;
+
+  /* Typografie: Space Grotesk für Überschriften/Zahlen (Charakter, geometrisch,
+     passt zur klaren/präzisen Markenwelt einer Reinigungsfirma), Inter bleibt
+     für Fließtext, Formulare und dichte Tabellen (beste Lesbarkeit bei kleinen
+     Größen, bereits eingebunden). */
+  --font-display: 'Space Grotesk', 'Inter', Arial, sans-serif;
+  --font-body: 'Inter', Arial, sans-serif;
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-base: 14px;
+  --text-md: 16px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+
+  /* Abstände: eine Skala statt verstreuter Zufallswerte. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
   --radius: 12px;
-  font-family: 'Inter', Arial, sans-serif;
+  --radius-sm: 8px;
+  --shadow-card: 0 1px 2px rgba(17, 17, 17, 0.04), 0 4px 12px rgba(17, 17, 17, 0.05);
+  --shadow-card-hover: 0 2px 4px rgba(17, 17, 17, 0.06), 0 8px 20px rgba(17, 17, 17, 0.08);
+
+  font-family: var(--font-body);
 }
 
 * {
@@ -20,8 +59,41 @@
 
 body {
   margin: 0;
-  background: #eef1f2;
+  background: var(--bg);
   color: var(--ink);
+  font-size: var(--text-base);
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  margin: 0 0 var(--space-3);
+}
+
+h1 {
+  font-size: var(--text-2xl);
+}
+
+h2 {
+  font-size: var(--text-xl);
+}
+
+h3 {
+  font-size: var(--text-lg);
+}
+
+/* Tabellarische Zahlen (Preise, Beträge) sollen nicht "wackeln" -
+   Space Grotesk hat gut ausbalancierte Ziffern, tabular-nums zusätzlich
+   für exakte Spaltenausrichtung in Preistabellen. */
+.money,
+.overview-row-meta,
+.ai-issue-desc strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .app-shell {
@@ -77,19 +149,49 @@ body {
   padding: 4px 6px;
 }
 
+/* Standard-Button ist bewusst zurückhaltend (Sekundär-Look) - nur .primary
+   bekommt die volle Teal-Füllung. Vorher waren alle ~90 Buttons im Code
+   gleich laut (teal), egal ob "Zurück" oder "Speichern" - das nahm jeder
+   echten Primäraktion ihre visuelle Führung. */
 button {
-  background: var(--teal);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 7px 12px;
-  font-size: 13px;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: var(--text-sm);
   font-family: inherit;
+  font-weight: 600;
   cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
 
 button:hover {
+  background: var(--sec-bg);
+  border-color: var(--gray-light);
+}
+
+button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 1px;
+}
+
+button.primary,
+button.btn-primary {
+  background: var(--teal);
+  color: #fff;
+  border-color: var(--teal);
+}
+
+button.primary:hover,
+button.btn-primary:hover {
   background: var(--teal-dark);
+  border-color: var(--teal-dark);
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 button.icon-btn {
@@ -384,14 +486,14 @@ button.icon-btn:hover {
 }
 
 .lv-section-title {
-  font-size: 13.5px;
-  font-weight: 700;
+  font-size: var(--text-md);
+  font-weight: 600;
   color: var(--ink);
   border: 1px solid transparent;
   background: transparent;
   padding: 3px 6px;
   width: calc(100% - 60px);
-  font-family: inherit;
+  font-family: var(--font-display);
 }
 
 .lv-section-title:hover,
@@ -492,7 +594,9 @@ tr.drag-over td {
 .modal {
   background: #fff;
   border-radius: 14px;
-  padding: 20px 24px;
+  border-top: 3px solid var(--teal);
+  box-shadow: var(--shadow-card-hover);
+  padding: var(--space-5) var(--space-5);
   width: 380px;
   max-width: 90vw;
   max-height: 88vh;
@@ -516,7 +620,10 @@ tr.drag-over td {
 .overview-page-card {
   background: #fff;
   border-radius: 14px;
-  padding: 28px 32px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--teal);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-6) var(--space-6);
   width: 720px;
   max-width: 100%;
 }
@@ -667,16 +774,19 @@ tr.drag-over td {
 .overview-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-sm);
   cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
 .overview-row:hover {
-  border-color: var(--teal, #2a9d8f);
-  background: #f7fbfa;
+  border-color: var(--teal-line);
+  border-left-color: var(--teal);
+  background: var(--teal-bg);
 }
 
 .overview-row-main {
@@ -685,13 +795,16 @@ tr.drag-over td {
 }
 
 .overview-row-title {
+  font-family: var(--font-display);
   font-weight: 600;
+  font-size: var(--text-md);
   color: var(--ink);
 }
 
 .overview-row-sub {
-  font-size: 12.5px;
+  font-size: var(--text-sm);
   color: var(--gray);
+  margin-top: 1px;
 }
 
 .overview-row-meta {
@@ -767,19 +880,81 @@ tr.drag-over td {
   font-family: inherit;
 }
 
+/* Globale Basis für alle Formularfelder, auch außerhalb von .modal-field
+   (z.B. Suchfelder in Listenansichten) - vorher unstyled Browser-Default. */
+input[type='text'],
+input[type='date'],
+input[type='time'],
+input[type='number'],
+input[type='email'],
+input[type='search'],
+select,
+textarea {
+  font-family: inherit;
+  font-size: var(--text-base);
+  padding: 8px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: var(--ink);
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+input[type='text']:focus,
+input[type='date']:focus,
+input[type='time']:focus,
+input[type='number']:focus,
+input[type='email']:focus,
+input[type='search']:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--teal);
+  box-shadow: 0 0 0 3px var(--teal-bg);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--gray-light);
+}
+
 .modal-section-divider {
   border: none;
   border-top: 1px solid var(--line);
-  margin: 14px 0;
+  margin: var(--space-6) 0 var(--space-4);
+}
+
+.checkbox-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.checkbox-field:has(input:checked) {
+  border-color: var(--teal);
+  background: var(--teal-bg);
+  color: var(--teal-dark);
+  font-weight: 600;
+}
+
+.checkbox-field input {
+  accent-color: var(--teal);
 }
 
 .modal-subheading {
-  font-size: 12.5px;
+  font-size: var(--text-xs);
   font-weight: 700;
-  color: var(--gray);
+  color: var(--teal-dark);
   text-transform: uppercase;
-  letter-spacing: 0.4px;
-  margin-bottom: 8px;
+  letter-spacing: 0.6px;
+  margin-bottom: var(--space-3);
 }
 
 .token-badge {
@@ -910,32 +1085,40 @@ tr.drag-over td {
   background: #fff;
   color: var(--ink);
   border: 1px solid var(--line-strong);
-  font-size: 12.5px;
-  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  padding: 6px 14px;
 }
 
 .ai-status-badge.pending {
   color: var(--gray);
+  background: var(--sec-bg);
+  border-color: var(--line);
 }
 
 .ai-status-badge.clean {
-  border-color: #1c7a34;
-  color: #1c7a34;
+  border-color: transparent;
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .ai-status-badge.issues-red {
-  border-color: #d0342c;
-  color: #d0342c;
+  border-color: transparent;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .ai-status-badge.issues-orange {
-  border-color: #e07b00;
-  color: #e07b00;
+  border-color: transparent;
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .ai-status-badge.error {
-  border-color: #d0342c;
-  color: #d0342c;
+  border-color: transparent;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .ai-status-spinner {
@@ -1062,18 +1245,18 @@ tr.drag-over td {
 }
 
 .ai-dual-status-running {
-  background: #fff4d6;
-  color: #8a6300;
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .ai-dual-status-done {
-  background: #e3f7e9;
-  color: #1c7a3d;
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .ai-dual-status-error {
-  background: #fbe4e2;
-  color: #a5271f;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .ai-dual-result {
@@ -1103,12 +1286,13 @@ tr.drag-over td {
 }
 
 .ai-issue-card {
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin-bottom: 10px;
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-2);
   background: #fff;
-  border-left: 4px solid var(--line);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--teal-line);
+  box-shadow: var(--shadow-card);
 }
 
 .ai-issue-red {

@@ -656,7 +656,7 @@ export default function CrmCustomerProfile({ customerKey, onBack, onOpenDocument
           onChange={(e) => setNotizen(e.target.value)}
           placeholder="Interne Notizen zu diesem Kunden..."
         />
-        <button type="button" onClick={handleSaveNotes} disabled={savingNotes}>
+        <button type="button" className="primary" onClick={handleSaveNotes} disabled={savingNotes}>
           {savingNotes ? 'Speichert...' : 'Notizen speichern'}
         </button>
       </div>
