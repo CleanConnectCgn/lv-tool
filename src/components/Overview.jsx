@@ -98,6 +98,12 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
         </button>
         {onInspect && <button onClick={onInspect}>Besichtigungsmodus</button>}
         {onOpenCrm && <button onClick={onOpenCrm}>👥 Kunden (CRM)</button>}
+        <button
+          type="button"
+          onClick={() => window.open('https://vertragsgenerator-production-7738.up.railway.app', '_blank', 'noopener')}
+        >
+          📄 Vertragsgenerator
+        </button>
         <a href="/api/backup" className="icon-btn" title="Backup aller Daten herunterladen">
           💾 Backup
         </a>
