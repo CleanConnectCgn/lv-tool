@@ -53,13 +53,15 @@ describe('POST /api/db/customers', () => {
   });
 
   it('legt KEINEN Kunden an, wenn keine Objektadresse ermittelbar ist (kein Kunde ohne Objekt)', async () => {
-    const before = await prisma.customer.count();
+    // Prüft gezielt auf Abwesenheit dieses einen Testnamens statt einer
+    // globalen Zeilenzahl - die wäre unter parallel laufenden Testdateien
+    // (andere Suiten legen zeitgleich eigene Testkunden an) unzuverlässig.
     await request(app)
       .post('/api/db/customers')
-      .send({ name: 'Sollte nicht entstehen GmbH' })
+      .send({ name: 'Sollte nicht entstehen GmbH (Block 5)' })
       .expect(400);
-    const after = await prisma.customer.count();
-    expect(after).toBe(before);
+    const found = await prisma.customer.findFirst({ where: { name: 'Sollte nicht entstehen GmbH (Block 5)' } });
+    expect(found).toBeNull();
   });
 
   it('nutzt eine eigene Objektadresse, wenn sameAsObjectAddress nicht gesetzt ist', async () => {

@@ -13,6 +13,7 @@ import { registerAuthRoutes, requireAuth } from './lib/auth.js';
 import { mailTransporter } from './lib/mailer.js';
 import { uploadDocumentToDrive, DRIVE_UPLOAD_SCOPE } from './lib/drive.js';
 import { registerDbCrmRoutes } from './lib/dbCrm.js';
+import { registerSevdeskLinkRoutes } from './lib/sevdeskLink.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -55,6 +56,8 @@ app.use('/api', requireAuth);
 // Block 5: Kundenmaske/Objekte gegen die neue Postgres-Datenbank, eigenes
 // Präfix /api/db/* - siehe server/lib/dbCrm.js.
 registerDbCrmRoutes(app);
+// Block 6: sevDesk-Kundenverknüpfung - siehe server/lib/sevdeskLink.js.
+registerSevdeskLinkRoutes(app);
 
 // Verhindert unbeabsichtigte Kostenexplosion bei den KI-Endpoints (Gemini/
 // Claude/Vision) - z.B. durch versehentliches Mehrfachklicken oder einen

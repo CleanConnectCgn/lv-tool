@@ -20,6 +20,12 @@ Läuft live unter https://lv-tool-production.up.railway.app
   erzwungen), Sammelanlage (mehrere Objekte aus einem mehrzeiligen
   Adressfeld), Leistungsverzeichnis auf andere Objekte übertragen
   (unabhängige Kopien, danach je Objekt einzeln bearbeitbar)
+- **sevDesk-Kundenverknüpfung - Block 6**: gleicht sevDesk-Kontakte (nur
+  lesend) gegen die neuen Postgres-Kunden ab - exakte E-Mail-Übereinstimmung
+  wird sofort automatisch verknüpft, gleiche Firmendomain oder nur
+  ähnlicher Firmenname sind reine Vorschläge zur Bestätigung (Namens-
+  Ähnlichkeit verknüpft nie automatisch). Jede Verknüpfung lässt sich
+  jederzeit wieder trennen
 - LV-Editor: Bereiche/Zeilen hinzufügen, entfernen, per Drag & Drop
   neu anordnen, Intervall-Spalten (wöchentlich/monatlich/jährlich) plus
   optionale Wochentagsauswahl, Zusatzleistungen (Glasreinigung,
@@ -119,7 +125,9 @@ server/lib/           auth.js (Google-Login, Session-Cookie, ALLOWED_EMAILS),
                       crypto.js (AES-256-GCM für gespeicherte OAuth-Tokens),
                       mailer.js (geteilt mit worker/), drive.js (Google-Drive-
                       Upload je gespeichertem Dokument), dbCrm.js (Block 5,
-                      Kunden/Objekte/Leistungsverzeichnis-Endpoints), prisma.js
+                      Kunden/Objekte/Leistungsverzeichnis-Endpoints),
+                      sevdeskLink.js (Block 6, sevDesk-Kundenverknüpfung),
+                      prisma.js
 worker/               Backup-Worker (Block 4), eigener Railway-Dienst:
                       backup.js (pg_dump/gzip/Scheduler), storage.js
                       (austauschbarer Speicher-Adapter), index.js (Prozess-

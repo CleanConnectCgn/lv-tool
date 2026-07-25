@@ -41,3 +41,9 @@ export const updateServiceSpecItem = (specId, itemId, patch) =>
   request('PUT', `/api/db/service-specs/${specId}/items/${itemId}`, patch);
 export const transferServiceSpec = (specId, targetObjectIds) =>
   request('POST', `/api/db/service-specs/${specId}/transfer`, { targetObjectIds });
+
+// Block 6: sevDesk-Kundenverknüpfung
+export const runSevdeskLink = () => request('POST', '/api/db/sevdesk-link/run');
+export const confirmSevdeskLink = (customerId, sevdeskContactId) =>
+  request('POST', '/api/db/sevdesk-link/confirm', { customerId, sevdeskContactId });
+export const unlinkSevdesk = (customerId) => request('DELETE', `/api/db/sevdesk-link/${customerId}`);

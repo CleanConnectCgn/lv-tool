@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getDbCustomer, createDbObject, bulkCreateDbObjects } from '../../lib/dbCrm.js';
+import { getDbCustomer, createDbObject, bulkCreateDbObjects, unlinkSevdesk } from '../../lib/dbCrm.js';
 
 export default function DbCustomerDetail({ customerId, onBack, onOpenObject }) {
   const [customer, setCustomer] = useState(null);
@@ -76,6 +76,25 @@ export default function DbCustomerDetail({ customerId, onBack, onOpenObject }) {
         <p className="modal-hint">
           {[customer.street, [customer.zip, customer.city].filter(Boolean).join(' ')].filter(Boolean).join(', ') ||
             'Keine Rechnungsadresse hinterlegt'}
+        </p>
+        <p className="modal-hint">
+          {customer.sevdeskContactId ? (
+            <>
+              🔗 Mit sevDesk-Kontakt {customer.sevdeskContactId} verknüpft ·{' '}
+              <button
+                className="icon-btn"
+                onClick={async () => {
+                  if (!window.confirm('Verknüpfung zu sevDesk wirklich trennen?')) return;
+                  await unlinkSevdesk(customerId);
+                  load();
+                }}
+              >
+                Trennen
+              </button>
+            </>
+          ) : (
+            'Nicht mit sevDesk verknüpft'
+          )}
         </p>
 
         <div className="overview-actions">
