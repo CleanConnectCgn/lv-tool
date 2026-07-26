@@ -33,6 +33,7 @@ export const listRoomAreas = () => request('GET', '/api/db/room-areas');
 export const listElementGroups = () => request('GET', '/api/db/element-groups');
 export const listCatalog = (elementGroupId) =>
   request('GET', `/api/db/catalog${elementGroupId ? `?elementGroupId=${encodeURIComponent(elementGroupId)}` : ''}`);
+export const createCatalogItem = (payload) => request('POST', '/api/db/catalog', payload);
 
 export const listServiceSpecs = (objectId) => request('GET', `/api/db/objects/${objectId}/service-specs`);
 export const createServiceSpec = (objectId, payload) =>
@@ -47,3 +48,24 @@ export const runSevdeskLink = () => request('POST', '/api/db/sevdesk-link/run');
 export const confirmSevdeskLink = (customerId, sevdeskContactId) =>
   request('POST', '/api/db/sevdesk-link/confirm', { customerId, sevdeskContactId });
 export const unlinkSevdesk = (customerId) => request('DELETE', `/api/db/sevdesk-link/${customerId}`);
+
+// Block 7: Upload und Auslesung (raw-binary Body, nicht JSON).
+export async function uploadDocumentForExtraction(file, { customerId, objectId }) {
+  const params = new URLSearchParams({ mimeType: file.type });
+  if (customerId) params.set('customerId', customerId);
+  if (objectId) params.set('objectId', objectId);
+  const res = await fetch(`/api/db/uploads?${params.toString()}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
+    body: await file.arrayBuffer(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw new Error(data?.error || `Fehler (${res.status})`);
+  return data;
+}
+export const getUpload = (id) => request('GET', `/api/db/uploads/${id}`);
+export const retryUpload = (id) => request('POST', `/api/db/uploads/${id}/retry`);
+export const listUploads = (params = {}) => {
+  const qs = new URLSearchParams(params).toString();
+  return request('GET', `/api/db/uploads${qs ? `?${qs}` : ''}`);
+};

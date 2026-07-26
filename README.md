@@ -26,6 +26,16 @@ Läuft live unter https://lv-tool-production.up.railway.app
   ähnlicher Firmenname sind reine Vorschläge zur Bestätigung (Namens-
   Ähnlichkeit verknüpft nie automatisch). Jede Verknüpfung lässt sich
   jederzeit wieder trennen
+- **Upload und Auslesung - Block 7**: PDF/Foto eines bestehenden
+  Leistungsverzeichnisses an ein Objekt hochladen, automatische Zuordnung
+  der Positionen zum geschlossenen Leistungskatalog (austauschbarer
+  Adapter, Standard Gemini, Anbieterwahl nur über `EXTRACTION_PROVIDER`).
+  Das Modell darf ausschließlich vorhandene Katalog-IDs zurückgeben -
+  serverseitig erzwungen, nicht nur per Prompt erhofft. Ergebnis immer im
+  Review-Editor zur Bestätigung (Raumbereich wählen, Intervalle prüfen);
+  nicht zuordenbare Zeilen können zugeordnet, als neuer Katalogpunkt
+  angelegt (nur durch einen Menschen) oder verworfen werden. Jeder
+  Auslese-Aufruf wird mit Modell/Dauer/Kosten protokolliert
 - LV-Editor: Bereiche/Zeilen hinzufügen, entfernen, per Drag & Drop
   neu anordnen, Intervall-Spalten (wöchentlich/monatlich/jährlich) plus
   optionale Wochentagsauswahl, Zusatzleistungen (Glasreinigung,
@@ -127,7 +137,10 @@ server/lib/           auth.js (Google-Login, Session-Cookie, ALLOWED_EMAILS),
                       Upload je gespeichertem Dokument), dbCrm.js (Block 5,
                       Kunden/Objekte/Leistungsverzeichnis-Endpoints),
                       sevdeskLink.js (Block 6, sevDesk-Kundenverknüpfung),
-                      prisma.js
+                      uploads.js (Block 7, Upload-Endpoints), prisma.js
+server/lib/extraction/ Austauschbarer Auslese-Adapter (Block 7): index.js
+                      (Dispatcher + Katalog-ID-Validierung + Protokollierung),
+                      gemini.js (Standard-Implementierung)
 worker/               Backup-Worker (Block 4), eigener Railway-Dienst:
                       backup.js (pg_dump/gzip/Scheduler), storage.js
                       (austauschbarer Speicher-Adapter), index.js (Prozess-

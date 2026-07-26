@@ -11,4 +11,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
   },
+  test: {
+    // Mehrere Testdateien öffnen sonst gleichzeitig eigene PrismaClient-
+    // Verbindungspools gegen dieselbe Postgres-Instanz - live beobachtet,
+    // dass das unter der (langsameren) öffentlichen Verbindung zu
+    // Cross-Test-Interferenzen und Timeouts führt. Sequenziell ist etwas
+    // langsamer, aber zuverlässig.
+    fileParallelism: false,
+  },
 });

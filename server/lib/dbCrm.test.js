@@ -157,3 +157,23 @@ describe('Leistungsverzeichnis erstellen + auf andere Objekte übertragen', () =
     expect(untouchedSpecs.body[0].items[0].woechentlich).toBe(2);
   }, 20000);
 });
+
+describe('POST /api/db/catalog (Block 7 - manuelles Anlegen aus der Review-Oberfläche)', () => {
+  it('legt einen neuen Katalogpunkt an', async () => {
+    const elementGroup = await prisma.elementGroup.findFirst();
+    const res = await request(app)
+      .post('/api/db/catalog')
+      .send({ elementGroupId: elementGroup.id, gegenstand: 'Testgegenstand (Block 7)', verb: 'ENTSTAUBEN' })
+      .expect(201);
+    expect(res.body.gegenstand).toBe('Testgegenstand (Block 7)');
+    await prisma.serviceCatalogItem.delete({ where: { id: res.body.id } });
+  });
+
+  it('lehnt ein ungültiges Verb ab (geschlossene Verbliste)', async () => {
+    const elementGroup = await prisma.elementGroup.findFirst();
+    await request(app)
+      .post('/api/db/catalog')
+      .send({ elementGroupId: elementGroup.id, gegenstand: 'x', verb: 'ERFUNDENES_VERB' })
+      .expect(400);
+  });
+});

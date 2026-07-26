@@ -267,6 +267,34 @@ export function registerDbCrmRoutes(app) {
     }
   });
 
+  // "Nur ein Mensch legt Katalogpunkte an" (Block 7) - dieser Endpunkt wird
+  // ausschließlich von der Review-Oberfläche aufgerufen (nicht zuordenbare
+  // Zeile -> "Als neuen Katalogpunkt anlegen"), NIEMALS vom Auslese-Adapter
+  // selbst.
+  app.post('/api/db/catalog', async (req, res) => {
+    const { elementGroupId, gegenstand, verb, zusatz, synonyme } = req.body || {};
+    if (!elementGroupId || !gegenstand || !verb) {
+      return res.status(400).json({ error: 'elementGroupId, gegenstand und verb sind erforderlich' });
+    }
+    try {
+      const item = await prisma.serviceCatalogItem.create({
+        data: {
+          elementGroupId,
+          gegenstand,
+          verb,
+          zusatz: zusatz || null,
+          synonyme: Array.isArray(synonyme) ? synonyme : [],
+        },
+        include: { elementGroup: true },
+      });
+      res.status(201).json(item);
+    } catch (err) {
+      // z.B. ungültiger verb-Wert (Prisma-Enum lehnt alles außerhalb der
+      // geschlossenen Verbliste hart ab).
+      res.status(400).json({ error: err?.message || 'Katalogpunkt konnte nicht angelegt werden' });
+    }
+  });
+
   // ---- Leistungsverzeichnisse (ServiceSpec) je Objekt ----
 
   app.get('/api/db/objects/:id/service-specs', async (req, res) => {

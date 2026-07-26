@@ -14,6 +14,7 @@ import { mailTransporter } from './lib/mailer.js';
 import { uploadDocumentToDrive, DRIVE_UPLOAD_SCOPE } from './lib/drive.js';
 import { registerDbCrmRoutes } from './lib/dbCrm.js';
 import { registerSevdeskLinkRoutes } from './lib/sevdeskLink.js';
+import { registerUploadRoutes } from './lib/uploads.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -58,6 +59,8 @@ app.use('/api', requireAuth);
 registerDbCrmRoutes(app);
 // Block 6: sevDesk-Kundenverknüpfung - siehe server/lib/sevdeskLink.js.
 registerSevdeskLinkRoutes(app);
+// Block 7: Upload und Auslesung - siehe server/lib/uploads.js.
+registerUploadRoutes(app);
 
 // Verhindert unbeabsichtigte Kostenexplosion bei den KI-Endpoints (Gemini/
 // Claude/Vision) - z.B. durch versehentliches Mehrfachklicken oder einen

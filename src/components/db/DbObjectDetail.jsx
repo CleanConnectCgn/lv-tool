@@ -8,6 +8,7 @@ import {
   createServiceSpec,
   transferServiceSpec,
 } from '../../lib/dbCrm.js';
+import DbUploadReview from './DbUploadReview.jsx';
 
 function IntervalSummary({ item }) {
   if (item.nachBedarf) return <span className="lv-interval-chip">Bei Bedarf</span>;
@@ -27,6 +28,7 @@ export default function DbObjectDetail({ objectId, onBack }) {
   const [error, setError] = useState('');
 
   const [showNewSpec, setShowNewSpec] = useState(false);
+  const [showUpload, setShowUpload] = useState(false);
   const [leistungsart, setLeistungsart] = useState('Unterhaltsreinigung');
   const [draftItems, setDraftItems] = useState([]);
   const [newItem, setNewItem] = useState({ roomAreaId: '', catalogItemId: '', mode: 'woechentlich', value: '1', bemerkung: '' });
@@ -116,7 +118,21 @@ export default function DbObjectDetail({ objectId, onBack }) {
         <div className="overview-actions">
           <button onClick={onBack}>Zurück</button>
           <button onClick={() => setShowNewSpec((v) => !v)}>+ Leistungsverzeichnis erstellen</button>
+          <button onClick={() => setShowUpload((v) => !v)}>📄 Dokument hochladen (Auslesen)</button>
         </div>
+
+        {showUpload && (
+          <DbUploadReview
+            objectId={objectId}
+            catalog={catalog}
+            roomAreas={roomAreas}
+            onCancel={() => setShowUpload(false)}
+            onDone={() => {
+              setShowUpload(false);
+              load();
+            }}
+          />
+        )}
 
         {showNewSpec && (
           <div className="import-box" style={{ marginBottom: 16 }}>
