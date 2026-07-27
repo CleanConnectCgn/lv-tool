@@ -15,6 +15,7 @@ import { uploadDocumentToDrive, DRIVE_UPLOAD_SCOPE } from './lib/drive.js';
 import { registerDbCrmRoutes } from './lib/dbCrm.js';
 import { registerSevdeskLinkRoutes } from './lib/sevdeskLink.js';
 import { registerUploadRoutes } from './lib/uploads.js';
+import { registerDocumentRoutes } from './lib/documentRoutes.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -61,6 +62,8 @@ registerDbCrmRoutes(app);
 registerSevdeskLinkRoutes(app);
 // Block 7: Upload und Auslesung - siehe server/lib/uploads.js.
 registerUploadRoutes(app);
+// Block 8: Dokumentenausgabe (LV-PDF, Vertrag) - siehe server/lib/documentRoutes.js.
+registerDocumentRoutes(app);
 
 // Verhindert unbeabsichtigte Kostenexplosion bei den KI-Endpoints (Gemini/
 // Claude/Vision) - z.B. durch versehentliches Mehrfachklicken oder einen

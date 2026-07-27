@@ -69,3 +69,9 @@ export const listUploads = (params = {}) => {
   const qs = new URLSearchParams(params).toString();
   return request('GET', `/api/db/uploads${qs ? `?${qs}` : ''}`);
 };
+
+// Block 8: Dokumentenausgabe
+export const lvPdfUrl = (specIds) => `/api/db/lv-pdf?specIds=${specIds.join(',')}`;
+export const createContract = (objectId, payload) => request('POST', `/api/db/objects/${objectId}/contract`, payload);
+export const contractDocxUrl = (contractId) => `/api/db/contracts/${contractId}/docx`;
+export const listContracts = (customerId) => request('GET', `/api/db/contracts?customerId=${customerId}`);

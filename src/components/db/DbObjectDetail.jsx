@@ -7,8 +7,10 @@ import {
   listServiceSpecs,
   createServiceSpec,
   transferServiceSpec,
+  lvPdfUrl,
 } from '../../lib/dbCrm.js';
 import DbUploadReview from './DbUploadReview.jsx';
+import DbContractForm from './DbContractForm.jsx';
 
 function IntervalSummary({ item }) {
   if (item.nachBedarf) return <span className="lv-interval-chip">Bei Bedarf</span>;
@@ -36,6 +38,7 @@ export default function DbObjectDetail({ objectId, onBack }) {
   const [transferSpecId, setTransferSpecId] = useState(null);
   const [transferTargets, setTransferTargets] = useState([]);
   const [transferStatus, setTransferStatus] = useState('idle');
+  const [contractFormSpecId, setContractFormSpecId] = useState(null);
 
   function load() {
     setStatus('loading');
@@ -241,6 +244,24 @@ export default function DbObjectDetail({ objectId, onBack }) {
                 </li>
               ))}
             </ul>
+
+            <div className="ai-issue-actions" style={{ marginBottom: 8 }}>
+              <a href={lvPdfUrl([spec.id])} target="_blank" rel="noreferrer">
+                <button type="button">📄 Als PDF exportieren</button>
+              </a>
+              <button type="button" onClick={() => setContractFormSpecId(contractFormSpecId === spec.id ? null : spec.id)}>
+                📝 Vertrag erstellen
+              </button>
+            </div>
+
+            {contractFormSpecId === spec.id && (
+              <DbContractForm
+                objectId={objectId}
+                defaultLeistungsart={spec.leistungsart}
+                defaultLvDatum={spec.standDatum}
+                onClose={() => setContractFormSpecId(null)}
+              />
+            )}
 
             {transferSpecId === spec.id ? (
               <div className="import-box">

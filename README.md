@@ -60,8 +60,21 @@ Läuft live unter https://lv-tool-production.up.railway.app
   „🗄️ Jetzt sichern" sofort auslösbar. Jedes gespeicherte Dokument landet
   außerdem automatisch als JSON in einem Google-Drive-Ordner
   ("LV-Tool Dokumente"), sobald die Firmenkalender-Verbindung steht
-- Verlinkt mit dem separaten [vertragsgenerator](https://github.com/muecreates/vertragsgenerator)
-  (Vertrag direkt aus dem Kundenprofil erstellen)
+- **Dokumentenausgabe - Block 8**: Leistungsverzeichnis-PDF direkt aus den
+  Postgres-ServiceSpecs (Kopfzeile mit Leistungsart/Stand-Datum/Kunde/
+  Objektanschrift, feste Spalten, gruppiert nach Raumbereich und darin nach
+  Elementgruppe in fester Reihenfolge Boden/Wand/Abfall/Inventar; je Objekt
+  ein eigener Abschnitt, Duplikate innerhalb eines Abschnitts werden
+  zusammengefasst). Vertrag als DOCX, portiert aus dem separaten
+  vertragsgenerator-Repo (`server/lib/render/contractDocx.js`) - Haftung,
+  Gewährleistung und Schlussbestimmungen sind fester Code und nicht
+  veränderbar, Datenschutz ist eine feste Standardklausel (für Arztpraxis
+  etc. per Auswahl eine zusätzliche feste Verschwiegenheitsklausel), einzig
+  Kunde/Objekt/Überschrift/Vertragsnummer/Leistungsart/Intervall/Preis/
+  Zahlungsziel/Laufzeit/Kündigungsfrist/Leistungsbeginn/Ansprechpartner/
+  optionale Positionen sind variabel. Keine KI ist an der Vertragserstellung
+  beteiligt - es wird ausschließlich strukturiertes JSON gespeichert
+  (`renderedData`), das DOCX wird bei Abruf aus diesen Daten neu gerendert
 
 ## Lokale Entwicklung
 
@@ -141,6 +154,12 @@ server/lib/           auth.js (Google-Login, Session-Cookie, ALLOWED_EMAILS),
 server/lib/extraction/ Austauschbarer Auslese-Adapter (Block 7): index.js
                       (Dispatcher + Katalog-ID-Validierung + Protokollierung),
                       gemini.js (Standard-Implementierung)
+server/lib/render/    Dokumentenausgabe (Block 8): lvPdf.js (LV-PDF gegen
+                      ServiceSpec/Katalog, jsPDF + autoTable), contractDocx.js
+                      (Vertrags-DOCX, aus vertragsgenerator/build_docs_v17
+                      portiert, feste Klauseln + begrenzte Variablenliste),
+                      contractFields.js (Konstanten/DSGVO-Varianten, 1:1 aus
+                      vertragsgenerator übernommen)
 worker/               Backup-Worker (Block 4), eigener Railway-Dienst:
                       backup.js (pg_dump/gzip/Scheduler), storage.js
                       (austauschbarer Speicher-Adapter), index.js (Prozess-
