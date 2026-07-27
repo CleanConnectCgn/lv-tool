@@ -75,6 +75,17 @@ Läuft live unter https://lv-tool-production.up.railway.app
   optionale Positionen sind variabel. Keine KI ist an der Vertragserstellung
   beteiligt - es wird ausschließlich strukturiertes JSON gespeichert
   (`renderedData`), das DOCX wird bei Abruf aus diesen Daten neu gerendert
+- **Migration - Block 9**: einmaliges Skript (`scripts/migrate-legacy-data.js`,
+  siehe `MIGRATION.md`) übernimmt die bestehenden dateibasierten Dokumente in
+  das Postgres-Modell - Kunden/Objekte werden direkt angelegt (inkl.
+  sevDesk-Verknüpfung aus der alten Kontakt-ID), Freitext-LV-Zeilen werden per
+  Gemini-Textabgleich gegen den geschlossenen Katalog/die Raumbereiche
+  zugeordnet und nur bei eindeutigem Ergebnis übernommen (nie geraten, jede
+  zurückgegebene ID wird gegen die echte Liste geprüft). Alles andere landet
+  unverändert in einem "nicht zugeordnet"-Report zur manuellen Nachbearbeitung
+  über die bestehende UI. Läuft gegen einen `/api/backup`-Export, idempotent
+  (erneuter Lauf überspringt bereits Migriertes), vor dem echten Lauf per
+  Testlauf gegen eine lokale Kopie der Datenbank geprüft
 
 ## Lokale Entwicklung
 
@@ -166,8 +177,9 @@ worker/               Backup-Worker (Block 4), eigener Railway-Dienst:
                       Einstieg + interner /run-now-Endpoint)
 scripts/start.js      Ein Codebase, zwei Rollen: startet server/index.js
                       oder worker/index.js je nach SERVICE_ROLE
-prisma/schema.prisma  Postgres-Schema (Block 2) - noch nicht der primäre
-                      Datenspeicher, das ist bis Block 9 weiterhin DATA_DIR
+scripts/migrate-legacy-data.js  Einmaliges Migrationsskript (Block 9), siehe
+                      MIGRATION.md
+prisma/schema.prisma  Postgres-Schema (Block 2)
 prisma/seed.js        Feste Raumbereiche/Elementgruppen + Start-Katalog
                       (Block 5). Ausführen mit: npx prisma db seed
                       (idempotent, kann gefahrlos mehrfach laufen)
