@@ -3,8 +3,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
 import zlib from 'zlib';
+import crypto from 'crypto';
 
-let msUntilNextBerlin3am, runBackupOnce, backupDir;
+let msUntilNextBerlin3am, runBackupOnce, validateBackupContent, backupDir;
 
 beforeAll(async () => {
   backupDir = await fs.mkdtemp(path.join(os.tmpdir(), 'lv-tool-backup-test-'));
@@ -12,6 +13,7 @@ beforeAll(async () => {
   const mod = await import('./backup.js');
   msUntilNextBerlin3am = mod.msUntilNextBerlin3am;
   runBackupOnce = mod.runBackupOnce;
+  validateBackupContent = mod.validateBackupContent;
 });
 
 afterAll(async () => {
@@ -45,6 +47,30 @@ describe('msUntilNextBerlin3am', () => {
 
   it('liefert immer einen positiven Wert', () => {
     expect(msUntilNextBerlin3am(new Date())).toBeGreaterThan(0);
+  });
+});
+
+describe('validateBackupContent (Regressionstest, kein echter pg_dump nötig)', () => {
+  // Gefunden beim Audit 2026-07-30: pg_dump kann mit Exit-Code 0 enden,
+  // obwohl der Dump leer/trunkiert ist - ohne diese Prüfung würde ein
+  // kaputter Dump als guter Tagesbackup gezählt und pruneOldBackups würde
+  // trotzdem ältere, echte Backups löschen.
+  it('wirft bei einer verdächtig kleinen Datei', () => {
+    expect(() => validateBackupContent(Buffer.from('zu klein'))).toThrow(/verdächtig klein/);
+  });
+
+  it('wirft, wenn der entpackte Inhalt keinen PostgreSQL-Dump-Header enthält', () => {
+    // Zufällige Bytes statt sich wiederholendem Text - sonst komprimiert
+    // gzip das unter die 1024-Byte-Größenschwelle und der falsche Zweig
+    // (statt "kein gültiger Header") würde greifen.
+    const fakeGzip = zlib.gzipSync(crypto.randomBytes(2000));
+    expect(() => validateBackupContent(fakeGzip)).toThrow(/kein.*PostgreSQL-Dump-Header/);
+  });
+
+  it('akzeptiert einen plausiblen, echten Dump-Inhalt', () => {
+    const lines = Array.from({ length: 300 }, (_, i) => `-- Tabellenzeile ${i} mit unterschiedlichem Inhalt ${Math.random()}`);
+    const realistic = zlib.gzipSync(Buffer.from(`-- PostgreSQL database dump\n${lines.join('\n')}`));
+    expect(() => validateBackupContent(realistic)).not.toThrow();
   });
 });
 

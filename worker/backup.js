@@ -3,12 +3,30 @@
 // Prozess-Verkabelung (Scheduler, HTTP-Listener) liegt in worker/index.js.
 import { spawn } from 'child_process';
 import { createWriteStream } from 'fs';
+import { readFile } from 'fs/promises';
 import zlib from 'zlib';
 import { pipeline } from 'stream/promises';
 import { ensureBackupDir, backupFilePath, pruneOldBackups } from './storage.js';
 import { sendOperatorMail } from '../server/lib/mailer.js';
 
 const RETENTION_DAYS = 30;
+
+// Separat exportiert/testbar ohne echten pg_dump-Lauf: pg_dump kann mit
+// Exit-Code 0 enden, obwohl der Dump leer oder trunkiert ist (z.B.
+// Verbindungsabbruch mitten im Stream). Ohne diese Prüfung würde ein
+// kaputter Dump als guter Tagesbackup gezählt und pruneOldBackups würde
+// trotzdem ältere, echte Backups nach 30 Tagen löschen - am Ende ohne
+// einen einzigen brauchbaren Wiederherstellungspunkt. Gefunden beim Audit
+// 2026-07-30.
+export function validateBackupContent(compressedBuffer) {
+  if (compressedBuffer.length < 1024) {
+    throw new Error(`Backup-Datei ist verdächtig klein (${compressedBuffer.length} Bytes) - vermutlich fehlgeschlagen.`);
+  }
+  const decompressed = zlib.gunzipSync(compressedBuffer).toString('utf-8');
+  if (!decompressed.includes('PostgreSQL database dump')) {
+    throw new Error('Backup-Inhalt enthält keinen gültigen PostgreSQL-Dump-Header - vermutlich fehlgeschlagen.');
+  }
+}
 
 function timestampForFilename(date = new Date()) {
   return date.toISOString().replace(/[:.]/g, '-');
@@ -40,6 +58,9 @@ export async function runBackupOnce() {
   const pipelinePromise = pipeline(dump.stdout, zlib.createGzip(), createWriteStream(targetPath));
 
   await Promise.all([exitPromise, pipelinePromise]);
+
+  // Validierung VOR dem Löschen alter Backups - siehe validateBackupContent().
+  validateBackupContent(await readFile(targetPath));
 
   const removedOldBackups = await pruneOldBackups(RETENTION_DAYS);
   return { filename, removedOldBackups };
