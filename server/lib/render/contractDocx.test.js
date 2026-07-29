@@ -107,4 +107,86 @@ describe('buildContractDocument', () => {
     expect(arztpraxis).toContain('ärztliche');
     expect(arztpraxis).toContain('Auftragsverarbeitung');
   });
+
+  it('nutzt einen gespeicherten dsgvoKlausel-Snapshot statt der Live-Tabelle (Immutability-Fix)', async () => {
+    // Simuliert: DSGVO_VARIANTEN.standard wurde nach Vertragserstellung
+    // inhaltlich geändert - der bereits erstellte Vertrag muss trotzdem den
+    // ZUM ERSTELLUNGSZEITPUNKT gültigen (gespeicherten) Text zeigen.
+    const snapshotText = 'DIES-IST-EIN-EINGEFRORENER-TEXT-AUS-DER-VERGANGENHEIT';
+    const xml = await extractDocumentXml(
+      await buildContractDocument({
+        ...BASE_CONTRACT,
+        dsgvoVariante: 'standard',
+        dsgvoKlausel: { label: 'Alt', braucht_avv: false, text: snapshotText },
+      })
+    );
+    expect(xml).toContain(snapshotText);
+  });
+
+  it('setzt das Standard-Zahlungsziel, wenn zahlungszielWerktage explizit null ist (Regressionstest)', async () => {
+    // Bug gefunden 2026-07-29 beim Testen mit echten, aus der DB geladenen
+    // Vertragsdaten: documentRoutes.js speichert ein fehlendes Zahlungsziel
+    // als explizites null (nicht als fehlenden Schlüssel). Ein Destructuring-
+    // Default (`= DEFAULT_WERT`) greift aber NUR bei undefined, nicht bei
+    // null - Ergebnis war "innerhalb von null Werktagen zu leisten" in
+    // echten Verträgen. Dieser Test bildet exakt den DB-Rundlauf nach
+    // (expliziter null-Wert, kein fehlender Schlüssel).
+    const xml = await extractDocumentXml(
+      await buildContractDocument({ ...BASE_CONTRACT, zahlungszielWerktage: null })
+    );
+    expect(xml).toContain('innerhalb von 10 Werktagen zu leisten');
+    expect(xml).not.toContain('null Werktagen');
+  });
+
+  it('nummeriert die Anlagen-Rangfolge (§9.3) in jeder Kombination lückenlos durch (Regressionstest)', async () => {
+    // Bug gefunden 2026-07-29: bei "kein AVV, aber Angebot vorhanden" sprang
+    // die Nummerierung von (2) auf (4) und übersprang (3), weil die (4) für
+    // "Angebot" fest verdrahtet war statt von den vorherigen Einträgen
+    // abzuhängen.
+    const cases = [
+      { dsgvoVariante: 'standard', angebotNummer: null, erwartet: ['(1) dieser Vertrag', '(2) Leistungsverzeichnis'] },
+      {
+        dsgvoVariante: 'standard',
+        angebotNummer: 'AN-1',
+        erwartet: ['(1) dieser Vertrag', '(2) Leistungsverzeichnis', '(3) Angebot'],
+      },
+      {
+        dsgvoVariante: 'gesundheitsdaten',
+        angebotNummer: null,
+        erwartet: ['(1) dieser Vertrag', '(2) Vereinbarung zur Auftragsverarbeitung', '(3) Leistungsverzeichnis'],
+      },
+      {
+        dsgvoVariante: 'gesundheitsdaten',
+        angebotNummer: 'AN-1',
+        erwartet: [
+          '(1) dieser Vertrag',
+          '(2) Vereinbarung zur Auftragsverarbeitung',
+          '(3) Leistungsverzeichnis',
+          '(4) Angebot',
+        ],
+      },
+    ];
+    for (const { dsgvoVariante, angebotNummer, erwartet } of cases) {
+      const xml = await extractDocumentXml(
+        await buildContractDocument({ ...BASE_CONTRACT, dsgvoVariante, angebotNummer, angebotDatum: '2026-07-01' })
+      );
+      for (const fragment of erwartet) {
+        expect(xml).toContain(fragment);
+      }
+      // Es darf niemals eine Nummer übersprungen werden, egal welche
+      // Kombination von Anlagen vorhanden ist.
+      expect(xml).not.toMatch(/\(2\)[^(]*\(4\)/);
+    }
+  });
+
+  it('zeigt keinen Warnbanner bei vollständigen Daten, aber einen bei fehlenden Pflichtangaben', async () => {
+    const vollstaendig = await extractDocumentXml(await buildContractDocument(BASE_CONTRACT));
+    expect(vollstaendig).not.toContain('ENTWURF');
+
+    const unvollstaendig = await extractDocumentXml(
+      await buildContractDocument({ ...BASE_CONTRACT, vertragsbeginn: null, verguetungNetto: null })
+    );
+    expect(unvollstaendig).toContain('ENTWURF');
+    expect(unvollstaendig).toContain('Leistungsbeginn fehlt');
+  });
 });

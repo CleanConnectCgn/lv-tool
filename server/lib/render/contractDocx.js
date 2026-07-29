@@ -16,17 +16,7 @@
 // - Zahlungsziel und Laufzeit sind jetzt echte Parameter (vorher feste
 //   Konstante bzw. gar nicht abgebildet), mit den bisherigen Werten als
 //   Standard, damit sich am Ergebnis für bestehende Fälle nichts ändert.
-import {
-  Document,
-  Packer,
-  Paragraph,
-  TextRun,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
-  BorderStyle,
-} from 'docx';
+import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle } from 'docx';
 import {
   DSGVO_VARIANTEN,
   AUFTRAGNEHMER,
@@ -41,109 +31,28 @@ import {
   VERZUGSZINSSATZ_PUNKTE,
   ZAHLUNGSZIEL_WERKTAGE as DEFAULT_ZAHLUNGSZIEL_WERKTAGE,
 } from './contractFields.js';
-
-const TEAL = '00C5C4';
-const GRAY = '6B7280';
-
-function heading(text, num) {
-  return new Paragraph({
-    children: [new TextRun({ text: `§${num} ${text}`, bold: true, size: 24 })],
-    spacing: { before: 260, after: 120 },
-    border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'E5E7EB', space: 4 } },
-  });
-}
-
-function para(text) {
-  return new Paragraph({ children: [new TextRun(text)], spacing: { after: 140 } });
-}
-
-function clause(num, text) {
-  return new Paragraph({
-    children: [new TextRun({ text: `${num} `, bold: true }), new TextRun(text)],
-    spacing: { after: 120 },
-  });
-}
-
-function bullet(text) {
-  return new Paragraph({ text, bullet: { level: 0 }, spacing: { after: 40 } });
-}
-
-function formatEuro(value) {
-  const n = Number(value);
-  if (Number.isNaN(n)) return '—';
-  return `${n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`;
-}
+import { validateContract } from './contractRules.js';
+import {
+  TEAL,
+  GRAY,
+  heading,
+  para,
+  clause,
+  bullet,
+  formatEuro,
+  formatDateDE,
+  noBorders,
+  infoBoxRow,
+  letterhead,
+  footerNote,
+  signatureBlock,
+} from './docxHelpers.js';
 
 function bruttoFromNetto(netto, mwstSatz) {
   const n = Number(netto);
   const satz = Number(mwstSatz);
   if (Number.isNaN(n) || Number.isNaN(satz)) return null;
   return n * (1 + satz / 100);
-}
-
-function formatDateDE(iso) {
-  if (!iso) return '[Datum]';
-  const [y, m, d] = String(iso).slice(0, 10).split('-');
-  if (!y || !m || !d) return iso;
-  return `${d}.${m}.${y}`;
-}
-
-function noBorders() {
-  const none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
-  return { top: none, bottom: none, left: none, right: none };
-}
-
-function infoBoxRow(label, value) {
-  return new TableRow({
-    children: [
-      new TableCell({
-        width: { size: 45, type: WidthType.PERCENTAGE },
-        borders: noBorders(),
-        children: [new Paragraph({ children: [new TextRun({ text: label, color: GRAY, size: 18 })] })],
-      }),
-      new TableCell({
-        width: { size: 55, type: WidthType.PERCENTAGE },
-        borders: noBorders(),
-        children: [new Paragraph({ children: [new TextRun({ text: value || '—', bold: true, size: 18 })] })],
-      }),
-    ],
-  });
-}
-
-function letterhead() {
-  return [
-    new Paragraph({
-      children: [
-        new TextRun({ text: AUFTRAGNEHMER.firma.toUpperCase(), bold: true, size: 18 }),
-        new TextRun({
-          text: `\n${AUFTRAGNEHMER.strasse} | ${AUFTRAGNEHMER.plz} ${AUFTRAGNEHMER.ort} | ${AUFTRAGNEHMER.telefon} | ${AUFTRAGNEHMER.email}`,
-          size: 16,
-          color: GRAY,
-        }),
-      ],
-      spacing: { after: 100 },
-    }),
-    new Paragraph({
-      border: { bottom: { style: BorderStyle.SINGLE, size: 12, color: TEAL, space: 6 } },
-      spacing: { after: 260 },
-      children: [],
-    }),
-  ];
-}
-
-function footerNote() {
-  return new Paragraph({
-    children: [
-      new TextRun({
-        text:
-          `${AUFTRAGNEHMER.firma} · ${AUFTRAGNEHMER.amtsgericht} · ${AUFTRAGNEHMER.hrNummer} · ` +
-          `IBAN ${AUFTRAGNEHMER.iban} · ${AUFTRAGNEHMER.bankinstitut} · BIC ${AUFTRAGNEHMER.bic} · ` +
-          `USt.-ID ${AUFTRAGNEHMER.ustId} · GF ${AUFTRAGNEHMER.geschaeftsfuehrung}`,
-        size: 14,
-        color: GRAY,
-      }),
-    ],
-  });
 }
 
 function kontodatenTable() {
@@ -171,38 +80,6 @@ function kontodatenTable() {
       row('IBAN', AUFTRAGNEHMER.iban, true),
       row('BIC', AUFTRAGNEHMER.bic),
       row('Verwendungszweck', 'Rechnungsnummer'),
-    ],
-  });
-}
-
-function signatureBlock(kundeFirma) {
-  const cell = (title, name) =>
-    new TableCell({
-      width: { size: 50, type: WidthType.PERCENTAGE },
-      shading: { fill: 'F5F8F8' },
-      margin: { top: 150, bottom: 150, left: 150, right: 150 },
-      children: [
-        new Paragraph({ children: [new TextRun({ text: 'Ort / Datum', size: 16, color: GRAY })] }),
-        new Paragraph({ text: '' }),
-        new Paragraph({ text: '' }),
-        new Paragraph({
-          border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'CDD3D7', space: 2 } },
-          children: [],
-        }),
-        new Paragraph({ children: [new TextRun({ text: name, bold: true, size: 18 })] }),
-        new Paragraph({ children: [new TextRun({ text: title, size: 16, color: GRAY })] }),
-      ],
-    });
-
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    rows: [
-      new TableRow({
-        children: [
-          cell('Auftragnehmer', `${AUFTRAGNEHMER.firma} · ${AUFTRAGNEHMER.geschaeftsfuehrung} (Geschäftsführer)`),
-          cell('Auftraggeber', kundeFirma || '[Auftraggeber]'),
-        ],
-      }),
     ],
   });
 }
@@ -238,17 +115,31 @@ export function buildContractDocument(contract) {
     reinigungsintervall,
     verguetungNetto,
     mwstSatz,
-    zahlungszielWerktage = DEFAULT_ZAHLUNGSZIEL_WERKTAGE,
+    // Bewusst kein Destructuring-Default (= DEFAULT_...): der greift nur bei
+    // undefined, nicht bei explizitem null - genau das speichert die DB aber
+    // (siehe documentRoutes.js), was zu "innerhalb von null Werktagen" führte
+    // (gefunden 2026-07-29 beim Testen mit echten Daten). Stattdessen unten
+    // per ?? aufgelöst, das behandelt null und undefined gleich.
+    zahlungszielWerktage: zahlungszielWerktageRoh,
     optionalePositionen = [],
     dsgvoVariante,
     angebotNummer,
     angebotDatum,
     lvDatum,
+    // Snapshot des tatsächlich verwendeten Klauseltexts, gesetzt beim Anlegen
+    // (documentRoutes.js) - macht das Dokument unabhängig von späteren
+    // Textänderungen an DSGVO_VARIANTEN (contractFields.js). Bestandsverträge
+    // von vor dieser Änderung haben noch keinen Snapshot; für die greift der
+    // Fallback auf die Live-Tabelle (deren historischer Text nicht mehr
+    // rekonstruierbar ist, da er nie gespeichert wurde).
+    dsgvoKlausel,
   } = contract;
 
   const satz = mwstSatz ?? STANDARD_MWST;
+  const zahlungszielWerktage = zahlungszielWerktageRoh ?? DEFAULT_ZAHLUNGSZIEL_WERKTAGE;
   const brutto = bruttoFromNetto(verguetungNetto, satz);
-  const dsgvoInfo = DSGVO_VARIANTEN[dsgvoVariante] || DSGVO_VARIANTEN.standard;
+  const dsgvoInfo = dsgvoKlausel || DSGVO_VARIANTEN[dsgvoVariante] || DSGVO_VARIANTEN.standard;
+  const { errors: vorgabenFehler, warnings: vorgabenHinweise } = validateContract(contract);
 
   const kundeAdresse = [kunde.strasse, [kunde.plz, kunde.ort].filter(Boolean).join(' ')]
     .filter(Boolean)
@@ -291,8 +182,28 @@ export function buildContractDocument(contract) {
     ],
   });
 
+  const vorgabenMeldungen = [...vorgabenFehler, ...vorgabenHinweise];
+  const warnBanner =
+    vorgabenMeldungen.length > 0
+      ? [
+          new Paragraph({
+            shading: { fill: 'FDECEC' },
+            spacing: { before: 100, after: 200 },
+            children: [
+              new TextRun({
+                text: `ENTWURF — vor Versand/Unterschrift ergänzen: ${vorgabenMeldungen.join('; ')}`,
+                bold: true,
+                color: 'B42318',
+                size: 18,
+              }),
+            ],
+          }),
+        ]
+      : [];
+
   const children = [
     ...letterhead(),
+    ...warnBanner,
     new Paragraph({ children: [new TextRun({ text: ueberschrift, bold: true, size: 40 })], spacing: { after: 220 } }),
     headerTable,
     new Paragraph({ text: '', spacing: { after: 200 } }),
@@ -628,10 +539,16 @@ export function buildContractDocument(contract) {
     ),
     clause(
       '9.3',
-      'Bei Widersprüchen zwischen diesem Vertrag und den Anlagen gilt folgende Rangfolge: (1) dieser Vertrag, ' +
-        (dsgvoInfo.braucht_avv ? '(2) Vereinbarung zur Auftragsverarbeitung (Anlage 3), (3) ' : '(2) ') +
-        'Leistungsverzeichnis (Anlage 1)' +
-        (angebotNummer ? ', (4) Angebot (Anlage 2).' : '.')
+      'Bei Widersprüchen zwischen diesem Vertrag und den Anlagen gilt folgende Rangfolge: ' +
+        [
+          'dieser Vertrag',
+          ...(dsgvoInfo.braucht_avv ? ['Vereinbarung zur Auftragsverarbeitung (Anlage 3)'] : []),
+          'Leistungsverzeichnis (Anlage 1)',
+          ...(angebotNummer ? ['Angebot (Anlage 2)'] : []),
+        ]
+          .map((text, i) => `(${i + 1}) ${text}`)
+          .join(', ') +
+        '.'
     ),
     clause(
       '9.4',

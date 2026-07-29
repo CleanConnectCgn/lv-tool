@@ -96,8 +96,14 @@ describe('POST /api/db/objects/:id/contract, GET /api/db/contracts/:id/docx', ()
     contractIdsToClean.push(created.body.contract.id);
 
     expect(created.body.document.type).toBe('VERTRAG');
-    expect(created.body.document.renderedData.vertragsnummer).toMatch(/^VT-\d{4}$/);
+    expect(created.body.document.renderedData.vertragsnummer).toMatch(/^VT-\d+$/);
     expect(created.body.document.renderedData.kunde.firma).toBe('Dokument Test GmbH (Block 8)');
+    // Snapshot des Klauseltexts + Vorlagenversion muss mitgespeichert sein
+    // (Immutability-Fix - siehe contractDocx.test.js).
+    expect(created.body.document.renderedData.dsgvoKlausel.text).toBeTruthy();
+    expect(created.body.document.renderedData.contractTemplateVersion).toBeTruthy();
+    // Alle Pflichtfelder waren gesetzt -> keine Warnungen.
+    expect(created.body.warnings).toEqual([]);
 
     // supertest puffert diesen MIME-Type nicht automatisch in .body - über
     // Content-Length statt res.body.length prüfen, dass echte Bytes zurückkamen.
@@ -118,15 +124,109 @@ describe('POST /api/db/objects/:id/contract, GET /api/db/contracts/:id/docx', ()
     expect(docxRes.body.toString('latin1', 0, 2)).toBe('PK');
   });
 
-  it('erzeugt bei zwei Verträgen zwei unterschiedliche Vertragsnummern', async () => {
+  it('erzeugt bei zwei Verträgen zwei unterschiedliche, fortlaufende Vertragsnummern', async () => {
     const a = await request(app).post(`/api/db/objects/${objectId}/contract`).send({}).expect(201);
     const b = await request(app).post(`/api/db/objects/${objectId}/contract`).send({}).expect(201);
     contractIdsToClean.push(a.body.contract.id, b.body.contract.id);
-    expect(a.body.document.renderedData.vertragsnummer).not.toBe(b.body.document.renderedData.vertragsnummer);
+    const numA = Number(a.body.document.renderedData.vertragsnummer.replace('VT-', ''));
+    const numB = Number(b.body.document.renderedData.vertragsnummer.replace('VT-', ''));
+    expect(numB).toBe(numA + 1);
+  });
+
+  it('meldet Warnungen bei fehlenden fachlichen Feldern, blockiert die Erstellung aber nicht', async () => {
+    const created = await request(app).post(`/api/db/objects/${objectId}/contract`).send({}).expect(201);
+    contractIdsToClean.push(created.body.contract.id);
+    expect(created.body.warnings.length).toBeGreaterThan(0);
+  });
+
+  it('lehnt eine unbekannte Datenschutz-Klausel mit 400 ab (keine Vertrags-/Dokumenterstellung)', async () => {
+    const res = await request(app)
+      .post(`/api/db/objects/${objectId}/contract`)
+      .send({ dsgvoVariante: 'gibt-es-nicht' })
+      .expect(400);
+    expect(res.body.errors.length).toBeGreaterThan(0);
   });
 
   it('listet Verträge eines Kunden', async () => {
     const list = await request(app).get(`/api/db/contracts?customerId=${customerId}`).expect(200);
     expect(list.body.length).toBeGreaterThan(0);
+  });
+});
+
+describe('GET /api/db/contracts/:id/avv-docx', () => {
+  it('liefert 200 + echtes DOCX für eine AVV-pflichtige Variante', async () => {
+    const created = await request(app)
+      .post(`/api/db/objects/${objectId}/contract`)
+      .send({ dsgvoVariante: 'gesundheitsdaten' })
+      .expect(201);
+    contractIdsToClean.push(created.body.contract.id);
+
+    const avvRes = await request(app)
+      .get(`/api/db/contracts/${created.body.contract.id}/avv-docx`)
+      .buffer(true)
+      .parse((res, callback) => {
+        const chunks = [];
+        res.on('data', (chunk) => chunks.push(chunk));
+        res.on('end', () => callback(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(avvRes.body.toString('latin1', 0, 2)).toBe('PK');
+  });
+
+  it('liefert 409 für eine Variante ohne AVV-Pflicht (z.B. standard)', async () => {
+    const created = await request(app)
+      .post(`/api/db/objects/${objectId}/contract`)
+      .send({ dsgvoVariante: 'standard' })
+      .expect(201);
+    contractIdsToClean.push(created.body.contract.id);
+
+    await request(app).get(`/api/db/contracts/${created.body.contract.id}/avv-docx`).expect(409);
+  });
+
+  it('liefert 404 für einen unbekannten Vertrag', async () => {
+    await request(app).get('/api/db/contracts/00000000-0000-0000-0000-000000000000/avv-docx').expect(404);
+  });
+});
+
+describe('PATCH /api/db/contracts/:id/status', () => {
+  it('setzt Status und passendes Zeitstempel-Feld', async () => {
+    const created = await request(app).post(`/api/db/objects/${objectId}/contract`).send({}).expect(201);
+    contractIdsToClean.push(created.body.contract.id);
+
+    const sent = await request(app)
+      .patch(`/api/db/contracts/${created.body.contract.id}/status`)
+      .send({ status: 'VERSENDET' })
+      .expect(200);
+    expect(sent.body.status).toBe('VERSENDET');
+    expect(sent.body.sentAt).toBeTruthy();
+
+    const signed = await request(app)
+      .patch(`/api/db/contracts/${created.body.contract.id}/status`)
+      .send({ status: 'UNTERSCHRIEBEN' })
+      .expect(200);
+    expect(signed.body.signedAt).toBeTruthy();
+  });
+
+  it('lehnt einen unbekannten Status mit 400 ab', async () => {
+    const created = await request(app).post(`/api/db/objects/${objectId}/contract`).send({}).expect(201);
+    contractIdsToClean.push(created.body.contract.id);
+    await request(app)
+      .patch(`/api/db/contracts/${created.body.contract.id}/status`)
+      .send({ status: 'ERFUNDEN' })
+      .expect(400);
+  });
+});
+
+describe('POST /api/db/contracts/:id/ai-review', () => {
+  it('meldet 500, wenn ANTHROPIC_API_KEY nicht konfiguriert ist', async () => {
+    const originalKey = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const created = await request(app).post(`/api/db/objects/${objectId}/contract`).send({}).expect(201);
+      contractIdsToClean.push(created.body.contract.id);
+      await request(app).post(`/api/db/contracts/${created.body.contract.id}/ai-review`).expect(500);
+    } finally {
+      if (originalKey) process.env.ANTHROPIC_API_KEY = originalKey;
+    }
   });
 });

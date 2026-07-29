@@ -75,3 +75,9 @@ export const lvPdfUrl = (specIds) => `/api/db/lv-pdf?specIds=${specIds.join(',')
 export const createContract = (objectId, payload) => request('POST', `/api/db/objects/${objectId}/contract`, payload);
 export const contractDocxUrl = (contractId) => `/api/db/contracts/${contractId}/docx`;
 export const listContracts = (customerId) => request('GET', `/api/db/contracts?customerId=${customerId}`);
+
+// Baustein-System: AVV (Anlage 3), Status-Historie, KI-Gegenkontrolle.
+export const avvDocxUrl = (contractId) => `/api/db/contracts/${contractId}/avv-docx`;
+export const updateContractStatus = (contractId, status) =>
+  request('PATCH', `/api/db/contracts/${contractId}/status`, { status });
+export const runContractAiReview = (contractId) => request('POST', `/api/db/contracts/${contractId}/ai-review`);

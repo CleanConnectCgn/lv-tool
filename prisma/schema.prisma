@@ -71,6 +71,16 @@ enum RecurringJobStatus {
   BEENDET
 }
 
+// Lebenszyklus eines generierten Vertrags (Block "Baustein-System" -
+// Vollständigkeit selbst wird NICHT hier abgebildet, die wird bei jedem
+// Rendern live aus renderedData neu berechnet, siehe contractRules.js).
+enum ContractStatus {
+  ENTWURF
+  VERSENDET
+  UNTERSCHRIEBEN
+  GEKUENDIGT
+}
+
 enum CalendarEventType {
   BESICHTIGUNG
   ERSTREINIGUNG
@@ -252,6 +262,11 @@ model ServiceSpecItem {
   roomArea   RoomArea @relation(fields: [roomAreaId], references: [id])
 
   nachBedarf   Boolean  @default(false) @map("nach_bedarf")
+  // Echte einmalige Leistung (z.B. Grundreinigung/Glasreinigung bei Einzug),
+  // kein Wiederholungsintervall - kein Zahlenfeld nötig, analog zu
+  // nachBedarf. Ergänzt 2026-07-29, da "Jährlich 1x" als Notlösung
+  // inhaltlich falsch war (impliziert Wiederholung).
+  einmalig     Boolean  @default(false) @map("einmalig")
   woechentlich Int? // Häufigkeit im Zeitraum, z.B. 5 = fünfmal pro Woche
   monatlich    Int?
   jaehrlich    Int? // z.B. 4 = quartalsweise
@@ -319,6 +334,18 @@ model Contract {
   documentId String   @map("document_id")
   document   Document @relation(fields: [documentId], references: [id])
 
+  status   ContractStatus @default(ENTWURF)
+  sentAt   DateTime?      @map("sent_at")
+  signedAt DateTime?      @map("signed_at")
+
+  // Audit-Trail der letzten KI-Gegenkontrolle (beratend, kein Gate - siehe
+  // POST /api/db/contracts/:id/ai-review). "freigabe" gespiegelt als eigene
+  // Spalte, damit Listenansichten nicht jedes Mal das komplette JSON
+  // parsen müssen.
+  lastAiReviewAt       DateTime? @map("last_ai_review_at")
+  lastAiReviewFreigabe String?   @map("last_ai_review_freigabe")
+  lastAiReviewResult   Json?     @map("last_ai_review_result")
+
   ownerId   String?  @map("owner_id")
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -327,6 +354,17 @@ model Contract {
   @@index([customerId])
   @@index([documentId])
   @@map("contracts")
+}
+
+// Atomarer, fortlaufender Zähler (z.B. für Vertragsnummern) - ein Upsert mit
+// { value: { increment: 1 } } ist eine einzelne, atomare SQL-Anweisung und
+// damit race-condition-frei, anders als das bisherige "zufällig erzeugen +
+// gegen die DB auf Eindeutigkeit prüfen".
+model Sequence {
+  name  String @id
+  value Int    @default(0)
+
+  @@map("sequences")
 }
 
 // ---------------------------------------------------------------------------

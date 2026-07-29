@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createContract, contractDocxUrl } from '../../lib/dbCrm.js';
+import { createContract, contractDocxUrl, avvDocxUrl, runContractAiReview } from '../../lib/dbCrm.js';
 
 // Block 8: sammelt genau die im Auftrag als variabel erlaubten Felder
 // (Ueberschrift, Leistungsart, Intervall, Preis, Zahlungsziel, Laufzeit,
@@ -7,7 +7,34 @@ import { createContract, contractDocxUrl } from '../../lib/dbCrm.js';
 // Anschrift kommen serverseitig aus dem Objekt, Vertragsnummer wird
 // serverseitig erzeugt. Haftung/Gewaehrleistung/Schlussbestimmungen sind im
 // Renderer fest und hier nicht editierbar.
+//
+// Lokale Kopie von BRANCHEN/BRANCHE_ZU_DSGVO/braucht_avv statt Import aus
+// server/lib/render/contractFields.js - gleiches Muster wie die schon
+// bisher hier fest hinterlegten Datenschutz-Klausel-Optionen (Server- und
+// Client-Bundle sind getrennt). Bewusst nur 2 DSGVO-Varianten (Standard /
+// Erhöhter Schutz) statt vieler Branchen-Einzelvarianten - deckt sich mit
+// der tatsächlichen Kundenstruktur (Rückfrage 2026-07-29 beantwortet).
+const BRANCHEN = [
+  { key: 'buero', label: 'Büro' },
+  { key: 'treppenhaus', label: 'Treppenhaus / Wohnanlage' },
+  { key: 'gewerbehalle', label: 'Gewerbehalle / Produktion' },
+  { key: 'praxis', label: 'Arzt-/Physio-/Psychologenpraxis' },
+  { key: 'sonstiges', label: 'Sonstiges' },
+];
+const BRANCHE_ZU_DSGVO = {
+  buero: 'standard',
+  treppenhaus: 'standard',
+  gewerbehalle: 'standard',
+  praxis: 'gesundheitsdaten',
+  sonstiges: 'standard',
+};
+const DSGVO_BRAUCHT_AVV = {
+  standard: false,
+  gesundheitsdaten: true,
+};
+
 export default function DbContractForm({ objectId, defaultLeistungsart, defaultLvDatum, onClose }) {
+  const [branche, setBranche] = useState('buero');
   const [leistungsart, setLeistungsart] = useState(defaultLeistungsart || 'Unterhaltsreinigung');
   const [reinigungsintervall, setReinigungsintervall] = useState('');
   const [verguetungNetto, setVerguetungNetto] = useState('');
@@ -20,6 +47,16 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
   const [status, setStatus] = useState('idle'); // idle | saving | done | error
   const [error, setError] = useState('');
   const [contractId, setContractId] = useState(null);
+  const [warnings, setWarnings] = useState([]);
+
+  const [aiStatus, setAiStatus] = useState('idle'); // idle | running | done | error
+  const [aiResult, setAiResult] = useState(null);
+  const [aiError, setAiError] = useState('');
+
+  function handleBrancheChange(value) {
+    setBranche(value);
+    setDsgvoVariante(BRANCHE_ZU_DSGVO[value] || 'standard');
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -27,6 +64,7 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
     setError('');
     try {
       const result = await createContract(objectId, {
+        branche,
         leistungsart,
         reinigungsintervall,
         verguetungNetto: verguetungNetto || null,
@@ -39,6 +77,7 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
         lvDatum: defaultLvDatum || null,
       });
       setContractId(result.contract.id);
+      setWarnings(result.warnings || []);
       setStatus('done');
     } catch (err) {
       setError(err?.message || 'Vertrag konnte nicht angelegt werden');
@@ -46,19 +85,79 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
     }
   }
 
+  async function handleAiReview() {
+    setAiStatus('running');
+    setAiError('');
+    try {
+      const result = await runContractAiReview(contractId);
+      setAiResult(result);
+      setAiStatus('done');
+    } catch (err) {
+      setAiError(err?.message || 'KI-Prüfung fehlgeschlagen');
+      setAiStatus('error');
+    }
+  }
+
   if (status === 'done' && contractId) {
     return (
       <div className="import-box">
         <div className="modal-message success">Vertrag angelegt.</div>
+        {warnings.length > 0 && (
+          <div className="modal-message error">
+            Entwurf unvollständig - vor Versand ergänzen:
+            <ul>
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="modal-actions">
           <button type="button" onClick={onClose}>
             Schließen
           </button>
+          {DSGVO_BRAUCHT_AVV[dsgvoVariante] && (
+            <a href={avvDocxUrl(contractId)}>
+              <button type="button">AVV (Anlage 3) herunterladen</button>
+            </a>
+          )}
           <a href={contractDocxUrl(contractId)}>
             <button type="button" className="primary">
               Als DOCX herunterladen
             </button>
           </a>
+        </div>
+
+        <div className="ai-dual-checkup">
+          <div className="ai-dual-header">
+            <h3>KI-Gegenkontrolle (beratend)</h3>
+            <button type="button" className="ai-btn-apply" onClick={handleAiReview} disabled={aiStatus === 'running'}>
+              {aiStatus === 'idle' ? 'KI-Prüfung starten' : 'Erneut prüfen'}
+            </button>
+          </div>
+          {aiStatus === 'running' && <p>Claude prüft den Vertrag gegen die Vorgaben...</p>}
+          {aiStatus === 'error' && <div className="modal-message error">{aiError}</div>}
+          {aiResult && (
+            <div className="ai-dual-result">
+              {aiResult.verstoesse?.length > 0 && (
+                <div>
+                  <strong>Gefundene Verstöße:</strong>
+                  <ul>
+                    {aiResult.verstoesse.map((v, i) => (
+                      <li key={i}>
+                        {v.regel} — {v.fundstelle}: {v.begruendung}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <p>
+                <strong>Freigabeempfehlung:</strong>{' '}
+                {aiResult.freigabe === 'bereit' ? '✓ Bereit' : '⚠ Überarbeitung empfohlen'}
+                {aiResult.begruendung && ` — ${aiResult.begruendung}`}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -71,6 +170,16 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
 
       <div className="modal-field-row">
         <label className="modal-field">
+          Branche
+          <select value={branche} onChange={(e) => handleBrancheChange(e.target.value)}>
+            {BRANCHEN.map((b) => (
+              <option key={b.key} value={b.key}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="modal-field">
           Leistungsart
           <input value={leistungsart} onChange={(e) => setLeistungsart(e.target.value)} />
         </label>
@@ -78,12 +187,12 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
           Intervall
           <input value={reinigungsintervall} onChange={(e) => setReinigungsintervall(e.target.value)} placeholder="z.B. 2x wöchentlich" />
         </label>
+      </div>
+      <div className="modal-field-row">
         <label className="modal-field">
           Preis (netto, EUR/Monat)
           <input type="number" step="0.01" value={verguetungNetto} onChange={(e) => setVerguetungNetto(e.target.value)} />
         </label>
-      </div>
-      <div className="modal-field-row">
         <label className="modal-field">
           Leistungsbeginn
           <input type="date" value={vertragsbeginn} onChange={(e) => setVertragsbeginn(e.target.value)} />
@@ -92,12 +201,12 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
           Kündigungsfrist (Monate)
           <input type="number" min="1" value={kuendigungsfristMonate} onChange={(e) => setKuendigungsfristMonate(e.target.value)} />
         </label>
+      </div>
+      <div className="modal-field-row">
         <label className="modal-field">
           Laufzeit (Monate, leer = unbestimmt)
           <input type="number" min="1" value={laufzeitMonate} onChange={(e) => setLaufzeitMonate(e.target.value)} />
         </label>
-      </div>
-      <div className="modal-field-row">
         <label className="modal-field">
           Zahlungsziel (Werktage, leer = Standard)
           <input type="number" min="1" value={zahlungszielWerktage} onChange={(e) => setZahlungszielWerktage(e.target.value)} />
@@ -106,15 +215,21 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
           Ansprechpartner (intern)
           <input value={internerAnsprechpartner} onChange={(e) => setInternerAnsprechpartner(e.target.value)} />
         </label>
+      </div>
+      <div className="modal-field-row">
         <label className="modal-field">
           Datenschutz-Klausel
           <select value={dsgvoVariante} onChange={(e) => setDsgvoVariante(e.target.value)}>
-            <option value="standard">Standard (Büro/Gewerbe)</option>
-            <option value="gesundheitsdaten">Arztpraxis (Verschwiegenheit, AVV)</option>
-            <option value="mandantendaten">Kanzlei (Mandantendaten, AVV)</option>
-            <option value="minderjaehrige">Kindergarten/Schule (AVV)</option>
+            <option value="standard">Standard (Büro/Treppenhaus/Gewerbe)</option>
+            <option value="gesundheitsdaten">Erhöhter Schutz — Praxis (Gesundheitsdaten, AVV)</option>
           </select>
         </label>
+        {BRANCHE_ZU_DSGVO[branche] !== dsgvoVariante && (
+          <div className="modal-message error">
+            Achtung: Diese Klausel weicht von der für "{BRANCHEN.find((b) => b.key === branche)?.label}" empfohlenen
+            Variante ab.
+          </div>
+        )}
       </div>
 
       <div className="modal-actions">

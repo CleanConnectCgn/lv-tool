@@ -44,13 +44,23 @@ export const ZAHLUNGSZIEL_WERKTAGE = 10;
 
 export const STANDARD_MWST = 19;
 
+// Stempel, der bei jeder Vertragserstellung mit in renderedData gespeichert
+// wird - rein zur Nachvollziehbarkeit, falls die feste §1-§9-Vorlage
+// (contractDocx.js) je geändert wird. Bei einer inhaltlichen Änderung der
+// Vorlage hier hochzählen.
+export const CONTRACT_TEMPLATE_VERSION = 'contract-v2-2026-07-29';
+
+// Bewusst nur zwei Kategorien, keine feinere Branchenausdifferenzierung -
+// deckt sich mit der tatsächlichen Kundenstruktur (überwiegend Büro/
+// Treppenhaus, gelegentlich Arzt-/Physio-/Psychologenpraxen). Mehr
+// Varianten würden die Wahrscheinlichkeit einer Fehlauswahl erhöhen, ohne
+// echten Nutzen für nicht vorkommende Fälle (Kanzlei, Kindergarten o.ä.) -
+// bewusst entfernt (Rückfrage 2026-07-29 beantwortet).
 export const BRANCHEN = [
   { key: 'buero', label: 'Büro' },
-  { key: 'arztpraxis', label: 'Arztpraxis' },
-  { key: 'kanzlei', label: 'Kanzlei' },
   { key: 'treppenhaus', label: 'Treppenhaus / Wohnanlage' },
   { key: 'gewerbehalle', label: 'Gewerbehalle / Produktion' },
-  { key: 'kindergarten', label: 'Kindergarten / Schule' },
+  { key: 'praxis', label: 'Arzt-/Physio-/Psychologenpraxis' },
   { key: 'sonstiges', label: 'Sonstiges' },
 ];
 
@@ -58,105 +68,81 @@ export const BRANCHEN = [
 // verallgemeinert aus der Arztpraxis-Formulierung im Referenzvertrag.
 export const DSGVO_VARIANTEN = {
   standard: {
-    label: 'Standard (Büro/Gewerbe)',
+    label: 'Standard (Büro, Treppenhaus, Gewerbe)',
     braucht_avv: false,
-    text: `Der Auftragnehmer verpflichtet sich, im Rahmen der Leistungserbringung Kenntnis
-erlangte personenbezogene Daten gemäß den Vorschriften der DSGVO und des BDSG
-vertraulich zu behandeln und ausschließlich zur Vertragserfüllung zu verwenden. Eine
-Weitergabe an Dritte erfolgt nicht, soweit nicht gesetzlich vorgeschrieben. Die
-eingesetzten Reinigungskräfte werden auf das Datengeheimnis verpflichtet.`,
+    // Begründung braucht_avv: false - bei reiner Unterhaltsreinigung ohne
+    // gezielten, planmäßigen Datenzugriff gelten Reinigungskräfte nach
+    // gängiger Aufsichtsbehördenpraxis (u.a. LfDI-FAQs zur Gebäudereinigung)
+    // nicht als Auftragsverarbeiter i.S.v. Art. 28 DSGVO, solange die
+    // Kenntnisnahme rein zufällig bleibt. Das wird unten im Vertragstext
+    // selbst begründet, nicht nur stillschweigend angenommen.
+    text: `Bei der Reinigung von Büroflächen, Treppenhäusern und sonstigen Gemeinschaftsflächen
+erlangt der Auftragnehmer allenfalls zufällig Kenntnis von personenbezogenen Daten (z.B.
+Namen auf Schreibtischunterlagen, Bildschirminhalten, Besucherlisten, Namens- und
+Klingelschildern, Briefkästen oder Postsendungen). Eine gezielte, planmäßige Verarbeitung
+personenbezogener Daten im Auftrag des Auftraggebers ist nicht Gegenstand dieses Vertrages;
+der Auftragnehmer wird insoweit nicht als Auftragsverarbeiter im Sinne von Art. 28 DSGVO
+tätig, sofern nicht ausnahmsweise eine gesonderte Vereinbarung zur Auftragsverarbeitung
+geschlossen wird. Unabhängig davon trifft der Auftragnehmer angemessene technische und
+organisatorische Maßnahmen gemäß Art. 32 DSGVO: Alle eingesetzten Mitarbeiter werden vor
+Tätigkeitsbeginn schriftlich auf die Vertraulichkeit personenbezogener Daten verpflichtet
+(sog. Datengeheimnis, Art. 29, Art. 32 Abs. 4 DSGVO) und ausdrücklich angewiesen, sichtbare
+Unterlagen, Bildschirminhalte, Namens- und Klingelschilder, Briefkästen und Postsendungen
+weder zu lesen noch zu kopieren, zu fotografieren, zu bewegen oder in sonstiger Weise zur
+Kenntnis zu nehmen. Eine Weitergabe zufällig zur Kenntnis genommener Daten an Dritte erfolgt
+nicht, soweit nicht gesetzlich vorgeschrieben. Stellt der Auftragnehmer bei seiner Tätigkeit
+Anhaltspunkte für eine Verletzung des Schutzes personenbezogener Daten fest (z.B. offensichtlich
+unbefugten Zugriff Dritter auf Unterlagen oder IT-Systeme), informiert er den Auftraggeber
+unverzüglich, spätestens innerhalb von 24 Stunden nach Kenntnisnahme, damit dieser seinen
+Meldepflichten nach Art. 33 DSGVO nachkommen kann.`,
   },
+  // Einzige Sonder-Variante, deckt Arzt-, Physiotherapie- und
+  // Psychologenpraxen gemeinsam ab (statt einzelner Branchen-Varianten) -
+  // rechtlich tragfähig, weil alle drei über Art. 9 DSGVO (Gesundheitsdaten)
+  // abgedeckt sind, unabhängig davon, ob im Einzelfall zusätzlich eine
+  // berufsständische Schweigepflicht (z.B. ärztlich) einschlägig ist.
   gesundheitsdaten: {
-    label: 'Arztpraxis / Gesundheitsdaten (Art. 9 DSGVO)',
+    label: 'Erhöhter Schutz — Arzt-/Physio-/Psychologenpraxis (Art. 9 DSGVO, AVV)',
     braucht_avv: true,
-    text: `Da die Reinigung in einer Arztpraxis erfolgt und dabei zufällig Kenntnis von
-Patientendaten entstehen kann, verpflichtet sich der Auftragnehmer, alle eingesetzten
-Mitarbeiter ausdrücklich auf das Datenschutzgeheimnis und die ärztliche
-Schweigepflicht zu verpflichten. Die Mitarbeiter werden angewiesen, sichtbare
-Patientenunterlagen nicht einzusehen und Vertraulichkeit zu wahren. Da der
-Auftraggeber als Verantwortlicher im Sinne der DSGVO gilt und der Auftragnehmer als
-Auftragsverarbeiter tätig wird, sind die Parteien gemäß Art. 28 DSGVO verpflichtet,
-eine Vereinbarung zur Auftragsverarbeitung (AVV) abzuschließen. Die als Anlage 3
-beigefügte Vereinbarung zur Auftragsverarbeitung (AVV) ist vor Beginn der
-Reinigungstätigkeit von beiden Parteien zu unterzeichnen und wird Bestandteil dieses
-Vertrages.`,
-  },
-  mandantendaten: {
-    label: 'Kanzlei / Mandantendaten (§ 43a BRAO / § 57 StBerG)',
-    braucht_avv: true,
-    text: `Da die Reinigung in einer Kanzlei erfolgt und dabei zufällig Kenntnis von
-Mandantendaten entstehen kann, verpflichtet sich der Auftragnehmer, alle eingesetzten
-Mitarbeiter ausdrücklich auf das Datenschutzgeheimnis und die berufsrechtliche
-Verschwiegenheitspflicht (§ 43a BRAO bzw. § 57 StBerG) zu verpflichten. Die
-Mitarbeiter werden angewiesen, sichtbare Akten und Unterlagen nicht einzusehen, zu
-bewegen oder zu fotografieren und Vertraulichkeit zu wahren. Da der Auftraggeber als
-Verantwortlicher im Sinne der DSGVO gilt und der Auftragnehmer als
-Auftragsverarbeiter tätig wird, sind die Parteien gemäß Art. 28 DSGVO verpflichtet,
-eine Vereinbarung zur Auftragsverarbeitung (AVV) abzuschließen. Die als Anlage 3
-beigefügte Vereinbarung zur Auftragsverarbeitung (AVV) ist vor Beginn der
-Reinigungstätigkeit von beiden Parteien zu unterzeichnen und wird Bestandteil dieses
-Vertrages.`,
-  },
-  minderjaehrige: {
-    label: 'Kindergarten / Schule / Daten Minderjähriger (Art. 8 DSGVO)',
-    braucht_avv: true,
-    text: `Da die Reinigung in einer Einrichtung erfolgt, in der mit Kindern und deren
-personenbezogenen Daten (u.a. gemäß Art. 8 DSGVO) gearbeitet wird, verpflichtet sich
-der Auftragnehmer, ausschließlich Personal mit gültigem erweitertem
-Führungszeugnis (§ 30a BZRG) einzusetzen und dieses ausdrücklich auf das
-Datenschutzgeheimnis zu verpflichten. Die Mitarbeiter werden angewiesen, sichtbare
-Unterlagen und Datenträger nicht einzusehen, zu bewegen oder zu fotografieren. Da
-der Auftraggeber als Verantwortlicher im Sinne der DSGVO gilt und der Auftragnehmer
-als Auftragsverarbeiter tätig wird, sind die Parteien gemäß Art. 28 DSGVO verpflichtet,
-eine Vereinbarung zur Auftragsverarbeitung (AVV) abzuschließen. Die als Anlage 3
-beigefügte Vereinbarung zur Auftragsverarbeitung (AVV) ist vor Beginn der
-Reinigungstätigkeit von beiden Parteien zu unterzeichnen und wird Bestandteil dieses
-Vertrages.`,
+    text: `Da die Reinigung in einer Arzt-, Physiotherapie- oder Psychologenpraxis (oder einer
+vergleichbaren Einrichtung mit Gesundheitsdaten) erfolgt und dabei zufällig Kenntnis von
+Patienten- bzw. Klientendaten entstehen kann, verpflichtet sich der Auftragnehmer, alle
+eingesetzten Mitarbeiter ausdrücklich auf das Datenschutzgeheimnis sowie - soweit im
+Einzelfall einschlägig - die ärztliche bzw. berufliche Schweigepflicht zu verpflichten. Die
+Mitarbeiter werden angewiesen, sichtbare Patienten- bzw. Behandlungsunterlagen nicht
+einzusehen und Vertraulichkeit zu wahren. Da der Auftraggeber als Verantwortlicher im Sinne
+der DSGVO gilt und der Auftragnehmer als Auftragsverarbeiter tätig wird, sind die Parteien
+gemäß Art. 28 DSGVO verpflichtet, eine Vereinbarung zur Auftragsverarbeitung (AVV)
+abzuschließen. Die als Anlage 3 beigefügte Vereinbarung zur Auftragsverarbeitung (AVV) ist
+vor Beginn der Reinigungstätigkeit von beiden Parteien zu unterzeichnen und wird Bestandteil
+dieses Vertrages.`,
   },
 };
 
-// Ordnet jeder Branche eine sinnvolle DSGVO-Standardvariante zu (im Formular
-// änderbar - der Checkup prüft später, ob Branche und Variante zusammenpassen).
+// Ordnet jeder Branche eine sinnvolle DSGVO-Standardvariante zu. Wird vom
+// Formular (DbContractForm.jsx) genutzt, um bei Branchenauswahl automatisch
+// die passende Klausel vorzubelegen (weiterhin manuell überschreibbar) -
+// und von validateContract() (contractRules.js), um vor einer Fehlwahl
+// (z.B. "Standard" für eine Praxis) zu warnen.
 export const BRANCHE_ZU_DSGVO = {
   buero: 'standard',
-  arztpraxis: 'gesundheitsdaten',
-  kanzlei: 'mandantendaten',
   treppenhaus: 'standard',
   gewerbehalle: 'standard',
-  kindergarten: 'minderjaehrige',
+  praxis: 'gesundheitsdaten',
   sonstiges: 'standard',
 };
 
-export function blankContract() {
-  return {
-    branche: 'buero',
-    dsgvoVariante: 'standard',
-    kunde: { firma: '', strasse: '', plz: '', ort: '', ansprechpartner: '', email: '' },
-    // Interner Ansprechpartner auf Seite des Auftragnehmers für dieses
-    // Vertragsprojekt (steht in der Kopfbox, nicht zu verwechseln mit der
-    // Geschäftsführung, die unterzeichnet).
-    internerAnsprechpartner: '',
-    objektAdresse: '',
-    datum: new Date().toISOString().slice(0, 10),
-    vertragsbeginn: '',
-    kuendigungsfristMonate: 2,
-    reinigungsintervall: '',
-    wochentage: [],
-    verguetungNetto: '',
-    mwstSatz: STANDARD_MWST,
-    glasreinigung: { aktiv: false, preisNetto: '', intervall: 'auf Anfrage', ersteinsatzRabatt: true },
-    angebotNummer: '',
-    angebotDatum: '',
-    lvDatum: '',
-    vertragsnummer: '',
-  };
-}
-
-// Fortlaufende Vertragsnummer im Format VT-XXXX. Rein client-seitig anhand
-// des aktuellen Jahres + Zufallskomponente - für eine echte fortlaufende
-// Nummerierung müsste ein Zähler serverseitig persistiert werden (siehe
-// README "Noch offen").
-export function generateVertragsnummer() {
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `VT-${rand}`;
-}
+// Angaben für den AVV-Baustein (avvDocx.js, Anlage 3) - nur für die eine
+// DSGVO-Variante mit braucht_avv: true. Bewusst kurze, strukturierte Felder
+// statt Fließtext - der Renderer baut daraus die Art.-28-Abs.-3-DSGVO-
+// Pflichtangaben (Gegenstand/Art/Zweck/Kategorien).
+export const AVV_VARIANTEN = {
+  gesundheitsdaten: {
+    kategorienBetroffenerPersonen:
+      'Patientinnen und Patienten bzw. Klientinnen und Klienten des Auftraggebers sowie ggf. dessen Mitarbeiter',
+    datenarten:
+      'Gesundheitsdaten im Sinne von Art. 9 DSGVO (z.B. auf sichtbaren Unterlagen, Bildschirmen oder in ' +
+      'Gesprächen zufällig wahrnehmbare Angaben zu Diagnosen, Behandlungen oder Terminen) sowie allgemeine ' +
+      'personenbezogene Daten (Namen, Kontaktdaten)',
+  },
+};
