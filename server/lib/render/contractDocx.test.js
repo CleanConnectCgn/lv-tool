@@ -138,6 +138,22 @@ describe('buildContractDocument', () => {
     expect(xml).not.toContain('null Werktagen');
   });
 
+  it('zeigt "—" statt erfundener "0,00 EUR" bei fehlender Vergütung (Regressionstest)', async () => {
+    // Bug gefunden beim Rechts-Audit 2026-07-30: Number(null) und Number('')
+    // sind 0, nicht NaN - eine fehlende Vergütung wurde dadurch als "0,00
+    // EUR netto... entspricht 0,00 EUR brutto" ins Dokument geschrieben,
+    // ein erfundener, falscher Geldbetrag in einem sonst als vollständig
+    // wirkenden Vertrag.
+    const xml = await extractDocumentXml(
+      await buildContractDocument({ ...BASE_CONTRACT, verguetungNetto: null })
+    );
+    // Gezielt statt pauschal "0,00 EUR" verboten - §2.3 enthält legitim
+    // "50,00 EUR" (Schlüssel-Haftungsgrenze), das sonst fälschlich träfe.
+    expect(xml).not.toContain('in Höhe von 0,00 EUR');
+    expect(xml).not.toContain('entspricht 0,00 EUR');
+    expect(xml).toContain('— netto');
+  });
+
   it('nummeriert die Anlagen-Rangfolge (§9.3) in jeder Kombination lückenlos durch (Regressionstest)', async () => {
     // Bug gefunden 2026-07-29: bei "kein AVV, aber Angebot vorhanden" sprang
     // die Nummerierung von (2) auf (4) und übersprang (3), weil die (4) für
@@ -188,5 +204,52 @@ describe('buildContractDocument', () => {
     );
     expect(unvollstaendig).toContain('ENTWURF');
     expect(unvollstaendig).toContain('Leistungsbeginn fehlt');
+  });
+
+  it('rechnet die Vertragsstrafe (§7.5) explizit auf weitergehenden Schadensersatz an (AGB-Fix)', async () => {
+    // Gefunden beim Rechts-Audit 2026-07-30: "unbeschadet weitergehender
+    // Schadensersatzansprüche" ohne Anrechnung ist ein klassisches
+    // AGB-Unwirksamkeitsmuster (Vertragsstrafe + voller Schaden kumuliert
+    // statt angerechnet).
+    const xml = await extractDocumentXml(await buildContractDocument(BASE_CONTRACT));
+    expect(xml).toContain('wird auf einen solchen weitergehenden Schadensersatzanspruch angerechnet');
+  });
+
+  it('verlangt von Kunden-Erklärungen nur Textform, nie die strengere Schriftform (§309 Nr. 13 BGB)', async () => {
+    // Gefunden beim Rechts-Audit 2026-07-30: mehrere Klauseln verlangten
+    // "schriftlich" (echte Schriftform, § 126 BGB) für Erklärungen des
+    // Kunden gegenüber dem Verwender - das ist in Verbraucher-AGB nach
+    // § 309 Nr. 13 BGB unwirksam. § 9.1 nutzte schon korrekt "Textform".
+    // § 7.4 (interne Mitarbeiterverpflichtung, kein Kunden-Verwender-
+    // Verhältnis) bleibt bewusst bei "schriftlich" - deshalb hier keine
+    // pauschale Prüfung auf "kommt gar nicht mehr vor", sondern gezielt die
+    // vorher betroffenen Kundenerklärungen.
+    const xml = await extractDocumentXml(await buildContractDocument(BASE_CONTRACT));
+    expect(xml).toContain('in Textform einen oder mehrere Mängel rügt'); // §4.1
+    expect(xml).toContain('in Textform eine Frist zur'); // §4.3 (Nacherfüllungsfrist)
+    expect(xml).toContain('trotz Abmahnung in Textform'); // §6.3
+    expect(xml).toContain('nach Mahnung in Textform'); // §6.3
+    expect(xml).not.toContain('schriftlich einen oder mehrere Mängel rügt');
+    expect(xml).not.toContain('schriftlich eine Frist zur Nacherfüllung');
+    expect(xml).not.toContain('trotz schriftlicher Abmahnung');
+    expect(xml).not.toContain('nach schriftlicher Mahnung');
+
+    // §6.1 ("...von einer Partei in Textform gekündigt...") erscheint nur
+    // bei befristeter Laufzeit (Auto-Verlängerungs-Fall) - eigener Aufruf.
+    const befristet = await extractDocumentXml(await buildContractDocument({ ...BASE_CONTRACT, laufzeitMonate: 24 }));
+    expect(befristet).toContain('von einer Partei in Textform');
+    expect(befristet).not.toContain('von einer Partei schriftlich');
+  });
+
+  it('lässt keinen Widerspruch mehr, wer die Vergütung optionaler Zusatzpositionen bestimmt', async () => {
+    // Gefunden beim Rechts-Audit 2026-07-30: § 1.2 behauptete, das Angebot
+    // (Anlage 2) gelte "insbesondere für die Vergütung optionaler
+    // Zusatzpositionen", während § 3.1 und die Rangfolge in § 9.3 beide
+    // sagen, der Vertrag selbst (§ 2) sei maßgeblich.
+    const xml = await extractDocumentXml(
+      await buildContractDocument({ ...BASE_CONTRACT, angebotNummer: 'AN-1', angebotDatum: '2026-07-01' })
+    );
+    expect(xml).not.toContain('gilt insbesondere für die Vergütung');
+    expect(xml).toContain('Die Vergütung optionaler Zusatzpositionen richtet sich nach § 2');
   });
 });

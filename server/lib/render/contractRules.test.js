@@ -34,6 +34,14 @@ describe('validateContract', () => {
     expect(validateContract({ mwstSatz: -1 }).errors.some((e) => e.includes('MwSt'))).toBe(true);
   });
 
+  it('blockiert negative oder ungültige Vergütung, aber warnt nur bei fehlender', () => {
+    expect(validateContract({ verguetungNetto: -50 }).errors.some((e) => e.includes('Vergütung'))).toBe(true);
+    expect(validateContract({ verguetungNetto: 'abc' }).errors.some((e) => e.includes('Vergütung'))).toBe(true);
+    const fehlend = validateContract({ verguetungNetto: null });
+    expect(fehlend.errors).toEqual([]);
+    expect(fehlend.warnings.some((w) => w.includes('Vergütung'))).toBe(true);
+  });
+
   it('blockiert negative Laufzeit', () => {
     const { errors } = validateContract({ laufzeitMonate: -3 });
     expect(errors.some((e) => e.includes('Laufzeit'))).toBe(true);

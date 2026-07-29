@@ -54,6 +54,15 @@ export function validateContract(data = {}) {
   }
   if (data.verguetungNetto === null || data.verguetungNetto === undefined || data.verguetungNetto === '') {
     warnings.push('Vergütung (netto) fehlt');
+  } else {
+    // Anders als "fehlt" (Entwurf, warning) ist ein vorhandener, aber
+    // ungültiger/negativer Wert kein Entwurfszustand, sondern ein
+    // fehlerhafter Input - blockiert die Erstellung. Gefunden beim
+    // Rechts-Audit 2026-07-30 zusammen mit dem 0,00-EUR-Maskierungsbug.
+    const netto = Number(data.verguetungNetto);
+    if (Number.isNaN(netto) || netto < 0) {
+      errors.push('Vergütung (netto) muss eine nichtnegative Zahl sein');
+    }
   }
   if (!data.reinigungsintervall) {
     warnings.push('Reinigungsintervall fehlt');

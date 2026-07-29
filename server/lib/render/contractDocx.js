@@ -40,6 +40,7 @@ import {
   clause,
   bullet,
   formatEuro,
+  formatPercent,
   formatDateDE,
   noBorders,
   infoBoxRow,
@@ -49,6 +50,11 @@ import {
 } from './docxHelpers.js';
 
 function bruttoFromNetto(netto, mwstSatz) {
+  // Number(null) und Number('') sind 0, nicht NaN - ohne diese explizite
+  // Prüfung hätte eine fehlende Vergütung hier bereits zu 0 EUR brutto
+  // "verrechnet" und wäre nie als fehlend bei formatEuro() angekommen
+  // (siehe docxHelpers.js).
+  if (netto === null || netto === undefined || netto === '') return null;
   const n = Number(netto);
   const satz = Number(mwstSatz);
   if (Number.isNaN(n) || Number.isNaN(satz)) return null;
@@ -222,8 +228,8 @@ export function buildContractDocument(contract) {
         `Bestandteil dieses Vertrages ist.` +
         (angebotNummer
           ? ` Das Angebot ${angebotNummer}${angebotDatum ? ` vom ${formatDateDE(angebotDatum)}` : ''} ist als ` +
-            `Anlage 2 Bestandteil dieses Vertrages und gilt insbesondere für die Vergütung optionaler ` +
-            `Zusatzpositionen.`
+            `Anlage 2 Bestandteil dieses Vertrages. Die Vergütung optionaler Zusatzpositionen richtet sich nach ` +
+            `§ 2 dieses Vertrages.`
           : '') +
         (dsgvoInfo.braucht_avv
           ? ' Die Vereinbarung zur Auftragsverarbeitung (AVV) ist als Anlage 3 Bestandteil dieses Vertrages.'
@@ -236,7 +242,11 @@ export function buildContractDocument(contract) {
     ),
 
     heading('Leistungsumfang und Pflichten', 2),
-    new Paragraph({ children: [new TextRun({ text: `1. ${leistungsart}`, bold: true })], spacing: { after: 60 } }),
+    // "Leistung 1:" statt bloß "1." - eine bloße Zahl sah aus wie eine
+    // fehlende Unterklausel §2.1/§2.2 (diese Liste hat eine eigene,
+    // eigenständige Nummerierung, keine §-Klauselnummern). Gefunden beim
+    // Rechts-Audit 2026-07-30.
+    new Paragraph({ children: [new TextRun({ text: `Leistung 1: ${leistungsart}`, bold: true })], spacing: { after: 60 } }),
     bullet(`Reinigungsintervall: ${reinigungsintervall || '[Intervall]'}`),
     bullet(`Objekt: ${objektAdresse || '[Objektadresse]'}`),
     bullet(`Gemäß beigefügtem Leistungsverzeichnis${lvDatum ? ` (Stand: ${formatDateDE(lvDatum)})` : ''}`),
@@ -250,13 +260,13 @@ export function buildContractDocument(contract) {
       const ersteinsatzNetto = pos.ersteinsatzRabatt ? Number(pos.preisNetto || 0) / 2 : null;
       return [
         new Paragraph({
-          children: [new TextRun({ text: `${i + 2}. ${pos.name} (Pauschalpreis pro Einsatz)`, bold: true })],
+          children: [new TextRun({ text: `Leistung ${i + 2}: ${pos.name} (Pauschalpreis pro Einsatz)`, bold: true })],
           spacing: { before: 140, after: 60 },
         }),
         bullet(`Reinigungsintervall: ${pos.intervall || 'auf Anfrage'}`),
         bullet(`Objekt: ${objektAdresse || '[Objektadresse]'}`),
         bullet(
-          `Vergütung: ${formatEuro(pos.preisNetto)} netto zzgl. ${satz} % MwSt. (${formatEuro(posBrutto)} brutto) je Einsatz`
+          `Vergütung: ${formatEuro(pos.preisNetto)} netto zzgl. ${formatPercent(satz)} % MwSt. (${formatEuro(posBrutto)} brutto) je Einsatz`
         ),
         ...(pos.ersteinsatzRabatt
           ? [
@@ -278,8 +288,9 @@ export function buildContractDocument(contract) {
         `Auftragnehmer beschränkt auf den reinen Wiederbeschaffungswert des einzelnen Schlüssels oder ` +
         `Transponders (max. ${formatEuro(HAFTUNG_SCHLUESSEL_EINFACH_EUR)}). Eine darüber hinausgehende Haftung ` +
         'für die Änderung der gesamten Schließanlage ist ausgeschlossen, es sei denn, der Verlust wurde grob ' +
-        'fahrlässig verursacht oder eine Schließanlagenänderung ist zur Abwehr eines konkreten ' +
-        'Sicherheitsrisikos erforderlich; in diesem Fall haftet der Auftragnehmer für die Kosten einer Teil- ' +
+        'fahrlässig verursacht oder eine Schließanlagenänderung ist - unabhängig vom Verschuldensgrad - zur ' +
+        'Abwehr eines konkreten Sicherheitsrisikos erforderlich; in diesem Fall haftet der Auftragnehmer für ' +
+        'die Kosten einer Teil- ' +
         `oder Komplettänderung der Schließanlage, begrenzt auf ${formatEuro(HAFTUNG_SCHLIESSANLAGE_EUR)} je ` +
         'Schadensfall. Bei Vertragsende sind sämtliche Zugangsmittel spätestens am letzten Werktag der ' +
         'Vertragslaufzeit zurückzugeben.'
@@ -308,14 +319,14 @@ export function buildContractDocument(contract) {
       `Ansprechpartner des Auftragnehmers ist ${AUFTRAGNEHMER.geschaeftsfuehrung} (Geschäftsführer), ` +
         `erreichbar unter ${AUFTRAGNEHMER.telefon} sowie ${AUFTRAGNEHMER.email}. Bei Mängeln, Notfällen oder ` +
         'organisatorischen Rückfragen ist dieser Kontakt zu nutzen. Änderungen werden dem Auftraggeber ' +
-        'schriftlich mitgeteilt.'
+        'in Textform mitgeteilt.'
     ),
 
     heading('Vergütung und Zahlungsbedingungen', 3),
     clause(
       '3.1',
       `Der Auftragnehmer erhält vom Auftraggeber ein monatliches Pauschalhonorar für die ${leistungsart} ` +
-        `in Höhe von ${formatEuro(verguetungNetto)} netto zzgl. ${satz} % MwSt., entspricht ${formatEuro(brutto)} ` +
+        `in Höhe von ${formatEuro(verguetungNetto)} netto zzgl. ${formatPercent(satz)} % MwSt., entspricht ${formatEuro(brutto)} ` +
         `brutto.` +
         (optionalePositionen.length > 0
           ? ' Die optionalen Zusatzpositionen werden gemäß den Angaben in § 2 je Einsatz vergütet.'
@@ -333,34 +344,38 @@ export function buildContractDocument(contract) {
     new Paragraph({ text: '', spacing: { after: 140 } }),
     clause('3.3', 'Für die ordnungsgemäße Versteuerung der Vergütung ist der Auftragnehmer selbst verantwortlich.'),
     clause(
-      '3.3a',
+      // War "3.3a" - kein anderer Vertragsteil verweist auf diese oder die
+      // folgenden Nummern (einzige Querverweis-Ausnahme im Vertrag ist § 3.2,
+      // die unverändert bleibt), daher gefahrlos in die reguläre X.Y-Folge
+      // umnummeriert. Gefunden beim Rechts-Audit 2026-07-30.
+      '3.4',
       'Der Auftraggeber ist berechtigt, mit unbestrittenen oder rechtskräftig festgestellten Gegenforderungen ' +
         'aufzurechnen. Bei begründeten und dokumentierten Mängeln ist der Auftraggeber berechtigt, ein ' +
         'Zurückbehaltungsrecht in Höhe des zweifachen Mangelbeseitigungsaufwandes auszuüben, bis der Mangel ' +
         'behoben ist.'
     ),
     clause(
-      '3.4',
+      '3.5',
       'Weicht der tatsächliche Verschmutzungsgrad einmalig und außerordentlich vom vereinbarten Niveau ab, ' +
         'ist der Auftragnehmer zur Mehrleistung ohne zusätzliche Vergütung verpflichtet, sofern der ' +
         'Mehraufwand pro Einsatz 30 Minuten nicht übersteigt. Bei Uneinigkeit über das Ausmaß des ' +
         'Verschmutzungsgrades dokumentieren beide Parteien den Zustand gemeinsam per Foto oder Protokoll vor ' +
         'Beginn der Reinigung. Bei dauerhaft erhöhtem Verschmutzungsgrad oder einem Mehraufwand von mehr als ' +
         '30 Minuten pro Einsatz ist der Auftragnehmer berechtigt, eine schriftliche Vergütungsanpassung zu ' +
-        'verlangen. Nicht im Leistungsverzeichnis aufgeführte Arbeiten werden gegen gesonderte, vorher ' +
-        'schriftlich zu vereinbarende Vergütung ausgeführt.'
+        'verlangen. Nicht im Leistungsverzeichnis aufgeführte Arbeiten werden gegen gesonderte, vorher in ' +
+        'Textform zu vereinbarende Vergütung ausgeführt.'
     ),
     clause(
-      '3.5',
+      '3.6',
       'Ändert sich der Tariflohn im Gebäudereinigerhandwerk (Lohngruppe 1 für Unterhaltsreinigung, ' +
-        'Lohngruppe 6 für Glasreinigung) um mehr als 3 %, kann jede Partei eine entsprechende Anpassung ' +
-        'schriftlich verlangen. Erhöhungen und Senkungen werden gleichermaßen weitergegeben, maximal 5 % pro ' +
+        'Lohngruppe 6 für Glasreinigung) um mehr als 3 %, kann jede Partei eine entsprechende Anpassung in ' +
+        'Textform verlangen. Erhöhungen und Senkungen werden gleichermaßen weitergegeben, maximal 5 % pro ' +
         'Kalenderjahr, wirksam einen Monat nach Mitteilung. Bei Erhöhungen über 5 % hat jede Partei ein ' +
         'Sonderkündigungsrecht mit einer Frist von einem Monat zum Monatsende.'
     ),
     clause(
-      '3.6',
-      'Der Auftraggeber verpflichtet sich, den Auftragnehmer unverzüglich schriftlich zu informieren, sofern ' +
+      '3.7',
+      'Der Auftraggeber verpflichtet sich, den Auftragnehmer unverzüglich in Textform zu informieren, sofern ' +
         'bei ihm die Voraussetzungen für eine Umkehr der Steuerschuldnerschaft nach § 13b Abs. 2 Nr. 8 UStG ' +
         'vorliegen. In diesem Fall wird die Vergütung ohne Umsatzsteuerausweis in Rechnung gestellt. Unterlässt ' +
         'der Auftraggeber diese Mitteilung, haftet er für etwaige steuerliche Nachteile des Auftragnehmers.'
@@ -374,7 +389,7 @@ export function buildContractDocument(contract) {
         'Abnahmeaufforderung gemäß § 640 Abs. 2 BGB zu erteilen. Der Auftraggeber wird darauf hingewiesen, ' +
         'dass die im jeweiligen Monat erbrachten Reinigungsleistungen als abgenommen gelten, sofern er nicht ' +
         `innerhalb von ${RUEGEFRIST_WERKTAGE} Werktagen (bei Verbrauchern: ${RUEGEFRIST_VERBRAUCHER_WERKTAGE} ` +
-        'Werktagen) nach Zugang der Rechnung schriftlich einen oder mehrere Mängel rügt. Die Rüge muss den ' +
+        'Werktagen) nach Zugang der Rechnung in Textform einen oder mehrere Mängel rügt. Die Rüge muss den ' +
         'Mangel hinreichend konkret beschreiben (Art und Ort); eine Sammelrüge mehrerer Mängel ist zulässig. ' +
         'Das Zahlungsziel richtet sich nach § 3.2.'
     ),
@@ -383,12 +398,12 @@ export function buildContractDocument(contract) {
       'Bei verdeckten Mängeln, die bei ordnungsgemäßer Untersuchung nicht erkennbar waren, beginnt die ' +
         'Rügefrist abweichend von 4.1 mit dem Zeitpunkt der Entdeckung; die Rüge muss unverzüglich, spätestens ' +
         `innerhalb von ${RUEGEFRIST_WERKTAGE} Werktagen nach Entdeckung (bei Verbrauchern: ` +
-        `${RUEGEFRIST_VERBRAUCHER_WERKTAGE} Werktagen), schriftlich unter Angabe von Zeit, Ort, Art und Umfang ` +
+        `${RUEGEFRIST_VERBRAUCHER_WERKTAGE} Werktagen), in Textform unter Angabe von Zeit, Ort, Art und Umfang ` +
         'des Mangels erfolgen.'
     ),
     clause(
       '4.3',
-      'Im Falle einer mangelhaften Leistung hat der Auftraggeber dem Auftragnehmer schriftlich eine Frist zur ' +
+      'Im Falle einer mangelhaften Leistung hat der Auftraggeber dem Auftragnehmer in Textform eine Frist zur ' +
         `Nacherfüllung zu setzen, die mindestens ${NACHERFUELLUNG_WERKTAGE} Werktage betragen muss. Die ` +
         'Nacherfüllung hat spätestens beim nächsten regulären Reinigungseinsatz, jedoch nicht später als ' +
         `innerhalb von ${NACHERFUELLUNG_WERKTAGE} Werktagen nach Fristsetzung, zu erfolgen. Bei ` +
@@ -413,7 +428,7 @@ export function buildContractDocument(contract) {
       'Mängelansprüche des Auftraggebers verjähren gemäß § 634a Abs. 1 Nr. 1 BGB in zwei Jahren ab der ' +
         'jeweiligen monatlichen Abnahme. Schadensersatzansprüche wegen arglistig verschwiegener Mängel ' +
         'verjähren nach der regelmäßigen Frist von drei Jahren gemäß §§ 195, 199 BGB. Die Verjährung von ' +
-        'Mängelansprüchen wird durch eine schriftliche Mängelrüge bis zur vollständigen Mängelbeseitigung ' +
+        'Mängelansprüchen wird durch eine Mängelrüge in Textform bis zur vollständigen Mängelbeseitigung ' +
         'gehemmt.'
     ),
 
@@ -453,7 +468,7 @@ export function buildContractDocument(contract) {
       `Dieser Vertrag tritt am ${formatDateDE(vertragsbeginn)} in Kraft und wird ` +
         (laufzeitMonate
           ? `für die Dauer von ${laufzeitMonate} Monaten geschlossen. Wird der Vertrag nicht spätestens ` +
-            `${kuendigungsfristMonate || '[X]'} Monate vor Ablauf der Laufzeit von einer Partei schriftlich ` +
+            `${kuendigungsfristMonate || '[X]'} Monate vor Ablauf der Laufzeit von einer Partei in Textform ` +
             'gekündigt, verlängert er sich automatisch um jeweils zwölf Monate.'
           : 'auf unbestimmte Zeit geschlossen.')
     ),
@@ -462,14 +477,14 @@ export function buildContractDocument(contract) {
       `Der Vertrag kann von jeder Partei mit einer Frist von ${kuendigungsfristMonate || '[X]'} Monaten zum ` +
         'Ende eines Kalendermonats' +
         (laufzeitMonate ? ' erstmals zum Ablauf der Laufzeit' : '') +
-        ' schriftlich gekündigt werden.'
+        ' in Textform gekündigt werden.'
     ),
     clause(
       '6.3',
       'Das Recht zur fristlosen Kündigung aus wichtigem Grund bleibt unberührt. Ein wichtiger Grund liegt ' +
-        'insbesondere vor bei: (a) einer schwerwiegenden Pflichtverletzung, die trotz schriftlicher Abmahnung ' +
+        'insbesondere vor bei: (a) einer schwerwiegenden Pflichtverletzung, die trotz Abmahnung in Textform ' +
         'nicht innerhalb von 10 Werktagen abgestellt wird; (b) Zahlungsverzug von mehr als 30 Tagen nach ' +
-        'schriftlicher Mahnung; (c) Insolvenzantrag einer Vertragspartei; (d) einem Verstoß gegen ' +
+        'Mahnung in Textform; (c) Insolvenzantrag einer Vertragspartei; (d) einem Verstoß gegen ' +
         'Datenschutz- oder Vertraulichkeitspflichten; (e) wiederholten Mängeln trotz Nacherfüllung ' +
         '(mindestens drei dokumentierte Fälle innerhalb von zwei Monaten).'
     ),
@@ -507,8 +522,10 @@ export function buildContractDocument(contract) {
       '7.5',
       'Bei einem schuldhaften Verstoß gegen die Vertraulichkeits- oder Datenschutzpflichten durch den ' +
         `Auftragnehmer oder seine Mitarbeiter verpflichtet sich der Auftragnehmer zur Zahlung einer ` +
-        `Vertragsstrafe in Höhe von ${formatEuro(VERTRAGSSTRAFE_EUR)} pro Verstoß, unbeschadet weitergehender ` +
-        'Schadensersatzansprüche.'
+        `Vertragsstrafe in Höhe von ${formatEuro(VERTRAGSSTRAFE_EUR)} pro Verstoß. Ein die Vertragsstrafe ` +
+        'übersteigender, nachgewiesener Schaden kann zusätzlich geltend gemacht werden; die bereits gezahlte ' +
+        'Vertragsstrafe wird auf einen solchen weitergehenden Schadensersatzanspruch angerechnet (§ 340 Abs. 2 ' +
+        'BGB).'
     ),
 
     heading('Höhere Gewalt', 8),

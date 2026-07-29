@@ -30,9 +30,26 @@ export function bullet(text) {
 }
 
 export function formatEuro(value) {
+  // Bug gefunden beim Rechts-Audit 2026-07-30: Number(null) und Number('')
+  // sind 0, nicht NaN - eine fehlende Vergütung wurde dadurch fälschlich
+  // als "0,00 EUR" ins Dokument geschrieben (ein erfundener, falscher
+  // Geldbetrag) statt als erkennbarer Platzhalter. Echte 0 (z.B. bewusst
+  // kostenlose Zusatzleistung) bleibt "0,00 EUR" - nur fehlende Werte
+  // werden jetzt als "—" erkannt.
+  if (value === null || value === undefined || value === '') return '—';
   const n = Number(value);
   if (Number.isNaN(n)) return '—';
   return `${n.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`;
+}
+
+// MwSt.-Satz wurde vorher als rohe JS-Zahl interpoliert (`${satz} %`) - bei
+// einem Nicht-Ganzzahl-Satz (z.B. 7,5 %) wäre das als "7.5 %" mit
+// englischem Punkt statt deutschem Komma im Dokument gelandet. Gefunden
+// beim Rechts-Audit 2026-07-30.
+export function formatPercent(value) {
+  const n = Number(value);
+  if (Number.isNaN(n)) return '—';
+  return n.toLocaleString('de-DE', { maximumFractionDigits: 2 });
 }
 
 export function formatDateDE(iso) {
