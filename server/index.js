@@ -9,7 +9,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { google } from 'googleapis';
 import rateLimit from 'express-rate-limit';
 import { customerKeyFor } from '../src/lib/crmKeys.js';
-import { registerAuthRoutes, requireAuth } from './lib/auth.js';
+import { registerAuthRoutes, requireAuth, requireAdmin } from './lib/auth.js';
 import { mailTransporter } from './lib/mailer.js';
 import { uploadDocumentToDrive, DRIVE_UPLOAD_SCOPE } from './lib/drive.js';
 import { registerDbCrmRoutes } from './lib/dbCrm.js';
@@ -1112,12 +1112,19 @@ async function uploadDocumentToDriveIfConnected(req, doc) {
     if (!oauthClient) return;
     const safeName = (doc.objekt || doc.lvTitle || 'Dokument').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '_');
     const filename = `${doc.docType || 'main'}_${safeName}_${doc.id}.json`;
-    await uploadDocumentToDrive({
+    const result = await uploadDocumentToDrive({
       oauthClient,
       crmDir: CRM_DIR,
       filename,
       jsonContent: JSON.stringify(doc, null, 2),
     });
+    // Gleiche Erkennung wie handleCalendarError: bei widerrufenem Token die
+    // gespeicherte Verbindung löschen, statt unbemerkt weiter stillschweigend
+    // fehlzuschlagen (siehe Kommentar in drive.js). Gefunden beim Audit
+    // 2026-07-30.
+    if (result.reason === 'invalid_grant') {
+      await fs.unlink(CALENDAR_TOKEN_FILE).catch(() => {});
+    }
   } catch (err) {
     console.error('Drive-Upload-Hook fehlgeschlagen:', err?.message || err);
   }
@@ -1285,7 +1292,17 @@ async function buildDigestContent(req) {
       });
       termine = data.items || [];
     }
-  } catch {
+  } catch (err) {
+    // Vorher: stiller catch ohne Log, und ein widerrufener Token wurde nie
+    // erkannt/gelöscht (im Gegensatz zu handleCalendarError bei den echten
+    // Kalender-Routen) - der Digest hätte Kalendertermine dauerhaft und
+    // unbemerkt weggelassen, ohne dass sich der Zustand je selbst heilt.
+    // Gefunden beim Audit 2026-07-30.
+    const message = err?.message || String(err);
+    console.error('[Digest] Kalenderabfrage fehlgeschlagen:', message);
+    if (message.includes('invalid_grant') || err?.code === 401 || err?.response?.status === 401) {
+      await fs.unlink(CALENDAR_TOKEN_FILE).catch(() => {});
+    }
     termine = [];
   }
 
@@ -1317,11 +1334,18 @@ async function sendDigestIfDue(req) {
 
   const content = await buildDigestContent(req);
   await fs.mkdir(CRM_DIR, { recursive: true });
-  await fs.writeFile(LAST_DIGEST_FILE, JSON.stringify({ date: today }, null, 2));
-  if (!content) return { sent: false, reason: 'nothing_to_report' };
+  if (!content) {
+    await fs.writeFile(LAST_DIGEST_FILE, JSON.stringify({ date: today }, null, 2));
+    return { sent: false, reason: 'nothing_to_report' };
+  }
 
   const to = process.env.NOTIFY_EMAIL || process.env.SMTP_USER;
   await transporter.sendMail({ from: process.env.SMTP_USER, to, subject: content.subject, text: content.text });
+  // Marker erst NACH erfolgreichem Versand schreiben (vorher: davor). Ein
+  // SMTP-Fehler hätte den Tag sonst dauerhaft als "erledigt" markiert, ohne
+  // dass je eine Mail rausging - der stündliche Auto-Trigger (siehe unten)
+  // hätte es nie erneut versucht. Gefunden beim Audit 2026-07-30.
+  await fs.writeFile(LAST_DIGEST_FILE, JSON.stringify({ date: today }, null, 2));
   return { sent: true };
 }
 
@@ -1414,7 +1438,11 @@ async function readJsonFilesRecursive(dir, baseDir) {
   return result;
 }
 
-app.get('/api/backup', async (req, res) => {
+// Kompletter Datenexport - bewusst auf ADMIN beschränkt (im Gegensatz zum
+// übrigen Tagesgeschäft, das für alle Mitarbeiter offen bleibt), da hier in
+// einer Anfrage der gesamte Kundenbestand abgezogen werden kann. Gefunden
+// beim Sicherheits-Audit 2026-07-30.
+app.get('/api/backup', requireAdmin, async (req, res) => {
   try {
     const files = await readJsonFilesRecursive(DATA_DIR, DATA_DIR);
     const backup = { createdAt: new Date().toISOString(), files };
@@ -1432,7 +1460,7 @@ app.get('/api/backup', async (req, res) => {
 // statt eines eigenen Geheimnisses. Stößt den separaten Backup-Worker-Dienst
 // über Railways privates Netzwerk an (der Worker hat kein öffentliches
 // Domain, ist von außen gar nicht erreichbar).
-app.post('/api/backup/run-now', async (req, res) => {
+app.post('/api/backup/run-now', requireAdmin, async (req, res) => {
   const baseUrl = process.env.BACKUP_WORKER_INTERNAL_URL || 'http://backup-worker.railway.internal:8080';
   try {
     const workerRes = await fetch(`${baseUrl}/run-now`, {

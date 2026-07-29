@@ -9,24 +9,31 @@ import request from 'supertest';
 import { prisma } from './prisma.js';
 
 const TEST_EMAIL = 'auth-test-user@example.com';
-let isEmailAllowed, requireAuth, createdUserId;
+const ADMIN_EMAIL = 'auth-test-admin@example.com';
+let isEmailAllowed, requireAuth, requireAdmin, createdUserId, createdAdminId;
 
 beforeAll(async () => {
   process.env.SESSION_SECRET = 'test-secret-nicht-fuer-produktion';
-  process.env.ALLOWED_EMAILS = TEST_EMAIL;
+  process.env.ALLOWED_EMAILS = `${TEST_EMAIL},${ADMIN_EMAIL}`;
   delete process.env.DISABLE_AUTH_FOR_TESTS;
   const mod = await import('./auth.js');
   isEmailAllowed = mod.isEmailAllowed;
   requireAuth = mod.requireAuth;
+  requireAdmin = mod.requireAdmin;
 
   const user = await prisma.user.create({
     data: { googleId: `test-google-id-${crypto.randomUUID()}`, email: TEST_EMAIL, name: 'Auth Test' },
   });
   createdUserId = user.id;
+  const admin = await prisma.user.create({
+    data: { googleId: `test-google-id-${crypto.randomUUID()}`, email: ADMIN_EMAIL, name: 'Admin Test', role: 'ADMIN' },
+  });
+  createdAdminId = admin.id;
 });
 
 afterAll(async () => {
   if (createdUserId) await prisma.user.delete({ where: { id: createdUserId } }).catch(() => {});
+  if (createdAdminId) await prisma.user.delete({ where: { id: createdAdminId } }).catch(() => {});
   await prisma.$disconnect();
 });
 
@@ -88,7 +95,25 @@ describe('requireAuth (Middleware-Verhalten via supertest)', () => {
     try {
       await request(buildApp()).get('/geschuetzt').set('Cookie', `lv_session=${token}`).expect(401);
     } finally {
-      process.env.ALLOWED_EMAILS = TEST_EMAIL;
+      process.env.ALLOWED_EMAILS = `${TEST_EMAIL},${ADMIN_EMAIL}`;
     }
+  });
+});
+
+describe('requireAdmin (z.B. /api/backup - Sicherheitsfix 2026-07-30)', () => {
+  function buildApp() {
+    const app = express();
+    app.get('/admin-geschuetzt', requireAuth, requireAdmin, (req, res) => res.json({ ok: true }));
+    return app;
+  }
+
+  it('lehnt einen normalen MITARBEITER mit 403 ab', async () => {
+    const token = signSessionToken(createdUserId, process.env.SESSION_SECRET);
+    await request(buildApp()).get('/admin-geschuetzt').set('Cookie', `lv_session=${token}`).expect(403);
+  });
+
+  it('lässt einen ADMIN durch', async () => {
+    const token = signSessionToken(createdAdminId, process.env.SESSION_SECRET);
+    await request(buildApp()).get('/admin-geschuetzt').set('Cookie', `lv_session=${token}`).expect(200);
   });
 });

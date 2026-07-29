@@ -71,6 +71,17 @@ export async function uploadDocumentToDrive({ oauthClient, crmDir, filename, jso
     return { uploaded: true };
   } catch (err) {
     console.error('Google-Drive-Upload fehlgeschlagen (Dokument bleibt trotzdem gespeichert):', err?.message || err);
-    return { uploaded: false, reason: err?.message || 'error' };
+    // Vorher wurde ein widerrufener/abgelaufener Token hier genauso "still"
+    // behandelt wie jeder andere Fehler - im Gegensatz zu den Kalender-
+    // Routen (server/index.js handleCalendarError), die genau das erkennen
+    // und den gespeicherten Token löschen, damit die UI "Verbindung
+    // erneuern" anzeigt. Ohne diese Erkennung hätten Drive-Uploads nach
+    // einem Widerruf einfach für immer unbemerkt aufgehört, während
+    // /api/calendar/status weiterhin "connected: true" gemeldet hätte
+    // (prüft nur, ob die Token-Datei existiert, nicht ob sie noch gültig
+    // ist). Gefunden beim Audit 2026-07-30.
+    const message = err?.message || String(err);
+    const invalidGrant = message.includes('invalid_grant') || err?.code === 401 || err?.response?.status === 401;
+    return { uploaded: false, reason: invalidGrant ? 'invalid_grant' : message || 'error' };
   }
 }

@@ -131,6 +131,19 @@ export async function requireAuth(req, res, next) {
   }
 }
 
+// Für die wenigen Routen, die absichtlich nicht jedem Mitarbeiter offen
+// stehen sollen (z.B. kompletter Datenexport) - im Gegensatz zum
+// gewöhnlichen Tagesgeschäft (Kunden/Objekte/Verträge), das laut Auftrag
+// bewusst für alle Mitarbeiter sichtbar bleibt (kleines Team, keine
+// Owner-basierte Trennung gewünscht). Muss NACH requireAuth registriert
+// werden, setzt also req.user voraus.
+export function requireAdmin(req, res, next) {
+  if (req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: 'Nur für Admins' });
+  }
+  next();
+}
+
 export function registerAuthRoutes(app) {
   app.get('/api/auth/google/start', (req, res) => {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
