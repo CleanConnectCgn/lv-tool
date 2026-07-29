@@ -24,6 +24,7 @@ function draftFromMatch(m) {
   let mode = 'woechentlich';
   let value = '1';
   if (m.nachBedarf) mode = 'bedarf';
+  else if (m.einmalig) mode = 'einmalig';
   else if (m.woechentlich) {
     mode = 'woechentlich';
     value = String(m.woechentlich);
@@ -127,6 +128,7 @@ export default function DbUploadReview({ objectId, catalog, roomAreas, onDone, o
         catalogItemId: d.catalogItemId,
         roomAreaId: d.roomAreaId,
         nachBedarf: d.mode === 'bedarf',
+        einmalig: d.mode === 'einmalig',
         woechentlich: d.mode === 'woechentlich' ? Number(d.value) : null,
         monatlich: d.mode === 'monatlich' ? Number(d.value) : null,
         jaehrlich: d.mode === 'jaehrlich' ? Number(d.value) : null,
@@ -213,9 +215,10 @@ export default function DbUploadReview({ objectId, catalog, roomAreas, onDone, o
                       <option value="monatlich">Monatlich</option>
                       <option value="jaehrlich">Jährlich</option>
                       <option value="bedarf">Bei Bedarf</option>
+                      <option value="einmalig">Einmalig</option>
                     </select>
                   </label>
-                  {d.mode !== 'bedarf' && (
+                  {!['bedarf', 'einmalig'].includes(d.mode) && (
                     <label className="modal-field">
                       Häufigkeit
                       <input type="number" min="1" value={d.value} onChange={(e) => updateDraft(i, { value: e.target.value })} />

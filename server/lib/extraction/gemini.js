@@ -38,6 +38,7 @@ Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
       "originalText": "wörtlich erkannter Text der Zeile",
       "catalogItemId": "eine ID aus der Liste oben",
       "nachBedarf": true oder false,
+      "einmalig": true oder false,
       "woechentlich": Zahl oder null,
       "monatlich": Zahl oder null,
       "jaehrlich": Zahl oder null,
@@ -48,7 +49,7 @@ Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
     { "originalText": "wörtlich erkannter Text, unverändert" }
   ]
 }
-Genau EINES von nachBedarf/woechentlich/monatlich/jaehrlich darf pro Position gesetzt sein (die anderen null/false). Bei Unsicherheit lieber in "unmatched" einordnen als zu raten.`;
+Genau EINES von nachBedarf/einmalig/woechentlich/monatlich/jaehrlich darf pro Position gesetzt sein (die anderen null/false). "einmalig" bedeutet eine echte einmalige Leistung ohne Wiederholung (z.B. eine einmalige Grundreinigung oder Glasreinigung bei Einzug) - NICHT zu verwechseln mit "jaehrlich": 1, das eine jährlich wiederkehrende Leistung wäre. Bei Unsicherheit lieber in "unmatched" einordnen als zu raten.`;
 }
 
 export async function extract({ fileBuffer, mimeType, catalog }) {

@@ -51,6 +51,17 @@ describe('validateExtraction (reine Logik, kein I/O)', () => {
     expect(validateExtraction(rawExactlyOne, CATALOG).matched[0].missingFields).not.toContain('interval');
   });
 
+  it('übernimmt "einmalig" korrekt und zählt es als gültiges Intervallfeld (Regressionstest)', () => {
+    // Ergänzt 2026-07-30: "einmalig" fehlte hier komplett, obwohl die
+    // manuelle Neuanlage es bereits kannte - eine per Foto/PDF importierte
+    // einmalige Leistung wäre sonst fälschlich als "kein Intervall gesetzt"
+    // markiert worden.
+    const raw = { matched: [{ originalText: 'Einmalige Grundreinigung', catalogItemId: 'cat-1', einmalig: true }], unmatched: [] };
+    const { matched } = validateExtraction(raw, CATALOG);
+    expect(matched[0].einmalig).toBe(true);
+    expect(matched[0].missingFields).not.toContain('interval');
+  });
+
   it('lässt unmatched-Zeilen unverändert durch', () => {
     const raw = { matched: [], unmatched: [{ originalText: 'Komische Sonderleistung' }] };
     const { unmatched } = validateExtraction(raw, CATALOG);

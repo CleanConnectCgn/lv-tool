@@ -21,15 +21,21 @@ export function validateExtraction(raw, catalog) {
       unmatched.push({ originalText: row?.originalText || '', reason: 'invalid_catalog_id_from_model' });
       continue;
     }
-    const intervalFieldsSet = ['nachBedarf', 'woechentlich', 'monatlich', 'jaehrlich'].filter((k) => {
+    // "einmalig" ergänzt 2026-07-30: fehlte hier komplett, obwohl die
+    // manuelle Neuanlage (DbObjectDetail.jsx) den Wert bereits kannte -
+    // eine per Foto/PDF importierte einmalige Leistung wäre sonst
+    // stillschweigend falsch als "kein Intervall gesetzt" durchgereicht
+    // worden, exakt die Notlösungs-Problematik, die einmalig eigentlich lösen sollte.
+    const intervalFieldsSet = ['nachBedarf', 'einmalig', 'woechentlich', 'monatlich', 'jaehrlich'].filter((k) => {
       const v = row[k];
-      return k === 'nachBedarf' ? v === true : v !== null && v !== undefined && v !== '';
+      return k === 'nachBedarf' || k === 'einmalig' ? v === true : v !== null && v !== undefined && v !== '';
     }).length;
 
     matched.push({
       originalText: row.originalText || '',
       catalogItemId: row.catalogItemId,
       nachBedarf: !!row.nachBedarf,
+      einmalig: !!row.einmalig,
       woechentlich: row.woechentlich ?? null,
       monatlich: row.monatlich ?? null,
       jaehrlich: row.jaehrlich ?? null,
