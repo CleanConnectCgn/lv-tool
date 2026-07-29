@@ -111,6 +111,32 @@ describe('DELETE /api/db/objects/:id', () => {
 
     await request(app).delete(`/api/db/objects/${customer.body.object.id}`).expect(409);
   });
+
+  it('meldet 409 mit klarem Grund statt rohem 500, wenn noch ein Leistungsverzeichnis verknüpft ist', async () => {
+    // Gefunden beim Audit 2026-07-30: service_specs hat ON DELETE RESTRICT,
+    // vorher gab es dafür keinen eigenen Check - ein FK-Fehler wäre als
+    // roher 500 mit interner Prisma-Fehlermeldung durchgereicht worden.
+    const customer = await request(app)
+      .post('/api/db/customers')
+      .send({ name: 'Löschtest GmbH (Block 5)', street: 'E-Straße 1', zip: '50667', city: 'Köln', sameAsObjectAddress: true })
+      .expect(201);
+    customerIdsToClean.push(customer.body.customer.id);
+    const objectId = customer.body.object.id;
+
+    // Zweites Objekt, damit die "letztes Objekt"-Regel nicht greift.
+    await request(app)
+      .post(`/api/db/customers/${customer.body.customer.id}/objects/bulk`)
+      .send({ addresses: 'Zweitobjekt 1, 50667 Köln' })
+      .expect(201);
+
+    await request(app)
+      .post(`/api/db/objects/${objectId}/service-specs`)
+      .send({ leistungsart: 'Unterhaltsreinigung', items: [{ catalogItemId, roomAreaId, woechentlich: 2 }] })
+      .expect(201);
+
+    const res = await request(app).delete(`/api/db/objects/${objectId}`).expect(409);
+    expect(res.body.error).toContain('Leistungsverzeichnis');
+  });
 });
 
 describe('Leistungsverzeichnis erstellen + auf andere Objekte übertragen', () => {
@@ -188,6 +214,34 @@ describe('Leistungsverzeichnis erstellen + auf andere Objekte übertragen', () =
       .send({ targetObjectIds: [bulk.body.created[0].id] })
       .expect(201);
     expect(transferRes.body.createdSpecs[0].items[0].einmalig).toBe(true);
+  }, 20000);
+
+  it('löscht beim Wechsel des Intervalltyps per PUT die alten Intervallfelder (Regressionstest)', async () => {
+    // Gefunden beim Audit 2026-07-30: der PUT-Endpunkt kopierte vorher nur
+    // die im Request-Body vorhandenen Felder - ein Wechsel von "einmalig"
+    // zu "woechentlich" ohne explizites "einmalig: false" hätte beide
+    // Felder gleichzeitig gesetzt gelassen (widersprüchlicher Datensatz).
+    const customer = await request(app)
+      .post('/api/db/customers')
+      .send({ name: 'Intervallwechsel GmbH (Block 5)', street: 'F-Straße 1', zip: '50667', city: 'Köln', sameAsObjectAddress: true })
+      .expect(201);
+    customerIdsToClean.push(customer.body.customer.id);
+    const objectId = customer.body.object.id;
+
+    const specRes = await request(app)
+      .post(`/api/db/objects/${objectId}/service-specs`)
+      .send({ leistungsart: 'Grundreinigung', items: [{ catalogItemId, roomAreaId, einmalig: true }] })
+      .expect(201);
+    const itemId = specRes.body.items[0].id;
+
+    // Wechsel zu wöchentlich, OHNE explizit einmalig:false mitzusenden -
+    // genau der Fall, den ein zukünftiges Bearbeiten-Formular naiv so senden könnte.
+    const updated = await request(app)
+      .put(`/api/db/service-specs/${specRes.body.id}/items/${itemId}`)
+      .send({ woechentlich: 3 })
+      .expect(200);
+    expect(updated.body.woechentlich).toBe(3);
+    expect(updated.body.einmalig).toBe(false);
   }, 20000);
 });
 

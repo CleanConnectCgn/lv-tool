@@ -184,19 +184,34 @@ export function registerDbCrmRoutes(app) {
         .split('\n')
         .map((l) => l.trim())
         .filter(Boolean);
-      const created = [];
       const failed = [];
+      const toCreate = [];
       for (const line of lines) {
         const parsed = parseAddressLine(line);
         if (!parsed || parsed.error) {
           failed.push({ line, reason: parsed?.error || 'Unbekanntes Format' });
           continue;
         }
-        const object = await prisma.property.create({
-          data: { customerId: customer.id, street: parsed.street, zip: parsed.zip, city: parsed.city, label: parsed.street },
-        });
-        created.push(object);
+        toCreate.push(parsed);
       }
+
+      // Transaktional statt Zeile für Zeile: bricht das Anlegen mitten in
+      // der Schleife ab (z.B. transiente DB-Störung), rollt Postgres alles
+      // bereits Angelegte automatisch zurück. Vorher blieben bei einem
+      // Abbruch bereits erstellte Objekte in der DB, wurden dem Aufrufer
+      // wegen des rohen 500 aber nie mitgeteilt - ein erneuter Versuch mit
+      // derselben Adressliste hätte Duplikate erzeugt. Gefunden beim Audit
+      // 2026-07-30.
+      const created =
+        toCreate.length > 0
+          ? await prisma.$transaction(
+              toCreate.map((parsed) =>
+                prisma.property.create({
+                  data: { customerId: customer.id, street: parsed.street, zip: parsed.zip, city: parsed.city, label: parsed.street },
+                })
+              )
+            )
+          : [];
       res.status(created.length ? 201 : 400).json({ created, failed });
     } catch (err) {
       res.status(500).json({ error: err?.message || 'Sammelanlage fehlgeschlagen' });
@@ -227,6 +242,27 @@ export function registerDbCrmRoutes(app) {
         return res
           .status(409)
           .json({ error: 'Letztes Objekt eines Kunden kann nicht gelöscht werden - ein Kunde braucht mindestens ein Objekt.' });
+      }
+      // Vorher: kein Check, ein FK-Constraint-Fehler (ON DELETE RESTRICT auf
+      // service_specs/document_objects/recurring_jobs/calendar_events)
+      // führte zu einem rohen 500 mit der internen Prisma-Fehlermeldung
+      // statt einer verständlichen Antwort. Gefunden beim Audit 2026-07-30.
+      const [specs, documentObjects, recurringJobs, calendarEvents] = await Promise.all([
+        prisma.serviceSpec.count({ where: { objectId: object.id } }),
+        prisma.documentObject.count({ where: { objectId: object.id } }),
+        prisma.recurringJob.count({ where: { objectId: object.id } }),
+        prisma.calendarEvent.count({ where: { objectId: object.id } }),
+      ]);
+      const blockers = [
+        specs > 0 && `${specs} Leistungsverzeichnis${specs === 1 ? '' : 'se'}`,
+        documentObjects > 0 && `${documentObjects} Dokument${documentObjects === 1 ? '' : 'e'}`,
+        recurringJobs > 0 && `${recurringJobs} wiederkehrende${recurringJobs === 1 ? 'r' : ''} Termin${recurringJobs === 1 ? '' : 'e'}`,
+        calendarEvents > 0 && `${calendarEvents} Kalendertermin${calendarEvents === 1 ? '' : 'e'}`,
+      ].filter(Boolean);
+      if (blockers.length > 0) {
+        return res.status(409).json({
+          error: `Objekt kann nicht gelöscht werden, solange noch verknüpfte Daten bestehen: ${blockers.join(', ')}.`,
+        });
       }
       await prisma.property.delete({ where: { id: req.params.id } });
       res.json({ success: true });
@@ -363,9 +399,25 @@ export function registerDbCrmRoutes(app) {
         return res.status(404).json({ error: 'Item nicht gefunden' });
       }
       const data = {};
-      ['nachBedarf', 'einmalig', 'woechentlich', 'monatlich', 'jaehrlich', 'bemerkung', 'roomAreaId', 'catalogItemId'].forEach((k) => {
+      ['bemerkung', 'roomAreaId', 'catalogItemId'].forEach((k) => {
         if (req.body?.[k] !== undefined) data[k] = req.body[k];
       });
+      // Intervallfelder sind gegenseitig exklusiv (genau eines von
+      // nachBedarf/einmalig/woechentlich/monatlich/jaehrlich). Sobald der
+      // Aufrufer eines davon mitschickt, gilt das als vollständige neue
+      // Intervall-Angabe - alle anderen werden zurückgesetzt, statt nur das
+      // eine gesendete Feld zu überschreiben und die alten stehen zu lassen.
+      // Sonst könnte z.B. "einmalig: true" bestehen bleiben, während
+      // gleichzeitig "woechentlich: 2" gesetzt wird - ein widersprüchlicher
+      // Datensatz. Gefunden beim Audit 2026-07-30 (aktuell noch kein UI-
+      // Aufrufer für diesen Endpunkt, aber der Fehler wäre sonst latent).
+      const INTERVAL_FIELDS = ['nachBedarf', 'einmalig', 'woechentlich', 'monatlich', 'jaehrlich'];
+      if (INTERVAL_FIELDS.some((k) => req.body?.[k] !== undefined)) {
+        for (const k of INTERVAL_FIELDS) {
+          const isFlag = k === 'nachBedarf' || k === 'einmalig';
+          data[k] = req.body[k] ?? (isFlag ? false : null);
+        }
+      }
       const updated = await prisma.serviceSpecItem.update({
         where: { id: req.params.itemId },
         data,
