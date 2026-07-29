@@ -47,6 +47,28 @@ describe('groupItems', () => {
     expect(groups[0].items).toHaveLength(1);
   });
 
+  it('dedupliziert NICHT, wenn sich nur "einmalig" unterscheidet (Regressionstest)', () => {
+    // Ergänzt 2026-07-29 zusammen mit dem einmalig-Feld: eine reguläre und
+    // eine einmalige Position mit sonst identischen Werten dürfen nicht zu
+    // einer Zeile verschmolzen werden.
+    const base = {
+      catalogItemId: 'c1',
+      roomAreaId: 'ra-sanitaer',
+      roomArea: SANITAER,
+      catalogItem: { gegenstand: 'Hartboden', verb: 'FEUCHT_WISCHEN', elementGroup: BODEN },
+      nachBedarf: false,
+      woechentlich: null,
+      monatlich: null,
+      jaehrlich: null,
+      bemerkung: '',
+    };
+    const groups = groupItems([
+      { ...base, woechentlich: 2, einmalig: false },
+      { ...base, einmalig: true },
+    ]);
+    expect(groups[0].items).toHaveLength(2);
+  });
+
   it('behält unterschiedliche Intervalle derselben Position als getrennte Zeilen', () => {
     const base = {
       catalogItemId: 'c1',
@@ -93,6 +115,30 @@ describe('renderLvPdf', () => {
     const buffer = renderLvPdf(specs);
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(0);
+    expect(buffer.toString('latin1', 0, 8)).toBe('%PDF-1.3');
+  });
+
+  it('rendert eine echte einmalige Position (z.B. Grundreinigung), ohne zu werfen', () => {
+    const item = {
+      catalogItemId: 'c1',
+      roomAreaId: 'ra-sanitaer',
+      roomArea: SANITAER,
+      catalogItem: { gegenstand: 'Hartboden', verb: 'FEUCHT_WISCHEN', zusatz: null, elementGroup: BODEN },
+      nachBedarf: false,
+      einmalig: true,
+      woechentlich: null,
+      monatlich: null,
+      jaehrlich: null,
+      bemerkung: 'Einzugsreinigung',
+    };
+    const buffer = renderLvPdf([
+      {
+        leistungsart: 'Grundreinigung',
+        standDatum: new Date('2026-07-01'),
+        items: [item],
+        object: { street: 'Teststraße 1', zip: '50667', city: 'Köln', customer: { name: 'Test GmbH' } },
+      },
+    ]);
     expect(buffer.toString('latin1', 0, 8)).toBe('%PDF-1.3');
   });
 

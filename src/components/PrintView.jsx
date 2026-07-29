@@ -46,6 +46,10 @@ function DataRow({ row }) {
         <td className="pv-col-interval pv-col-interval-freeform" colSpan={3}>
           <span className="pv-interval-chip">Auf Anfrage</span>
         </td>
+      ) : row.intervalColumn === 'einmalig' ? (
+        <td className="pv-col-interval pv-col-interval-freeform" colSpan={3}>
+          <span className="pv-interval-chip">Einmalig</span>
+        </td>
       ) : (
         <>
           <IntervalCell value={row.intervalColumn === 'woechentlich' ? row.intervalValue : ''} />

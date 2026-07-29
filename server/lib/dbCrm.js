@@ -339,6 +339,7 @@ export function registerDbCrmRoutes(app) {
               catalogItemId: it.catalogItemId,
               roomAreaId: it.roomAreaId,
               nachBedarf: !!it.nachBedarf,
+              einmalig: !!it.einmalig,
               woechentlich: it.woechentlich != null && it.woechentlich !== '' ? Number(it.woechentlich) : null,
               monatlich: it.monatlich != null && it.monatlich !== '' ? Number(it.monatlich) : null,
               jaehrlich: it.jaehrlich != null && it.jaehrlich !== '' ? Number(it.jaehrlich) : null,
@@ -362,7 +363,7 @@ export function registerDbCrmRoutes(app) {
         return res.status(404).json({ error: 'Item nicht gefunden' });
       }
       const data = {};
-      ['nachBedarf', 'woechentlich', 'monatlich', 'jaehrlich', 'bemerkung', 'roomAreaId', 'catalogItemId'].forEach((k) => {
+      ['nachBedarf', 'einmalig', 'woechentlich', 'monatlich', 'jaehrlich', 'bemerkung', 'roomAreaId', 'catalogItemId'].forEach((k) => {
         if (req.body?.[k] !== undefined) data[k] = req.body[k];
       });
       const updated = await prisma.serviceSpecItem.update({
@@ -412,6 +413,7 @@ export function registerDbCrmRoutes(app) {
                 catalogItemId: it.catalogItemId,
                 roomAreaId: it.roomAreaId,
                 nachBedarf: it.nachBedarf,
+                einmalig: it.einmalig,
                 woechentlich: it.woechentlich,
                 monatlich: it.monatlich,
                 jaehrlich: it.jaehrlich,

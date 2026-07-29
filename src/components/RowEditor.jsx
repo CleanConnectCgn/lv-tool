@@ -18,6 +18,7 @@ function buildIntervalOptions() {
     });
   });
   opts.push({ value: 'aufAnfrage:Ja', label: 'Auf Anfrage' });
+  opts.push({ value: 'einmalig:Ja', label: 'Einmalig' });
   return opts;
 }
 const INTERVAL_OPTIONS = buildIntervalOptions();

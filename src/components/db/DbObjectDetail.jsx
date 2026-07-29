@@ -14,6 +14,7 @@ import DbContractForm from './DbContractForm.jsx';
 
 function IntervalSummary({ item }) {
   if (item.nachBedarf) return <span className="lv-interval-chip">Bei Bedarf</span>;
+  if (item.einmalig) return <span className="lv-interval-chip">Einmalig</span>;
   if (item.woechentlich) return <span className="lv-interval-chip">{item.woechentlich}x wöchentlich</span>;
   if (item.monatlich) return <span className="lv-interval-chip">{item.monatlich}x monatlich</span>;
   if (item.jaehrlich) return <span className="lv-interval-chip">{item.jaehrlich}x jährlich</span>;
@@ -66,6 +67,7 @@ export default function DbObjectDetail({ objectId, onBack }) {
       catalogItemId: newItem.catalogItemId,
       bemerkung: newItem.bemerkung,
       nachBedarf: newItem.mode === 'bedarf',
+      einmalig: newItem.mode === 'einmalig',
       woechentlich: newItem.mode === 'woechentlich' ? Number(newItem.value) : null,
       monatlich: newItem.mode === 'monatlich' ? Number(newItem.value) : null,
       jaehrlich: newItem.mode === 'jaehrlich' ? Number(newItem.value) : null,
@@ -180,9 +182,10 @@ export default function DbObjectDetail({ objectId, onBack }) {
                   <option value="monatlich">Monatlich</option>
                   <option value="jaehrlich">Jährlich</option>
                   <option value="bedarf">Bei Bedarf</option>
+                  <option value="einmalig">Einmalig</option>
                 </select>
               </label>
-              {newItem.mode !== 'bedarf' && (
+              {!['bedarf', 'einmalig'].includes(newItem.mode) && (
                 <label className="modal-field">
                   Häufigkeit
                   <input

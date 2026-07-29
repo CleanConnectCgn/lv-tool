@@ -126,6 +126,13 @@ function buildBody(sections) {
           { content: '', colSpan: 3, pill: true, value: 'Auf Anfrage' },
           bem,
         ]);
+      } else if (r.intervalColumn === 'einmalig') {
+        body.push([
+          r.text,
+          check,
+          { content: '', colSpan: 3, pill: true, value: 'Einmalig' },
+          bem,
+        ]);
       } else {
         body.push([
           r.text,

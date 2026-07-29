@@ -156,6 +156,39 @@ describe('Leistungsverzeichnis erstellen + auf andere Objekte übertragen', () =
     const untouchedSpecs = await request(app).get(`/api/db/objects/${target2.id}/service-specs`).expect(200);
     expect(untouchedSpecs.body[0].items[0].woechentlich).toBe(2);
   }, 20000);
+
+  it('speichert und überträgt eine echte einmalige Leistung (z.B. Grundreinigung) korrekt', async () => {
+    // Ergänzt 2026-07-29: vorher war "einmalig" gar nicht abbildbar, die
+    // Notlösung "Jährlich 1x" war inhaltlich falsch (impliziert Wiederholung).
+    const customer = await request(app)
+      .post('/api/db/customers')
+      .send({ name: 'Einmalig GmbH (Block 5)', street: 'D-Straße 1', zip: '50667', city: 'Köln', sameAsObjectAddress: true })
+      .expect(201);
+    customerIdsToClean.push(customer.body.customer.id);
+    const objectId = customer.body.object.id;
+
+    const specRes = await request(app)
+      .post(`/api/db/objects/${objectId}/service-specs`)
+      .send({
+        leistungsart: 'Grundreinigung',
+        items: [{ catalogItemId, roomAreaId, einmalig: true }],
+      })
+      .expect(201);
+    expect(specRes.body.items[0].einmalig).toBe(true);
+    expect(specRes.body.items[0].woechentlich).toBeNull();
+    expect(specRes.body.items[0].monatlich).toBeNull();
+    expect(specRes.body.items[0].jaehrlich).toBeNull();
+
+    const bulk = await request(app)
+      .post(`/api/db/customers/${customer.body.customer.id}/objects/bulk`)
+      .send({ addresses: 'Einmalzielweg 1, 50667 Köln' })
+      .expect(201);
+    const transferRes = await request(app)
+      .post(`/api/db/service-specs/${specRes.body.id}/transfer`)
+      .send({ targetObjectIds: [bulk.body.created[0].id] })
+      .expect(201);
+    expect(transferRes.body.createdSpecs[0].items[0].einmalig).toBe(true);
+  }, 20000);
 });
 
 describe('POST /api/db/catalog (Block 7 - manuelles Anlegen aus der Review-Oberfläche)', () => {

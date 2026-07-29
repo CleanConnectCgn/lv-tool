@@ -8,6 +8,7 @@ const INTERVAL_MAP = {
   monatlich: { column: 'monatlich', value: '1x' },
   quartalsweise: { column: 'jaehrlich', value: '4x' },
   nach_bedarf: { bedarf: true },
+  einmalig: { column: 'einmalig', value: 'Ja' },
 };
 
 let idCounter = 1;

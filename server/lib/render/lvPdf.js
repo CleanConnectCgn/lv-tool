@@ -68,6 +68,7 @@ export function groupItems(items) {
       item.catalogItemId,
       item.roomAreaId,
       item.nachBedarf,
+      item.einmalig,
       item.woechentlich,
       item.monatlich,
       item.jaehrlich,
@@ -168,14 +169,28 @@ function buildBody(roomAreaGroups) {
     ]);
     for (const item of group.items) {
       const check = { content: '', checkCell: true, checked: !!item.nachBedarf };
-      body.push([
-        catalogItemDisplayText(item.catalogItem),
-        check,
-        { content: '', pill: true, value: intervalValue(item, 'woechentlich') },
-        { content: '', pill: true, value: intervalValue(item, 'monatlich') },
-        { content: '', pill: true, value: intervalValue(item, 'jaehrlich') },
-        item.bemerkung || '',
-      ]);
+      if (item.einmalig) {
+        // Echte einmalige Leistung (kein Wiederholungsintervall) - Merge
+        // über alle drei Intervallspalten statt einer einzelnen, damit die
+        // Pille nicht fälschlich unter "Wöchentlich"/"Monatlich"/"Jährlich"
+        // zu stehen scheint. Gleicher Trick wie "Auf Anfrage" in
+        // src/lib/lvPdfExport.js.
+        body.push([
+          catalogItemDisplayText(item.catalogItem),
+          check,
+          { content: '', colSpan: 3, pill: true, value: 'Einmalig' },
+          item.bemerkung || '',
+        ]);
+      } else {
+        body.push([
+          catalogItemDisplayText(item.catalogItem),
+          check,
+          { content: '', pill: true, value: intervalValue(item, 'woechentlich') },
+          { content: '', pill: true, value: intervalValue(item, 'monatlich') },
+          { content: '', pill: true, value: intervalValue(item, 'jaehrlich') },
+          item.bemerkung || '',
+        ]);
+      }
     }
   }
   return body;
