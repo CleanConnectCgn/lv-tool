@@ -16,6 +16,7 @@ import { registerDbCrmRoutes } from './lib/dbCrm.js';
 import { registerSevdeskLinkRoutes } from './lib/sevdeskLink.js';
 import { registerUploadRoutes } from './lib/uploads.js';
 import { registerDocumentRoutes } from './lib/documentRoutes.js';
+import { withTimeout } from './lib/withTimeout.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -278,19 +279,11 @@ Sei präzise und praxisnah. Max 15 Issues. Nur echte Probleme melden, keine Phan
     const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
     res.json(parsed);
   } catch (err) {
+    console.error('[ai-check] fehlgeschlagen:', err?.message || err);
     res.status(502).json({ error: err?.message || err?.toString() || 'KI Anfrage fehlgeschlagen' });
   }
 });
 
-// Races a promise against a timeout so a hanging AI provider can't block
-// the checkup flow forever.
-function withTimeout(promise, ms, label) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} hat nicht innerhalb von ${ms / 1000}s geantwortet`)), ms);
-  });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-}
 
 function extractJson(raw) {
   const jsonMatch = (raw || '').match(/\{[\s\S]*\}/);
@@ -334,11 +327,16 @@ Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
   "zusammenfassung": "..."
 }`;
 
-    const result = await withTimeout(model.generateContent(prompt), 30000, 'Gemini');
+    // 30s war zu knapp - eine echte Testmessung mit einem realen LV-Dokument
+    // brauchte bereits ~19s (siehe 2026-07-31), größere/mehrseitige Scans
+    // hätten das leicht überschritten und wären fälschlich als Fehler
+    // erschienen statt einfach länger zu dauern.
+    const result = await withTimeout(model.generateContent(prompt), 90000, 'Gemini');
     const raw = result?.response?.text() || '{}';
     const parsed = extractJson(raw);
     res.json(parsed);
   } catch (err) {
+    console.error('[checkup/gemini] fehlgeschlagen:', err?.message || err);
     res.status(502).json({ error: err?.message || err?.toString() || 'Gemini Anfrage fehlgeschlagen' });
   }
 });
@@ -401,7 +399,7 @@ Für "freigabe" gilt ausschließlich "bereit" oder "ueberarbeitung".`;
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }],
       }),
-      45000,
+      60000,
       'Claude'
     );
 
@@ -409,6 +407,7 @@ Für "freigabe" gilt ausschließlich "bereit" oder "ueberarbeitung".`;
     const parsed = extractJson(textBlock?.text || '{}');
     res.json(parsed);
   } catch (err) {
+    console.error('[checkup/claude] fehlgeschlagen:', err?.message || err);
     res.status(502).json({ error: err?.message || err?.toString() || 'Claude Anfrage fehlgeschlagen' });
   }
 });
@@ -444,7 +443,7 @@ Antworte NUR als JSON im folgenden Format:
       "positionen": [
         {
           "leistung": "Beschreibung der Reinigungsleistung",
-          "intervall": "taeglich | 2x_woechentlich | woechentlich | 14taegig | monatlich | quartalsweise | nach_bedarf",
+          "intervall": "taeglich | 2x_woechentlich | woechentlich | 14taegig | monatlich | quartalsweise | nach_bedarf | einmalig",
           "wochentage": ["Mo", "Mi", "Fr"],
           "bemerkung": ""
         }
@@ -464,13 +463,14 @@ wenn erkennbar. Beispiel: "Hartböden feucht wischen (bis 180 cm Höhe alle Ober
           prompt,
           { inlineData: { data: req.body.toString('base64'), mimeType } },
         ]),
-        30000,
+        90000,
         'Gemini'
       );
       const raw = result?.response?.text() || '{}';
       const parsed = extractJson(raw);
       res.json(parsed);
     } catch (err) {
+      console.error('[lv/from-image] fehlgeschlagen:', err?.message || err);
       res.status(502).json({ error: err?.message || err?.toString() || 'Gemini Vision Anfrage fehlgeschlagen' });
     }
   }

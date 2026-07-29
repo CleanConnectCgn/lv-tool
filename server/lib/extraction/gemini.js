@@ -2,6 +2,7 @@
 // (EXTRACTION_PROVIDER unset oder "gemini") - nutzt den bereits hinterlegten
 // GEMINI_API_KEY.
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { withTimeout } from '../withTimeout.js';
 
 export const modelName = 'gemini-flash-latest';
 
@@ -55,10 +56,20 @@ export async function extract({ fileBuffer, mimeType, catalog }) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: modelName });
 
-  const result = await model.generateContent([
-    buildPrompt(catalog),
-    { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
-  ]);
+  // Vorher kein Timeout - ein hängender Gemini-Aufruf beim Dokument-Import
+  // (Vertragsgenerator/CRM) wäre nie fehlgeschlagen, sondern hätte einfach
+  // unbegrenzt "Liest aus..." angezeigt. Gefunden 2026-07-31 beim Prüfen
+  // aller KI-Checkups; 90s analog zu den anderen Vision-Aufrufen (siehe
+  // server/index.js), da eine reale Testmessung mit einem echten Dokument
+  // bereits ~19s brauchte.
+  const result = await withTimeout(
+    model.generateContent([
+      buildPrompt(catalog),
+      { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
+    ]),
+    90000,
+    'Gemini'
+  );
 
   const text = result?.response?.text() || '{}';
   const usage = result?.response?.usageMetadata || null;

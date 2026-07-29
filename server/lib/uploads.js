@@ -32,7 +32,10 @@ async function runExtractionFor(upload) {
   } catch (err) {
     // "Bei fehlgeschlagener Auslesung eine klare Meldung, was fehlt, und die
     // Möglichkeit, es erneut zu versuchen oder von Hand zu erfassen" - die
-    // Datei bleibt gespeichert, nur das Ergebnis trägt den Fehler.
+    // Datei bleibt gespeichert, nur das Ergebnis trägt den Fehler. Zusätzlich
+    // ins Server-Log (vorher nirgends geloggt, dadurch beim Prüfen 2026-07-31
+    // aus den Railway-Logs nicht diagnostizierbar).
+    console.error('[uploads] Auslesung fehlgeschlagen:', err?.message || err);
     const extractionResult = { status: 'failed', error: err?.message || 'Auslesung fehlgeschlagen' };
     await prisma.upload.update({ where: { id: upload.id }, data: { extractionResult } });
     return extractionResult;
