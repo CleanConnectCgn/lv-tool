@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { createContract, contractDocxUrl, avvDocxUrl, runContractAiReview } from '../../lib/dbCrm.js';
+import { createContract, contractPdfUrl, avvPdfUrl, runContractAiReview } from '../../lib/dbCrm.js';
 
 // Block 8: sammelt genau die im Auftrag als variabel erlaubten Felder
 // (Ueberschrift, Leistungsart, Intervall, Preis, Zahlungsziel, Laufzeit,
@@ -117,13 +117,13 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
             Schließen
           </button>
           {DSGVO_BRAUCHT_AVV[dsgvoVariante] && (
-            <a href={avvDocxUrl(contractId)}>
-              <button type="button">AVV (Anlage 3) herunterladen</button>
+            <a href={avvPdfUrl(contractId)}>
+              <button type="button">AVV (Anlage 3) als PDF herunterladen</button>
             </a>
           )}
-          <a href={contractDocxUrl(contractId)}>
+          <a href={contractPdfUrl(contractId)}>
             <button type="button" className="primary">
-              Als DOCX herunterladen
+              Als PDF herunterladen
             </button>
           </a>
         </div>

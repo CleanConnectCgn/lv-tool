@@ -11,6 +11,8 @@ import { prisma } from './prisma.js';
 import { renderLvPdf } from './render/lvPdf.js';
 import { buildContractDocument } from './render/contractDocx.js';
 import { buildAvvDocument } from './render/avvDocx.js';
+import { buildContractPdf } from './render/contractPdf.js';
+import { buildAvvPdf } from './render/avvPdf.js';
 import { validateContract } from './render/contractRules.js';
 import { withTimeout } from './withTimeout.js';
 import {
@@ -221,6 +223,43 @@ export function registerDocumentRoutes(app) {
       res.send(buffer);
     } catch (err) {
       res.status(500).json({ error: err?.message || 'AVV-DOCX konnte nicht erstellt werden' });
+    }
+  });
+
+  app.get('/api/db/contracts/:id/pdf', async (req, res) => {
+    try {
+      const contract = await prisma.contract.findUnique({ where: { id: req.params.id }, include: { document: true } });
+      if (!contract) return res.status(404).json({ error: 'Vertrag nicht gefunden' });
+      const buffer = await buildContractPdf(contract.document.renderedData);
+      res.set('Content-Type', 'application/pdf');
+      res.set(
+        'Content-Disposition',
+        `attachment; filename="${contract.document.renderedData?.vertragsnummer || 'Vertrag'}.pdf"`
+      );
+      res.send(buffer);
+    } catch (err) {
+      res.status(500).json({ error: err?.message || 'Vertrag-PDF konnte nicht erstellt werden' });
+    }
+  });
+
+  app.get('/api/db/contracts/:id/avv-pdf', async (req, res) => {
+    try {
+      const contract = await prisma.contract.findUnique({ where: { id: req.params.id }, include: { document: true } });
+      if (!contract) return res.status(404).json({ error: 'Vertrag nicht gefunden' });
+      const dsgvoVariante = contract.document.renderedData?.dsgvoVariante || 'standard';
+      const dsgvoInfo = DSGVO_VARIANTEN[dsgvoVariante];
+      if (!dsgvoInfo || !dsgvoInfo.braucht_avv) {
+        return res.status(409).json({ error: 'Für diese Datenschutz-Variante ist keine AVV erforderlich' });
+      }
+      const buffer = await buildAvvPdf(contract.document.renderedData);
+      res.set('Content-Type', 'application/pdf');
+      res.set(
+        'Content-Disposition',
+        `attachment; filename="${contract.document.renderedData?.vertragsnummer || 'Vertrag'}-AVV.pdf"`
+      );
+      res.send(buffer);
+    } catch (err) {
+      res.status(500).json({ error: err?.message || 'AVV-PDF konnte nicht erstellt werden' });
     }
   });
 
