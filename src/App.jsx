@@ -20,7 +20,7 @@ import DbCustomerList from './components/db/DbCustomerList.jsx';
 import DbCustomerForm from './components/db/DbCustomerForm.jsx';
 import DbCustomerDetail from './components/db/DbCustomerDetail.jsx';
 import DbObjectDetail from './components/db/DbObjectDetail.jsx';
-import { cloneOptionalSection, newSection } from './templates/templates.js';
+import { cloneOptionalSection, newSection, computeIntervalSummary } from './templates/templates.js';
 import { createDocument, updateDocument, getDocument, listDocuments } from './lib/documents.js';
 import { uploadLvPdf } from './lib/lvPdfs.js';
 
@@ -100,6 +100,16 @@ export default function App() {
     }
   }
 
+  // Reinigungsintervall fürs sevDesk-Angebot automatisch aus dem
+  // Leistungsverzeichnis ableiten (Kundenfeedback: stand vorher immer der
+  // generische Fallback "laut Leistungsverzeichnis", weil intervallInfo
+  // nirgends im UI gesetzt wurde) - läuft bei jeder Änderung an mainDoc.sections
+  // neu, damit z.B. "2x wöchentlich" korrekt bleibt, auch wenn einzelne
+  // Positionen nur 1x wöchentlich sind. Siehe src/lib/sevdesk.js.
+  useEffect(() => {
+    setIntervallInfo(computeIntervalSummary(mainDoc.sections));
+  }, [mainDoc.sections]);
+
   function handleSetupGenerated({ sections: mainSections, children, customer: newCustomer }) {
     setMainDoc({ id: null, lvTitle: 'Leistungsverzeichnis Unterhaltsreinigung', sections: mainSections });
     setChildDocs(
@@ -109,7 +119,6 @@ export default function App() {
     setCustomer(newCustomer);
     setObjekt(addressLine(newCustomer) || newCustomer?.name || '');
     setDatum(todayISO());
-    setIntervallInfo('');
     setInternalNotes('');
     setView('editor');
     if (pendingInspection) {
@@ -228,7 +237,6 @@ export default function App() {
       setObjekt(main.objekt);
       setInternalNotes(main.internalNotes || '');
       setDatum(main.datum);
-      setIntervallInfo(main.intervallInfo);
       setCustomer(main.customer || null);
       setActiveIndex(doc.parentId ? children.findIndex((c) => c.id === doc.id) : -1);
       setView('editor');

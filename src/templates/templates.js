@@ -24,6 +24,31 @@ function section(title, rows) {
   return { id: uid(), title, rows };
 }
 
+// Fasst das Reinigungsintervall des gesamten Objekts als EIN Label zusammen
+// (z.B. "2x wöchentlich"), statt es leer zu lassen und beim sevDesk-Angebot
+// auf den generischen Fallback "laut Leistungsverzeichnis" zurückzufallen
+// (src/lib/sevdesk.js). Nimmt je Intervall-Spalte (wöchentlich > monatlich >
+// jährlich, absteigend nach Häufigkeit) das MAXIMUM über alle aktiven
+// (nicht Bedarf, nicht leer) Zeilen - ein Objekt, das überwiegend 2x
+// wöchentlich, aber für einzelne Leistungen nur 1x wöchentlich gereinigt
+// wird, soll als "2x wöchentlich" beworben werden, nicht als "1x".
+export function computeIntervalSummary(sections) {
+  const rows = (sections || []).flatMap((s) => s.rows || []);
+  const activeRows = rows.filter((r) => (r.text || '').trim() && !r.bedarf);
+
+  const columnLabel = { woechentlich: 'wöchentlich', monatlich: 'monatlich', jaehrlich: 'jährlich' };
+  for (const col of INTERVAL_COLUMNS) {
+    const values = activeRows
+      .filter((r) => r.intervalColumn === col && r.intervalValue)
+      .map((r) => parseInt(r.intervalValue, 10))
+      .filter((n) => !Number.isNaN(n));
+    if (values.length > 0) {
+      return `${Math.max(...values)}x ${columnLabel[col]}`;
+    }
+  }
+  return '';
+}
+
 // ---- Winterdienst ----
 // Einziges hier noch aktiv genutztes Branchen-Template (via cloneTemplate('winterdienst')
 // in checklistAreas.js). Die früheren Templates für Büro/Arztpraxis/Treppenhaus/
