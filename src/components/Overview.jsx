@@ -112,34 +112,38 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
       <p className="modal-hint">Gespeicherte Leistungsverzeichnisse und Angebote.</p>
 
       <div className="overview-actions">
-        <button className="primary" onClick={onNew}>
-          + Neues Leistungsverzeichnis
-        </button>
-        {onInspect && <button onClick={onInspect}>Besichtigungsmodus</button>}
-        {onOpenCrm && <button onClick={onOpenCrm}>👥 Kunden (CRM)</button>}
-        {onOpenDbCrm && (
-          <button onClick={onOpenDbCrm} title="Neuer Bereich auf Basis der neuen Datenbank (Block 5)">
-            🗃️ Kunden (Postgres, neu)
+        <div className="overview-nav-group">
+          <button className="primary" onClick={onNew}>
+            + Neues Leistungsverzeichnis
           </button>
-        )}
-        <button
-          type="button"
-          onClick={() => window.open('https://vertragsgenerator-production-7738.up.railway.app', '_blank', 'noopener')}
-        >
-          📄 Vertragsgenerator
-        </button>
-        <a href="/api/backup" className="icon-btn" title="Backup aller Daten herunterladen">
-          💾 Backup
-        </a>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={handleRunBackupNow}
-          disabled={backupStatus === 'running'}
-          title="Sofortige Postgres-Sicherung über den Backup-Worker anstoßen"
-        >
-          {backupStatus === 'running' ? '⏳ Sichert...' : '🗄️ Jetzt sichern'}
-        </button>
+          {onInspect && <button onClick={onInspect}>Besichtigungsmodus</button>}
+          {onOpenCrm && <button onClick={onOpenCrm}>👥 Kunden (CRM)</button>}
+          {onOpenDbCrm && (
+            <button onClick={onOpenDbCrm} title="Neuer Bereich auf Basis der neuen Datenbank (Block 5)">
+              🗃️ Kunden (Postgres, neu)
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => window.open('https://vertragsgenerator-production-7738.up.railway.app', '_blank', 'noopener')}
+          >
+            📄 Vertragsgenerator
+          </button>
+        </div>
+        <div className="overview-utility-actions">
+          <a href="/api/backup" className="icon-btn" title="Backup aller Daten herunterladen">
+            💾 Backup
+          </a>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={handleRunBackupNow}
+            disabled={backupStatus === 'running'}
+            title="Sofortige Postgres-Sicherung über den Backup-Worker anstoßen"
+          >
+            {backupStatus === 'running' ? '⏳ Sichert...' : '🗄️ Jetzt sichern'}
+          </button>
+        </div>
       </div>
 
       {backupMessage && (

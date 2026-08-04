@@ -209,14 +209,24 @@ button:disabled {
   cursor: not-allowed;
 }
 
-button.icon-btn {
+/* a.icon-btn ergänzt (Bug gefunden bei der visuellen Prüfung 2026-08-01):
+   der Backup-Download-Link ist ein <a>, nicht <button> - ohne diesen
+   Selektor blieb er beim Standard-Browser-Link-Look (blau, unterstrichen)
+   hängen, obwohl er dieselbe Klasse trägt wie die Button-Variante. */
+button.icon-btn,
+a.icon-btn {
+  display: inline-block;
   background: transparent;
   color: #b13a3a;
   padding: 2px 6px;
   font-size: 13px;
+  text-decoration: none;
+  border: none;
+  border-radius: var(--radius-sm);
 }
 
-button.icon-btn:hover {
+button.icon-btn:hover,
+a.icon-btn:hover {
   background: #fdeaea;
 }
 
@@ -737,6 +747,29 @@ tr.drag-over td {
   color: var(--brand-text);
 }
 
+/* Der globale button-Grundstil (weißer Grund, dunkler Text) ist für helle
+   Flächen gebaut - auf der dunklen .overview-page-card (und allen Seiten,
+   die dieselbe Hülle nutzen: CRM-Listen/-Profile, Postgres-CRM,
+   Vertragsformular) rendert das als grelle weiße Pille auf fast-schwarzem
+   Grund. .primary/.icon-btn/.overview-delete-confirm bleiben unangetastet,
+   die passen bereits zum dunklen Grund. */
+.overview-page-card button:not(.primary):not(.icon-btn):not(.overview-delete-confirm),
+.overview-page-card .modal-actions button:first-child {
+  background: transparent;
+  color: var(--brand-text);
+  border-color: var(--brand-line-strong);
+}
+
+.overview-page-card button:not(.primary):not(.icon-btn):not(.overview-delete-confirm):hover,
+.overview-page-card .modal-actions button:first-child:hover {
+  background: var(--brand-surface-2);
+  border-color: var(--teal-line);
+}
+
+.overview-page-card button:not(.primary):not(.icon-btn):not(.overview-delete-confirm):focus-visible {
+  outline-color: var(--teal);
+}
+
 .quick-setup-card {
   max-width: 560px;
 }
@@ -776,13 +809,35 @@ tr.drag-over td {
 }
 
 .overview-actions {
-  margin-bottom: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-5);
+}
+
+/* Primäraktion + gleichrangige Navigations-Aktionen als eine zusammenhängende
+   Gruppe, statt einer undifferenzierten Reihe aus 6 Buttons. */
+.overview-nav-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* Backup/Admin-Werkzeuge: bewusst zurückhaltend und rechts abgesetzt, keine
+   Konkurrenz zur eigentlichen Navigation. */
+.overview-utility-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: auto;
 }
 
 .overview-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   max-height: 55vh;
   overflow-y: auto;
 }
@@ -791,7 +846,7 @@ tr.drag-over td {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-3);
+  padding: var(--space-3) var(--space-4);
   border: 1px solid var(--brand-line);
   border-left: 3px solid transparent;
   border-radius: var(--radius-sm);
