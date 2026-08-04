@@ -22,12 +22,9 @@ import {
   STANDARD_MWST,
   VERSICHERUNGSSUMME_EUR,
   VERTRAGSSTRAFE_EUR,
-  HAFTUNG_SCHLUESSEL_EINFACH_EUR,
-  HAFTUNG_SCHLIESSANLAGE_EUR,
+  SCHLUESSEL_SCHLIESSANLAGE_VERSICHERUNG_EUR,
   RUEGEFRIST_WERKTAGE,
-  RUEGEFRIST_VERBRAUCHER_WERKTAGE,
   NACHERFUELLUNG_WERKTAGE,
-  VERZUGSZINSSATZ_PUNKTE,
   ZAHLUNGSZIEL_WERKTAGE as DEFAULT_ZAHLUNGSZIEL_WERKTAGE,
 } from './contractFields.js';
 import { validateContract } from './contractRules.js';
@@ -49,7 +46,6 @@ import {
   bulletRow,
   boldRow,
   warnBannerRow,
-  hinweisRow,
   drawLetterhead,
   drawFurniture,
   drawSignatureBlock,
@@ -64,16 +60,27 @@ function bruttoFromNetto(netto, mwstSatz) {
   return n * (1 + satz / 100);
 }
 
+// Eine einzige Zeile mit mehrzeiligem Inhalt statt fünf separaten Zeilen -
+// Bug gefunden 2026-07-31 (Kundenfeedback): als fünf Zeilen konnte
+// jspdf-autotable den Seitenumbruch mitten in den Kontodaten setzen (z.B.
+// "IBAN" auf einer Seite, "BIC" erst auf der nächsten), was unprofessionell
+// aussah. Als eine Zeile kann der Umbruch den Block nur als Ganzes vor oder
+// nach sich lassen.
 function kontodatenRows() {
-  const line = (label, value) => [
-    { content: `${label}: ${value}`, styles: { fontSize: 8.5, fillColor: SEC_BG, textColor: GRAY, cellPadding: { top: 1, bottom: 1, left: 4 } } },
+  const lines = [
+    `Kontoinhaber: ${AUFTRAGNEHMER.firma}`,
+    `Geldinstitut: ${AUFTRAGNEHMER.bankinstitut}`,
+    `IBAN: ${AUFTRAGNEHMER.iban}`,
+    `BIC: ${AUFTRAGNEHMER.bic}`,
+    `Verwendungszweck: Rechnungsnummer`,
   ];
   return [
-    line('Kontoinhaber', AUFTRAGNEHMER.firma),
-    line('Geldinstitut', AUFTRAGNEHMER.bankinstitut),
-    line('IBAN', AUFTRAGNEHMER.iban),
-    line('BIC', AUFTRAGNEHMER.bic),
-    line('Verwendungszweck', 'Rechnungsnummer'),
+    [
+      {
+        content: lines.join('\n'),
+        styles: { fontSize: 8.5, fillColor: SEC_BG, textColor: GRAY, cellPadding: { top: 2, bottom: 2, left: 4 } },
+      },
+    ],
   ];
 }
 
@@ -109,7 +116,14 @@ export function buildContractPdf(contract) {
   const { errors: vorgabenFehler, warnings: vorgabenHinweise } = validateContract(contract);
   const vorgabenMeldungen = [...vorgabenFehler, ...vorgabenHinweise];
 
-  const kundeAdresse = [kunde.strasse, [kunde.plz, kunde.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  // Dreizeilig (Straße / PLZ Ort / Land) statt einer komma-getrennten Zeile -
+  // an contractDocx.js/den Referenzvertrag VT-1265 angeglichen (2026-07-30):
+  // vorher fehlte hier u.a. die Land-Zeile komplett.
+  const kundeAdresseZeilen = [
+    kunde.strasse,
+    [kunde.plz, kunde.ort].filter(Boolean).join(' '),
+    AUFTRAGNEHMER.land === 'Deutschland' ? 'Deutschland' : '',
+  ].filter(Boolean);
 
   const body = [
     ...(vorgabenMeldungen.length > 0
@@ -130,11 +144,18 @@ export function buildContractPdf(contract) {
         `Bestandteil dieses Vertrages ist.` +
         (angebotNummer
           ? ` Das Angebot ${angebotNummer}${angebotDatum ? ` vom ${formatDateDE(angebotDatum)}` : ''} ist als ` +
-            `Anlage 2 Bestandteil dieses Vertrages. Die Vergütung optionaler Zusatzpositionen richtet sich nach ` +
-            `§ 2 dieses Vertrages.`
+            `Anlage 2 Bestandteil dieses Vertrages und gilt insbesondere für die Vergütung der ` +
+            `${leistungsart}sleistungen.`
           : '') +
         (dsgvoInfo.braucht_avv
           ? ' Die Vereinbarung zur Auftragsverarbeitung (AVV) ist als Anlage 3 Bestandteil dieses Vertrages.'
+          : '') +
+        (angebotNummer
+          ? optionalePositionen.length > 0
+            ? ' Die Vergütung der im Angebot als optional ausgewiesenen und in diesen Vertrag aufgenommenen ' +
+              'Zusatzpositionen richtet sich nach § 2 dieses Vertrages.'
+            : ' Die im Angebot als optional ausgewiesenen Positionen sind nicht Gegenstand dieses Vertrages ' +
+              'und bedürfen einer gesonderten schriftlichen Beauftragung.'
           : '')
     ),
     clauseRow(
@@ -142,13 +163,31 @@ export function buildContractPdf(contract) {
       'Dieser Vertrag wird als Werkvertrag im Sinne der §§ 631 ff. BGB geschlossen. Der Auftragnehmer schuldet ' +
         'den vereinbarten Reinigungserfolg, nicht lediglich das Tätigwerden.'
     ),
+    clauseRow(
+      '1.4',
+      'Der Auftraggeber schließt diesen Vertrag in Ausübung seiner gewerblichen oder selbständigen ' +
+        'beruflichen Tätigkeit und handelt damit als Unternehmer im Sinne des § 14 BGB. Die ' +
+        'Reinigungsleistungen betreffen ausschließlich betrieblich genutzte Räumlichkeiten.'
+    ),
 
     headingRow(2, 'Leistungsumfang und Pflichten'),
-    boldRow(`Leistung 1: ${leistungsart}`),
-    bulletRow(`Reinigungsintervall: ${reinigungsintervall || '[Intervall]'}`),
-    bulletRow(`Objekt: ${objektAdresse || '[Objektadresse]'}`),
-    bulletRow(`Gemäß beigefügtem Leistungsverzeichnis${lvDatum ? ` (Stand: ${formatDateDE(lvDatum)})` : ''}`),
-    bulletRow('Reinigung außerhalb der regulären Öffnungszeiten, sofern nicht anders vereinbart'),
+    clauseRow(
+      '2.1',
+      `Der Auftragnehmer erbringt die im beigefügten Leistungsverzeichnis (Anlage 1) beschriebenen ` +
+        `Reinigungsleistungen. Das Regel-Reinigungsintervall beträgt ${reinigungsintervall || '[Intervall]'}. ` +
+        'Abweichende Intervalle für einzelne Bereiche sind dem Leistungsverzeichnis zu entnehmen. Die ' +
+        'Reinigung erfolgt außerhalb der regulären Öffnungszeiten des Auftraggebers, sofern nicht anders ' +
+        'vereinbart.'
+    ),
+    clauseRow(
+      '2.2',
+      'Die zu erbringenden Einzelleistungen, die betroffenen Bereiche sowie die jeweiligen ' +
+        `Reinigungsintervalle ergeben sich abschließend aus dem Leistungsverzeichnis (Anlage 1)` +
+        `${lvDatum ? `, Stand: ${formatDateDE(lvDatum)}` : ''}. Soweit dort für einzelne Leistungen oder ` +
+        'Bereiche abweichende Intervalle ausgewiesen sind, gehen diese der pauschalen Intervallangabe in ' +
+        '2.1 vor. Die Reinigung erfolgt außerhalb der regulären Öffnungszeiten des Auftraggebers, sofern ' +
+        'nicht anders vereinbart.'
+    ),
 
     ...optionalePositionen.flatMap((pos, i) => {
       const posBrutto = bruttoFromNetto(pos.preisNetto, satz);
@@ -176,14 +215,12 @@ export function buildContractPdf(contract) {
         'Verfügung. Ein Verlust ist dem Auftraggeber unverzüglich zu melden. Der Auftragnehmer haftet für den ' +
         'Verlust oder die Beschädigung von Zugangsmitteln nur, soweit ihn oder seine Erfüllungsgehilfen hierbei ' +
         'Vorsatz oder grobe Fahrlässigkeit trifft. Im Falle einfacher Fahrlässigkeit haftet der Auftragnehmer ' +
-        `beschränkt auf den reinen Wiederbeschaffungswert des einzelnen Schlüssels oder Transponders (max. ` +
-        `${formatEuro(HAFTUNG_SCHLUESSEL_EINFACH_EUR)}). Eine darüber hinausgehende Haftung für die Änderung der ` +
-        'gesamten Schließanlage ist ausgeschlossen, es sei denn, der Verlust wurde grob fahrlässig verursacht ' +
-        'oder eine Schließanlagenänderung ist - unabhängig vom Verschuldensgrad - zur Abwehr eines konkreten ' +
-        'Sicherheitsrisikos erforderlich; in diesem Fall haftet der Auftragnehmer für die Kosten einer Teil- ' +
-        `oder Komplettänderung der Schließanlage, begrenzt auf ${formatEuro(HAFTUNG_SCHLIESSANLAGE_EUR)} je ` +
-        'Schadensfall. Bei Vertragsende sind sämtliche Zugangsmittel spätestens am letzten Werktag der ' +
-        'Vertragslaufzeit zurückzugeben.'
+        'für den Wiederbeschaffungswert des einzelnen Schlüssels oder Transponders. Ist infolge des Verlusts ' +
+        'eine Teil- oder Komplettänderung der Schließanlage erforderlich, haftet der Auftragnehmer für die ' +
+        `hierfür anfallenden Kosten bis zu einem Betrag von ` +
+        `${formatEuro(SCHLUESSEL_SCHLIESSANLAGE_VERSICHERUNG_EUR)} je Schadensfall; der Auftragnehmer hält ` +
+        'hierfür eine entsprechende Schlüssel- und Schließanlagenversicherung vor. Bei Vertragsende sind ' +
+        'sämtliche Zugangsmittel spätestens am letzten Werktag der Vertragslaufzeit zurückzugeben.'
     ),
     clauseRow(
       '2.4',
@@ -217,7 +254,10 @@ export function buildContractPdf(contract) {
       '3.1',
       `Der Auftragnehmer erhält vom Auftraggeber ein monatliches Pauschalhonorar für die ${leistungsart} in ` +
         `Höhe von ${formatEuro(verguetungNetto)} netto zzgl. ${formatPercent(satz)} % MwSt., entspricht ` +
-        `${formatEuro(brutto)} brutto.` +
+        `${formatEuro(brutto)} brutto. Mit dieser Vergütung sind sämtliche Reinigungsmaterialien, ` +
+        'Reinigungsmittel, Verbrauchsmaterialien, die Wasseraufbereitung sowie die Anfahrt vollständig ' +
+        'abgegolten. Hygieneverbrauchsmaterial (z.B. Seife, Papierhandtücher, Toilettenpapier) stellt der ' +
+        'Auftraggeber, sofern nicht gesondert schriftlich vereinbart.' +
         (optionalePositionen.length > 0
           ? ' Die optionalen Zusatzpositionen werden gemäß den Angaben in § 2 je Einsatz vergütet.'
           : '')
@@ -226,9 +266,7 @@ export function buildContractPdf(contract) {
       '3.2',
       `Der Auftragnehmer stellt dem Auftraggeber monatlich eine ordnungsgemäße Rechnung. Die Übermittlung ` +
         `erfolgt in Textform, vorzugsweise per E-Mail. Die Vergütung wird mit Zugang der Rechnung angefordert ` +
-        `und ist innerhalb von ${zahlungszielWerktage} Werktagen zu leisten. Bei Zahlungsverzug sind ` +
-        `Verzugszinsen in Höhe von ${VERZUGSZINSSATZ_PUNKTE} Prozentpunkten über dem Basiszinssatz gemäß § 288 ` +
-        'Abs. 2 BGB geschuldet.'
+        `und ist innerhalb von ${zahlungszielWerktage} Tagen zu leisten.`
     ),
     ...kontodatenRows(),
     clauseRow('3.3', 'Für die ordnungsgemäße Versteuerung der Vergütung ist der Auftragnehmer selbst verantwortlich.'),
@@ -252,11 +290,13 @@ export function buildContractPdf(contract) {
     ),
     clauseRow(
       '3.6',
-      'Ändert sich der Tariflohn im Gebäudereinigerhandwerk (Lohngruppe 1 für Unterhaltsreinigung, Lohngruppe ' +
-        '6 für Glasreinigung) um mehr als 3 %, kann jede Partei eine entsprechende Anpassung in Textform ' +
-        'verlangen. Erhöhungen und Senkungen werden gleichermaßen weitergegeben, maximal 5 % pro Kalenderjahr, ' +
-        'wirksam einen Monat nach Mitteilung. Bei Erhöhungen über 5 % hat jede Partei ein Sonderkündigungsrecht ' +
-        'mit einer Frist von einem Monat zum Monatsende.'
+      'Ändert sich der Tariflohn im Gebäudereinigerhandwerk (Lohngruppe 1 für Unterhaltsreinigung) um mehr ' +
+        'als 2 %, kann jede Partei eine entsprechende Anpassung der Vergütung in Textform verlangen. Gleiches ' +
+        'gilt bei einer erheblichen Änderung der gesetzlichen Sozialabgaben oder der Material- und ' +
+        'Betriebskosten von mehr als 2 %. Erhöhungen und Senkungen werden gleichermaßen weitergegeben, ' +
+        'maximal 7 % pro Kalenderjahr, wirksam einen Monat nach Mitteilung in Textform unter Angabe der ' +
+        'maßgeblichen Kostenveränderung. Bei Erhöhungen über 5 % hat der Auftraggeber ein ' +
+        'Sonderkündigungsrecht mit einer Frist von einem Monat zum Monatsende.'
     ),
     clauseRow(
       '3.7',
@@ -273,18 +313,18 @@ export function buildContractPdf(contract) {
         'der Auftragnehmer berechtigt, dem Auftraggeber mit jeder Monatsrechnung eine Abnahmeaufforderung ' +
         'gemäß § 640 Abs. 2 BGB zu erteilen. Der Auftraggeber wird darauf hingewiesen, dass die im jeweiligen ' +
         `Monat erbrachten Reinigungsleistungen als abgenommen gelten, sofern er nicht innerhalb von ` +
-        `${RUEGEFRIST_WERKTAGE} Werktagen (bei Verbrauchern: ${RUEGEFRIST_VERBRAUCHER_WERKTAGE} Werktagen) nach ` +
-        'Zugang der Rechnung in Textform einen oder mehrere Mängel rügt. Die Rüge muss den Mangel hinreichend ' +
-        'konkret beschreiben (Art und Ort); eine Sammelrüge mehrerer Mängel ist zulässig. Das Zahlungsziel ' +
-        'richtet sich nach § 3.2.'
+        `${RUEGEFRIST_WERKTAGE} Werktagen nach Zugang der Rechnung in Textform einen oder mehrere Mängel rügt. ` +
+        'Auf diese Frist und die Folgen ihres Verstreichens wird der Auftraggeber in jeder ' +
+        'Abnahmeaufforderung ausdrücklich und in hervorgehobener Form hingewiesen. Die Rüge muss den Mangel ' +
+        'hinreichend konkret beschreiben (Art und Ort); eine Sammelrüge mehrerer Mängel ist zulässig. Das ' +
+        'Zahlungsziel richtet sich nach § 3.2.'
     ),
     clauseRow(
       '4.2',
       'Bei verdeckten Mängeln, die bei ordnungsgemäßer Untersuchung nicht erkennbar waren, beginnt die ' +
         'Rügefrist abweichend von 4.1 mit dem Zeitpunkt der Entdeckung; die Rüge muss unverzüglich, spätestens ' +
-        `innerhalb von ${RUEGEFRIST_WERKTAGE} Werktagen nach Entdeckung (bei Verbrauchern: ` +
-        `${RUEGEFRIST_VERBRAUCHER_WERKTAGE} Werktagen), in Textform unter Angabe von Zeit, Ort, Art und Umfang ` +
-        'des Mangels erfolgen.'
+        `innerhalb von ${RUEGEFRIST_WERKTAGE} Werktagen nach Entdeckung, in Textform unter Angabe von Zeit, ` +
+        'Ort, Art und Umfang des Mangels erfolgen.'
     ),
     clauseRow(
       '4.3',
@@ -322,18 +362,21 @@ export function buildContractPdf(contract) {
       '5.1',
       'Der Auftragnehmer haftet für Schäden, die er oder seine eingesetzten Mitarbeiter bei der ' +
         'Vertragsdurchführung am Eigentum des Auftraggebers oder Dritter verursachen. Bei Vorsatz und grober ' +
-        'Fahrlässigkeit haftet der Auftragnehmer unbeschränkt. Bei leicht fahrlässiger Verletzung wesentlicher ' +
-        'Vertragspflichten ist die Haftung auf den vertragstypischen, vorhersehbaren Schaden begrenzt. Bei ' +
-        'leicht fahrlässiger Verletzung nicht vertragswesentlicher Nebenpflichten ist die Haftung ' +
-        'ausgeschlossen.'
+        'Fahrlässigkeit haftet der Auftragnehmer unbeschränkt. Bei leicht fahrlässiger Verletzung von ' +
+        'Vertragspflichten ist die Haftung auf den vertragstypischen, vorhersehbaren Schaden begrenzt, ' +
+        `höchstens jedoch auf die zweifache Jahresvergütung nach § 3.1. Diese Haftungsbegrenzung gilt nicht ` +
+        'für Schäden an Zugangsmitteln und Schließanlagen; hierfür gilt ausschließlich § 2.3.'
     ),
     clauseRow(
       '5.2',
       `Der Auftragnehmer verpflichtet sich, eine gültige Betriebshaftpflichtversicherung mit einer ` +
         `Deckungssumme von mindestens ${formatEuro(VERSICHERUNGSSUMME_EUR)} pauschal für Sach- und ` +
-        'Vermögensschäden vorzuhalten. Der Nachweis ist dem Auftraggeber bei Vertragsschluss sowie auf ' +
-        'jährliches Verlangen unverzüglich vorzulegen. Änderungen oder die Kündigung des ' +
-        'Versicherungsvertrages sind dem Auftraggeber unverzüglich mitzuteilen.'
+        'Vermögensschäden vorzuhalten. Ergänzend hält der Auftragnehmer eine Schlüssel- und ' +
+        `Schließanlagenversicherung mit einer Deckungssumme von mindestens ` +
+        `${formatEuro(SCHLUESSEL_SCHLIESSANLAGE_VERSICHERUNG_EUR)} je Schadensfall vor. Die Nachweise sind ` +
+        'dem Auftraggeber bei Vertragsschluss sowie auf jährliches Verlangen unverzüglich vorzulegen. ' +
+        'Änderungen oder die Kündigung des Versicherungsvertrages sind dem Auftraggeber unverzüglich ' +
+        'mitzuteilen.'
     ),
     clauseRow(
       '5.3',
@@ -450,20 +493,14 @@ export function buildContractPdf(contract) {
         ]
           .map((text, i) => `(${i + 1}) ${text}`)
           .join(', ') +
-        '.'
+        '. Abweichend hiervon gehen die Angaben des Leistungsverzeichnisses (Anlage 1) vor, soweit sie Art, ' +
+        'Umfang, Häufigkeit oder örtlichen Geltungsbereich der einzelnen Reinigungsleistungen betreffen.'
     ),
     clauseRow(
       '9.4',
       `Erfüllungsort ist ${AUFTRAGNEHMER.ort}. Ausschließlicher Gerichtsstand für alle Streitigkeiten aus ` +
         `diesem Vertrag ist, soweit gesetzlich zulässig, ${AUFTRAGNEHMER.ort}. Es gilt das Recht der ` +
         'Bundesrepublik Deutschland.'
-    ),
-
-    hinweisRow(
-      'Hinweis: Diese Vorlage orientiert sich an einem bereits verwendeten Referenzvertrag, wurde aber für ' +
-        'diesen Generator angepasst und automatisiert befüllt. Insbesondere branchenspezifische Klauseln ' +
-        '(§ 7.2) und neu hinzugefügte Formulierungen sollten vor produktivem Einsatz in einem neuen ' +
-        'Anwendungsfall anwaltlich geprüft werden.'
     ),
   ];
 
@@ -472,7 +509,7 @@ export function buildContractPdf(contract) {
   const startY = drawHeaderBox(doc, {
     ueberschrift,
     kunde,
-    kundeAdresse,
+    kundeAdresseZeilen,
     vertragsnummer,
     datum,
     internerAnsprechpartner,
@@ -485,7 +522,12 @@ export function buildContractPdf(contract) {
   return Buffer.from(doc.output('arraybuffer'));
 }
 
-function drawHeaderBox(doc, { ueberschrift, kunde, kundeAdresse, vertragsnummer, datum, internerAnsprechpartner }) {
+// Kopfbereich: Label + Wert INLINE auf derselben Zeile (Label grau, Wert
+// fett dahinter) statt gestapelt/GROSSBUCHSTABEN - an contractDocx.js
+// (infoBoxRow) und den Referenzvertrag VT-1265 angeglichen (2026-07-30):
+// vorher wich die PDF-Optik hier sichtbar vom DOCX und vom echten
+// Referenzvertrag ab.
+function drawHeaderBox(doc, { ueberschrift, kunde, kundeAdresseZeilen, vertragsnummer, datum, internerAnsprechpartner }) {
   const y0 = 24;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
@@ -493,7 +535,16 @@ function drawHeaderBox(doc, { ueberschrift, kunde, kundeAdresse, vertragsnummer,
   doc.text(ueberschrift, MARGIN_X, y0 + 6);
 
   const boxY = y0 + 10;
-  const boxH = 22;
+  const lineHeight = 4.6;
+  // Bug gefunden 2026-07-30 (visuelle Prüfung): bei drei Adresszeilen
+  // (Straße/PLZ Ort/Land) war die Box knapper bemessen als die rechte
+  // Info-Spalte tatsächlich braucht (letzte Zeile "Ansprechpartner" endet
+  // bei offsetY 19+4.5=23.5) - die Werte-Zeile ragte dadurch über den
+  // unteren Rand der grauen Box hinaus. RIGHT_COL_MIN_H deckt die drei
+  // festen Info-Zeilen inkl. Unterlänge/Innenabstand ab, unabhängig von
+  // der (variablen) Anzahl Adresszeilen links.
+  const RIGHT_COL_MIN_H = 28;
+  const boxH = Math.max(RIGHT_COL_MIN_H, 9 + kundeAdresseZeilen.length * lineHeight);
   doc.setDrawColor(...LINE);
   doc.setLineWidth(0.2);
   doc.setFillColor(...SEC_BG);
@@ -509,10 +560,12 @@ function drawHeaderBox(doc, { ueberschrift, kunde, kundeAdresse, vertragsnummer,
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...INK);
-  doc.text(kunde.firma || '[Auftraggeber]', MARGIN_X + 4, boxY + 9.5);
+  doc.text(kunde.firma || '[Auftraggeber]', MARGIN_X + 4, boxY + 9.5, { maxWidth: 90 });
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
-  doc.text(kundeAdresse || '', MARGIN_X + 4, boxY + 14, { maxWidth: 90 });
+  kundeAdresseZeilen.forEach((line, i) => {
+    doc.text(line, MARGIN_X + 4, boxY + 13.5 + i * lineHeight, { maxWidth: 90 });
+  });
 
   const rightX = PAGE_W - MARGIN_X - 4;
   const infoLine = (label, value, offsetY) => {
@@ -523,11 +576,11 @@ function drawHeaderBox(doc, { ueberschrift, kunde, kundeAdresse, vertragsnummer,
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor(...INK);
-    doc.text(value || '—', rightX, boxY + offsetY + 4, { align: 'right' });
+    doc.text(value || '—', rightX, boxY + offsetY + 4.5, { align: 'right' });
   };
-  infoLine('VERTRAGSNUMMER', vertragsnummer, 5);
-  infoLine('DATUM', formatDateDE(datum), 12);
-  infoLine('ANSPRECHPARTNER', internerAnsprechpartner, 19);
+  infoLine('Vertragsnummer', vertragsnummer, 5);
+  infoLine('Datum', formatDateDE(datum), 12);
+  infoLine('Ansprechpartner', internerAnsprechpartner, 19);
 
   return boxY + boxH + 6;
 }

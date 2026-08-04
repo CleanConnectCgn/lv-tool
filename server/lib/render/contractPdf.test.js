@@ -105,7 +105,7 @@ describe('buildContractPdf', () => {
     const standard = await extractText(await buildContractPdf(BASE_CONTRACT));
     expect(standard).not.toContain('ärztliche');
 
-    const arztpraxis = await extractText(await buildContractPdf({ ...BASE_CONTRACT, dsgvoVariante: 'gesundheitsdaten' }));
+    const arztpraxis = await extractText(await buildContractPdf({ ...BASE_CONTRACT, dsgvoVariante: 'arztpraxis' }));
     expect(arztpraxis).toContain('ärztliche');
     expect(arztpraxis).toContain('Auftragsverarbeitung');
   });
@@ -124,8 +124,8 @@ describe('buildContractPdf', () => {
 
   it('setzt das Standard-Zahlungsziel, wenn zahlungszielWerktage explizit null ist (Regressionstest)', async () => {
     const text = await extractText(await buildContractPdf({ ...BASE_CONTRACT, zahlungszielWerktage: null }));
-    expect(text).toContain('innerhalb von 10 Werktagen zu leisten');
-    expect(text).not.toContain('null Werktagen');
+    expect(text).toContain('innerhalb von 14 Tagen zu leisten');
+    expect(text).not.toContain('null Tagen');
   });
 
   it('zeigt "—" statt erfundener "0,00 EUR" bei fehlender Vergütung (Regressionstest)', async () => {
@@ -144,12 +144,12 @@ describe('buildContractPdf', () => {
         erwartet: ['(1) dieser Vertrag', '(2) Leistungsverzeichnis', '(3) Angebot'],
       },
       {
-        dsgvoVariante: 'gesundheitsdaten',
+        dsgvoVariante: 'physiotherapiepraxis',
         angebotNummer: null,
         erwartet: ['(1) dieser Vertrag', '(2) Vereinbarung zur Auftragsverarbeitung', '(3) Leistungsverzeichnis'],
       },
       {
-        dsgvoVariante: 'gesundheitsdaten',
+        dsgvoVariante: 'physiotherapiepraxis',
         angebotNummer: 'AN-1',
         erwartet: [
           '(1) dieser Vertrag',
@@ -201,12 +201,26 @@ describe('buildContractPdf', () => {
     expect(befristet).not.toContain('von einer Partei schriftlich');
   });
 
-  it('lässt keinen Widerspruch mehr, wer die Vergütung optionaler Zusatzpositionen bestimmt', async () => {
-    const text = await extractText(
+  it('§1.2: Angebot gilt für die Regelleistung, optionale Angebotspositionen sind ohne § 2-Eintrag ausgeschlossen (Rechts-Audit gegen VT-1265)', async () => {
+    const ohneOptionale = await extractText(
       await buildContractPdf({ ...BASE_CONTRACT, angebotNummer: 'AN-1', angebotDatum: '2026-07-01' })
     );
-    expect(text).not.toContain('gilt insbesondere für die Vergütung');
-    expect(text).toContain('Die Vergütung optionaler Zusatzpositionen richtet sich nach § 2');
+    expect(ohneOptionale).toContain('gilt insbesondere für die Vergütung der Unterhaltsreinigungsleistungen');
+    expect(ohneOptionale).toContain('Die im Angebot als optional ausgewiesenen Positionen sind nicht Gegenstand dieses Vertrages');
+    expect(ohneOptionale).not.toContain('Die Vergütung optionaler Zusatzpositionen richtet sich nach § 2');
+
+    const mitOptionalen = await extractText(
+      await buildContractPdf({
+        ...BASE_CONTRACT,
+        angebotNummer: 'AN-1',
+        angebotDatum: '2026-07-01',
+        optionalePositionen: [{ name: 'Glasreinigung', preisNetto: 100 }],
+      })
+    );
+    expect(mitOptionalen).toContain(
+      'Die Vergütung der im Angebot als optional ausgewiesenen und in diesen Vertrag aufgenommenen Zusatzpositionen richtet sich nach § 2'
+    );
+    expect(mitOptionalen).not.toContain('sind nicht Gegenstand dieses Vertrages');
   });
 
   it('platziert den Unterschriftenblock ohne Überlappung mit der Fußzeile, auch bei langen Firmennamen', async () => {

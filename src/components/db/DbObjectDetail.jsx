@@ -260,6 +260,7 @@ export default function DbObjectDetail({ objectId, onBack }) {
             {contractFormSpecId === spec.id && (
               <DbContractForm
                 objectId={objectId}
+                sevdeskContactId={object.customer?.sevdeskContactId}
                 defaultLeistungsart={spec.leistungsart}
                 defaultLvDatum={spec.standDatum}
                 onClose={() => setContractFormSpecId(null)}

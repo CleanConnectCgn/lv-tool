@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { createContract, contractPdfUrl, avvPdfUrl, runContractAiReview } from '../../lib/dbCrm.js';
+import { listOffersForContact } from '../../lib/sevdesk.js';
+
+const SEVDESK_TOKEN_KEY = 'lv-tool:sevdesk-token';
 
 // Block 8: sammelt genau die im Auftrag als variabel erlaubten Felder
 // (Ueberschrift, Leistungsart, Intervall, Preis, Zahlungsziel, Laufzeit,
@@ -11,29 +14,36 @@ import { createContract, contractPdfUrl, avvPdfUrl, runContractAiReview } from '
 // Lokale Kopie von BRANCHEN/BRANCHE_ZU_DSGVO/braucht_avv statt Import aus
 // server/lib/render/contractFields.js - gleiches Muster wie die schon
 // bisher hier fest hinterlegten Datenschutz-Klausel-Optionen (Server- und
-// Client-Bundle sind getrennt). Bewusst nur 2 DSGVO-Varianten (Standard /
-// Erhöhter Schutz) statt vieler Branchen-Einzelvarianten - deckt sich mit
-// der tatsächlichen Kundenstruktur (Rückfrage 2026-07-29 beantwortet).
+// Client-Bundle sind getrennt). Praxis-Typen am 2026-07-31 wieder in
+// eigene Branchen aufgesplittet (vorher eine gemeinsame "praxis"-Branche) -
+// Rückfrage beantwortet: der echte Referenzvertrag benennt in § 7.2 konkret
+// den jeweiligen Praxis-Typ, eine Sammelformulierung wirkte unpräzise.
 const BRANCHEN = [
   { key: 'buero', label: 'Büro' },
   { key: 'treppenhaus', label: 'Treppenhaus / Wohnanlage' },
   { key: 'gewerbehalle', label: 'Gewerbehalle / Produktion' },
-  { key: 'praxis', label: 'Arzt-/Physio-/Psychologenpraxis' },
+  { key: 'physiotherapiepraxis', label: 'Physiotherapiepraxis' },
+  { key: 'arztpraxis', label: 'Arztpraxis' },
+  { key: 'psychologenpraxis', label: 'Psychologen-/Psychotherapiepraxis' },
   { key: 'sonstiges', label: 'Sonstiges' },
 ];
 const BRANCHE_ZU_DSGVO = {
   buero: 'standard',
   treppenhaus: 'standard',
   gewerbehalle: 'standard',
-  praxis: 'gesundheitsdaten',
+  physiotherapiepraxis: 'physiotherapiepraxis',
+  arztpraxis: 'arztpraxis',
+  psychologenpraxis: 'psychologenpraxis',
   sonstiges: 'standard',
 };
 const DSGVO_BRAUCHT_AVV = {
   standard: false,
-  gesundheitsdaten: true,
+  physiotherapiepraxis: true,
+  arztpraxis: true,
+  psychologenpraxis: true,
 };
 
-export default function DbContractForm({ objectId, defaultLeistungsart, defaultLvDatum, onClose }) {
+export default function DbContractForm({ objectId, sevdeskContactId, defaultLeistungsart, defaultLvDatum, onClose }) {
   const [branche, setBranche] = useState('buero');
   const [leistungsart, setLeistungsart] = useState(defaultLeistungsart || 'Unterhaltsreinigung');
   const [reinigungsintervall, setReinigungsintervall] = useState('');
@@ -48,6 +58,37 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
   const [error, setError] = useState('');
   const [contractId, setContractId] = useState(null);
   const [warnings, setWarnings] = useState([]);
+
+  // Angebot (Anlage 2) - statt Angebotsnummer/-datum manuell einzutippen,
+  // direkt aus einem bereits existierenden sevDesk-Angebot dieses Kunden
+  // übernehmen (Kundenwunsch: schnell, präzise, ohne Doppeleingabe).
+  const [angebotNummer, setAngebotNummer] = useState('');
+  const [angebotDatum, setAngebotDatum] = useState('');
+  const [offers, setOffers] = useState(null); // null = noch nicht geladen
+  const [offersStatus, setOffersStatus] = useState('idle'); // idle | loading | error
+  const [offersError, setOffersError] = useState('');
+
+  async function handleLoadOffers() {
+    setOffersStatus('loading');
+    setOffersError('');
+    try {
+      const token = localStorage.getItem(SEVDESK_TOKEN_KEY);
+      if (!token) throw new Error('Kein sevDesk-Token hinterlegt - erst im Angebots-Dialog verbinden.');
+      if (!sevdeskContactId) throw new Error('Dieser Kunde ist nicht mit einem sevDesk-Kontakt verknüpft.');
+      const list = await listOffersForContact(token, sevdeskContactId);
+      setOffers(list);
+      setOffersStatus('idle');
+    } catch (err) {
+      setOffersError(err?.message || 'Angebote konnten nicht geladen werden');
+      setOffersStatus('error');
+    }
+  }
+
+  function handleSelectOffer(offerId) {
+    const offer = (offers || []).find((o) => String(o.id) === offerId);
+    setAngebotNummer(offer?.orderNumber || '');
+    setAngebotDatum(offer?.orderDate || '');
+  }
 
   const [aiStatus, setAiStatus] = useState('idle'); // idle | running | done | error
   const [aiResult, setAiResult] = useState(null);
@@ -75,6 +116,8 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
         internerAnsprechpartner,
         dsgvoVariante,
         lvDatum: defaultLvDatum || null,
+        angebotNummer: angebotNummer || null,
+        angebotDatum: angebotDatum || null,
       });
       setContractId(result.contract.id);
       setWarnings(result.warnings || []);
@@ -208,7 +251,7 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
           <input type="number" min="1" value={laufzeitMonate} onChange={(e) => setLaufzeitMonate(e.target.value)} />
         </label>
         <label className="modal-field">
-          Zahlungsziel (Werktage, leer = Standard)
+          Zahlungsziel (Tage, leer = Standard)
           <input type="number" min="1" value={zahlungszielWerktage} onChange={(e) => setZahlungszielWerktage(e.target.value)} />
         </label>
         <label className="modal-field">
@@ -216,12 +259,45 @@ export default function DbContractForm({ objectId, defaultLeistungsart, defaultL
           <input value={internerAnsprechpartner} onChange={(e) => setInternerAnsprechpartner(e.target.value)} />
         </label>
       </div>
+      <div className="modal-subheading" style={{ marginTop: 8 }}>
+        Angebot (Anlage 2)
+      </div>
+      {offers === null && (
+        <button type="button" onClick={handleLoadOffers} disabled={offersStatus === 'loading'}>
+          {offersStatus === 'loading' ? 'Lädt Angebote...' : '📄 Bestehendes sevDesk-Angebot laden'}
+        </button>
+      )}
+      {offersError && <div className="modal-message error">{offersError}</div>}
+      {offers !== null && (
+        <label className="modal-field">
+          Angebot auswählen
+          <select defaultValue="" onChange={(e) => handleSelectOffer(e.target.value)}>
+            <option value="">Kein Angebot (§1.2 ohne Anlage 2)</option>
+            {offers.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.orderNumber}
+                {o.orderDate ? ` vom ${o.orderDate.split('-').reverse().join('.')}` : ''}
+                {o.header ? ` — ${o.header}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {angebotNummer && (
+        <p className="modal-hint">
+          Übernommen: {angebotNummer}
+          {angebotDatum ? ` vom ${angebotDatum.split('-').reverse().join('.')}` : ''}
+        </p>
+      )}
+
       <div className="modal-field-row">
         <label className="modal-field">
           Datenschutz-Klausel
           <select value={dsgvoVariante} onChange={(e) => setDsgvoVariante(e.target.value)}>
             <option value="standard">Standard (Büro/Treppenhaus/Gewerbe)</option>
-            <option value="gesundheitsdaten">Erhöhter Schutz — Praxis (Gesundheitsdaten, AVV)</option>
+            <option value="physiotherapiepraxis">Physiotherapiepraxis (Art. 9 DSGVO, AVV)</option>
+            <option value="arztpraxis">Arztpraxis (Art. 9 DSGVO, AVV)</option>
+            <option value="psychologenpraxis">Psychologen-/Psychotherapiepraxis (Art. 9 DSGVO, AVV)</option>
           </select>
         </label>
         {BRANCHE_ZU_DSGVO[branche] !== dsgvoVariante && (

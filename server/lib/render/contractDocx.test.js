@@ -102,7 +102,7 @@ describe('buildContractDocument', () => {
     expect(standard).not.toContain('ärztliche');
 
     const arztpraxis = await extractDocumentXml(
-      await buildContractDocument({ ...BASE_CONTRACT, dsgvoVariante: 'gesundheitsdaten' })
+      await buildContractDocument({ ...BASE_CONTRACT, dsgvoVariante: 'arztpraxis' })
     );
     expect(arztpraxis).toContain('ärztliche');
     expect(arztpraxis).toContain('Auftragsverarbeitung');
@@ -134,8 +134,8 @@ describe('buildContractDocument', () => {
     const xml = await extractDocumentXml(
       await buildContractDocument({ ...BASE_CONTRACT, zahlungszielWerktage: null })
     );
-    expect(xml).toContain('innerhalb von 10 Werktagen zu leisten');
-    expect(xml).not.toContain('null Werktagen');
+    expect(xml).toContain('innerhalb von 14 Tagen zu leisten');
+    expect(xml).not.toContain('null Tagen');
   });
 
   it('zeigt "—" statt erfundener "0,00 EUR" bei fehlender Vergütung (Regressionstest)', async () => {
@@ -167,12 +167,12 @@ describe('buildContractDocument', () => {
         erwartet: ['(1) dieser Vertrag', '(2) Leistungsverzeichnis', '(3) Angebot'],
       },
       {
-        dsgvoVariante: 'gesundheitsdaten',
+        dsgvoVariante: 'physiotherapiepraxis',
         angebotNummer: null,
         erwartet: ['(1) dieser Vertrag', '(2) Vereinbarung zur Auftragsverarbeitung', '(3) Leistungsverzeichnis'],
       },
       {
-        dsgvoVariante: 'gesundheitsdaten',
+        dsgvoVariante: 'physiotherapiepraxis',
         angebotNummer: 'AN-1',
         erwartet: [
           '(1) dieser Vertrag',
@@ -241,15 +241,37 @@ describe('buildContractDocument', () => {
     expect(befristet).not.toContain('von einer Partei schriftlich');
   });
 
-  it('lässt keinen Widerspruch mehr, wer die Vergütung optionaler Zusatzpositionen bestimmt', async () => {
-    // Gefunden beim Rechts-Audit 2026-07-30: § 1.2 behauptete, das Angebot
-    // (Anlage 2) gelte "insbesondere für die Vergütung optionaler
-    // Zusatzpositionen", während § 3.1 und die Rangfolge in § 9.3 beide
-    // sagen, der Vertrag selbst (§ 2) sei maßgeblich.
-    const xml = await extractDocumentXml(
+  it('§1.2: Angebot gilt für die Regelleistung, optionale Angebotspositionen sind ohne § 2-Eintrag ausgeschlossen (Rechts-Audit gegen VT-1265)', async () => {
+    // Zurückgenommene Annahme vom 2026-07-30: "gilt insbesondere für die
+    // Vergütung ..." wurde fälschlich für widersprüchlich zu § 3.1/§ 9.3
+    // gehalten und entfernt. Der echte, unterschriebene Referenzvertrag
+    // VT-1265 (§ 1.2) zeigt: kein Widerspruch - der Satz bezieht sich auf
+    // die im Angebot ursprünglich kalkulierte Regelleistung (identisch zu
+    // § 3.1), nicht auf optionale Positionen. Optionale, im Angebot als
+    // solche ausgewiesene Positionen sind standardmäßig NICHT
+    // Vertragsbestandteil (gesonderte schriftliche Beauftragung nötig) -
+    // nur wenn sie tatsächlich in optionalePositionen (§ 2) aufgenommen
+    // wurden, gelten sie als eingeschlossen. Gefunden/korrigiert 2026-07-31.
+    const ohneOptionale = await extractDocumentXml(
       await buildContractDocument({ ...BASE_CONTRACT, angebotNummer: 'AN-1', angebotDatum: '2026-07-01' })
     );
-    expect(xml).not.toContain('gilt insbesondere für die Vergütung');
-    expect(xml).toContain('Die Vergütung optionaler Zusatzpositionen richtet sich nach § 2');
+    expect(ohneOptionale).toContain('gilt insbesondere für die Vergütung der Unterhaltsreinigungsleistungen');
+    expect(ohneOptionale).toContain(
+      'Die im Angebot als optional ausgewiesenen Positionen sind nicht Gegenstand dieses Vertrages'
+    );
+    expect(ohneOptionale).not.toContain('Die Vergütung optionaler Zusatzpositionen richtet sich nach § 2');
+
+    const mitOptionalen = await extractDocumentXml(
+      await buildContractDocument({
+        ...BASE_CONTRACT,
+        angebotNummer: 'AN-1',
+        angebotDatum: '2026-07-01',
+        optionalePositionen: [{ name: 'Glasreinigung', preisNetto: 100 }],
+      })
+    );
+    expect(mitOptionalen).toContain(
+      'Die Vergütung der im Angebot als optional ausgewiesenen und in diesen Vertrag aufgenommenen Zusatzpositionen richtet sich nach § 2'
+    );
+    expect(mitOptionalen).not.toContain('sind nicht Gegenstand dieses Vertrages');
   });
 });

@@ -11,7 +11,7 @@ const BASE = {
   kunde: { firma: 'Praxis Musterfrau' },
   vertragsnummer: 'VT-2001',
   datum: '2026-07-29',
-  dsgvoVariante: 'gesundheitsdaten',
+  dsgvoVariante: 'physiotherapiepraxis',
 };
 
 describe('buildAvvDocument', () => {
@@ -27,13 +27,15 @@ describe('buildAvvDocument', () => {
   it('enthält die Pflichtangaben nach Art. 28 Abs. 3 DSGVO (Gliederungspunkte)', async () => {
     const xml = await extractDocumentXml(await buildAvvDocument(BASE));
     for (const abschnitt of [
-      'Gegenstand und Dauer der Verarbeitung',
-      'Weisungsgebundenheit',
-      'Vertraulichkeit',
-      'Technische und organisatorische Maßnahmen',
+      'Gegenstand, Dauer und Weisungsbindung',
+      'Art der Daten und Kategorien betroffener Personen',
+      'Pflichten des Auftragsverarbeiters',
+      'Meldung von Datenschutzverletzungen',
       'Unterauftragsverarbeiter',
-      'Löschung und Rückgabe',
-      'Kontrollrechte',
+      'Technische und organisatorische Maßnahmen',
+      'Nachweise und Kontrollrechte',
+      'Beendigung, Rückgabe und Löschung',
+      'Haftung und Schlussbestimmungen',
     ]) {
       expect(xml).toContain(abschnitt);
     }

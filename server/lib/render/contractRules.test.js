@@ -60,16 +60,16 @@ describe('validateContract', () => {
   });
 
   it('warnt bei Branche/Klausel-Mismatch (z.B. Standard-Klausel für Arztpraxis)', () => {
-    const { warnings } = validateContract({ branche: 'praxis', dsgvoVariante: 'standard' });
-    expect(warnings.some((w) => w.includes('praxis'))).toBe(true);
+    const { warnings } = validateContract({ branche: 'arztpraxis', dsgvoVariante: 'standard' });
+    expect(warnings.some((w) => w.includes('arztpraxis'))).toBe(true);
   });
 
   it('warnt nicht, wenn Branche und Klausel zusammenpassen', () => {
     const { warnings } = validateContract({
       kunde: { firma: 'Praxis Muster' },
       objektAdresse: 'Praxisweg 1, 50667 Köln',
-      branche: 'praxis',
-      dsgvoVariante: 'gesundheitsdaten',
+      branche: 'arztpraxis',
+      dsgvoVariante: 'arztpraxis',
       vertragsbeginn: '2026-09-01',
       verguetungNetto: 500,
       reinigungsintervall: '2x wöchentlich',

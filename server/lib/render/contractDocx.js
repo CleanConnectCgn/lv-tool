@@ -23,12 +23,9 @@ import {
   STANDARD_MWST,
   VERSICHERUNGSSUMME_EUR,
   VERTRAGSSTRAFE_EUR,
-  HAFTUNG_SCHLUESSEL_EINFACH_EUR,
-  HAFTUNG_SCHLIESSANLAGE_EUR,
+  SCHLUESSEL_SCHLIESSANLAGE_VERSICHERUNG_EUR,
   RUEGEFRIST_WERKTAGE,
-  RUEGEFRIST_VERBRAUCHER_WERKTAGE,
   NACHERFUELLUNG_WERKTAGE,
-  VERZUGSZINSSATZ_PUNKTE,
   ZAHLUNGSZIEL_WERKTAGE as DEFAULT_ZAHLUNGSZIEL_WERKTAGE,
 } from './contractFields.js';
 import { validateContract } from './contractRules.js';
@@ -223,16 +220,30 @@ export function buildContractDocument(contract) {
     para(`Objekt: ${objektAdresse || '[Objektadresse]'}`),
     clause(
       '1.2',
+      // Gegen den Referenzvertrag VT-1265 abgeglichen (2026-07-31): Angebot
+      // referenziert und mit "gilt insbesondere für die Vergütung ..."
+      // eingeleitet, AVV-Satz VOR dem Ausschluss-Satz, optionale
+      // Angebotspositionen sind standardmäßig NICHT Vertragsbestandteil und
+      // brauchen eine gesonderte schriftliche Beauftragung - nur wenn sie
+      // tatsächlich in optionalePositionen aufgenommen wurden (§2), gelten
+      // sie stattdessen als eingeschlossen und werden dort vergütet.
       `Die konkreten Leistungen, Reinigungsintervalle und Leistungsflächen sind im beigefügten ` +
         `Leistungsverzeichnis (Anlage 1${lvDatum ? `, Stand: ${formatDateDE(lvDatum)}` : ''}) geregelt, das ` +
         `Bestandteil dieses Vertrages ist.` +
         (angebotNummer
           ? ` Das Angebot ${angebotNummer}${angebotDatum ? ` vom ${formatDateDE(angebotDatum)}` : ''} ist als ` +
-            `Anlage 2 Bestandteil dieses Vertrages. Die Vergütung optionaler Zusatzpositionen richtet sich nach ` +
-            `§ 2 dieses Vertrages.`
+            `Anlage 2 Bestandteil dieses Vertrages und gilt insbesondere für die Vergütung der ` +
+            `${leistungsart}sleistungen.`
           : '') +
         (dsgvoInfo.braucht_avv
           ? ' Die Vereinbarung zur Auftragsverarbeitung (AVV) ist als Anlage 3 Bestandteil dieses Vertrages.'
+          : '') +
+        (angebotNummer
+          ? optionalePositionen.length > 0
+            ? ' Die Vergütung der im Angebot als optional ausgewiesenen und in diesen Vertrag aufgenommenen ' +
+              'Zusatzpositionen richtet sich nach § 2 dieses Vertrages.'
+            : ' Die im Angebot als optional ausgewiesenen Positionen sind nicht Gegenstand dieses Vertrages ' +
+              'und bedürfen einer gesonderten schriftlichen Beauftragung.'
           : '')
     ),
     clause(
@@ -240,17 +251,37 @@ export function buildContractDocument(contract) {
       'Dieser Vertrag wird als Werkvertrag im Sinne der §§ 631 ff. BGB geschlossen. Der Auftragnehmer ' +
         'schuldet den vereinbarten Reinigungserfolg, nicht lediglich das Tätigwerden.'
     ),
+    // Fehlte bisher komplett (Rechts-Audit gegen Referenzvertrag VT-1265,
+    // 2026-07-30) - trägt den Vertrag auf § 14 BGB (Unternehmer) fest, statt
+    // die Verbraucherfrage offenzulassen.
+    clause(
+      '1.4',
+      'Der Auftraggeber schließt diesen Vertrag in Ausübung seiner gewerblichen oder selbständigen ' +
+        'beruflichen Tätigkeit und handelt damit als Unternehmer im Sinne des § 14 BGB. Die ' +
+        'Reinigungsleistungen betreffen ausschließlich betrieblich genutzte Räumlichkeiten.'
+    ),
 
     heading('Leistungsumfang und Pflichten', 2),
-    // "Leistung 1:" statt bloß "1." - eine bloße Zahl sah aus wie eine
-    // fehlende Unterklausel §2.1/§2.2 (diese Liste hat eine eigene,
-    // eigenständige Nummerierung, keine §-Klauselnummern). Gefunden beim
-    // Rechts-Audit 2026-07-30.
-    new Paragraph({ children: [new TextRun({ text: `Leistung 1: ${leistungsart}`, bold: true })], spacing: { after: 60 } }),
-    bullet(`Reinigungsintervall: ${reinigungsintervall || '[Intervall]'}`),
-    bullet(`Objekt: ${objektAdresse || '[Objektadresse]'}`),
-    bullet(`Gemäß beigefügtem Leistungsverzeichnis${lvDatum ? ` (Stand: ${formatDateDE(lvDatum)})` : ''}`),
-    bullet('Reinigung außerhalb der regulären Öffnungszeiten, sofern nicht anders vereinbart'),
+    // §2.1/§2.2 als Fließtext statt "Leistung 1: ..." + Bullet-Liste -
+    // gegen den Referenzvertrag VT-1265 abgeglichen (2026-07-30): die
+    // vorherige Bullet-Form existiert im echten Vertrag nicht.
+    clause(
+      '2.1',
+      `Der Auftragnehmer erbringt die im beigefügten Leistungsverzeichnis (Anlage 1) beschriebenen ` +
+        `Reinigungsleistungen. Das Regel-Reinigungsintervall beträgt ${reinigungsintervall || '[Intervall]'}. ` +
+        'Abweichende Intervalle für einzelne Bereiche sind dem Leistungsverzeichnis zu entnehmen. Die ' +
+        'Reinigung erfolgt außerhalb der regulären Öffnungszeiten des Auftraggebers, sofern nicht anders ' +
+        'vereinbart.'
+    ),
+    clause(
+      '2.2',
+      'Die zu erbringenden Einzelleistungen, die betroffenen Bereiche sowie die jeweiligen ' +
+        `Reinigungsintervalle ergeben sich abschließend aus dem Leistungsverzeichnis (Anlage 1)` +
+        `${lvDatum ? `, Stand: ${formatDateDE(lvDatum)}` : ''}. Soweit dort für einzelne Leistungen oder ` +
+        'Bereiche abweichende Intervalle ausgewiesen sind, gehen diese der pauschalen Intervallangabe in ' +
+        '2.1 vor. Die Reinigung erfolgt außerhalb der regulären Öffnungszeiten des Auftraggebers, sofern ' +
+        'nicht anders vereinbart.'
+    ),
 
     // Optionale Positionen (Auftrag Block 8) - verallgemeinert statt fest auf
     // Glasreinigung zugeschnitten, jede Position bekommt einen eigenen
@@ -285,15 +316,12 @@ export function buildContractDocument(contract) {
         'zur Verfügung. Ein Verlust ist dem Auftraggeber unverzüglich zu melden. Der Auftragnehmer haftet für ' +
         'den Verlust oder die Beschädigung von Zugangsmitteln nur, soweit ihn oder seine Erfüllungsgehilfen ' +
         'hierbei Vorsatz oder grobe Fahrlässigkeit trifft. Im Falle einfacher Fahrlässigkeit haftet der ' +
-        `Auftragnehmer beschränkt auf den reinen Wiederbeschaffungswert des einzelnen Schlüssels oder ` +
-        `Transponders (max. ${formatEuro(HAFTUNG_SCHLUESSEL_EINFACH_EUR)}). Eine darüber hinausgehende Haftung ` +
-        'für die Änderung der gesamten Schließanlage ist ausgeschlossen, es sei denn, der Verlust wurde grob ' +
-        'fahrlässig verursacht oder eine Schließanlagenänderung ist - unabhängig vom Verschuldensgrad - zur ' +
-        'Abwehr eines konkreten Sicherheitsrisikos erforderlich; in diesem Fall haftet der Auftragnehmer für ' +
-        'die Kosten einer Teil- ' +
-        `oder Komplettänderung der Schließanlage, begrenzt auf ${formatEuro(HAFTUNG_SCHLIESSANLAGE_EUR)} je ` +
-        'Schadensfall. Bei Vertragsende sind sämtliche Zugangsmittel spätestens am letzten Werktag der ' +
-        'Vertragslaufzeit zurückzugeben.'
+        'Auftragnehmer für den Wiederbeschaffungswert des einzelnen Schlüssels oder Transponders. Ist infolge ' +
+        'des Verlusts eine Teil- oder Komplettänderung der Schließanlage erforderlich, haftet der ' +
+        `Auftragnehmer für die hierfür anfallenden Kosten bis zu einem Betrag von ` +
+        `${formatEuro(SCHLUESSEL_SCHLIESSANLAGE_VERSICHERUNG_EUR)} je Schadensfall; der Auftragnehmer hält ` +
+        'hierfür eine entsprechende Schlüssel- und Schließanlagenversicherung vor. Bei Vertragsende sind ' +
+        'sämtliche Zugangsmittel spätestens am letzten Werktag der Vertragslaufzeit zurückzugeben.'
     ),
     clause(
       '2.4',
@@ -327,7 +355,10 @@ export function buildContractDocument(contract) {
       '3.1',
       `Der Auftragnehmer erhält vom Auftraggeber ein monatliches Pauschalhonorar für die ${leistungsart} ` +
         `in Höhe von ${formatEuro(verguetungNetto)} netto zzgl. ${formatPercent(satz)} % MwSt., entspricht ${formatEuro(brutto)} ` +
-        `brutto.` +
+        `brutto. Mit dieser Vergütung sind sämtliche Reinigungsmaterialien, Reinigungsmittel, ` +
+        'Verbrauchsmaterialien, die Wasseraufbereitung sowie die Anfahrt vollständig abgegolten. ' +
+        'Hygieneverbrauchsmaterial (z.B. Seife, Papierhandtücher, Toilettenpapier) stellt der Auftraggeber, ' +
+        'sofern nicht gesondert schriftlich vereinbart.' +
         (optionalePositionen.length > 0
           ? ' Die optionalen Zusatzpositionen werden gemäß den Angaben in § 2 je Einsatz vergütet.'
           : '')
@@ -336,9 +367,7 @@ export function buildContractDocument(contract) {
       '3.2',
       `Der Auftragnehmer stellt dem Auftraggeber monatlich eine ordnungsgemäße Rechnung. Die Übermittlung ` +
         `erfolgt in Textform, vorzugsweise per E-Mail. Die Vergütung wird mit Zugang der Rechnung angefordert ` +
-        `und ist innerhalb von ${zahlungszielWerktage} Werktagen zu leisten. Bei Zahlungsverzug sind ` +
-        `Verzugszinsen in Höhe von ${VERZUGSZINSSATZ_PUNKTE} Prozentpunkten über dem Basiszinssatz gemäß § 288 ` +
-        'Abs. 2 BGB geschuldet.'
+        `und ist innerhalb von ${zahlungszielWerktage} Tagen zu leisten.`
     ),
     kontodatenTable(),
     new Paragraph({ text: '', spacing: { after: 140 } }),
@@ -367,10 +396,16 @@ export function buildContractDocument(contract) {
     ),
     clause(
       '3.6',
-      'Ändert sich der Tariflohn im Gebäudereinigerhandwerk (Lohngruppe 1 für Unterhaltsreinigung, ' +
-        'Lohngruppe 6 für Glasreinigung) um mehr als 3 %, kann jede Partei eine entsprechende Anpassung in ' +
-        'Textform verlangen. Erhöhungen und Senkungen werden gleichermaßen weitergegeben, maximal 5 % pro ' +
-        'Kalenderjahr, wirksam einen Monat nach Mitteilung. Bei Erhöhungen über 5 % hat jede Partei ein ' +
+      'Ändert sich der Tariflohn im Gebäudereinigerhandwerk (Lohngruppe 1 für Unterhaltsreinigung) um mehr ' +
+        // "in Textform" statt "schriftlich" - dieselbe §309-Nr.-13-BGB-Regel
+        // wie bei §4.1/4.3 (siehe contractDocx.test.js): eine Erklärung des
+        // Auftraggebers gegenüber dem Verwender darf in AGB keine strengere
+        // Form als Textform verlangen. Rechts-Audit 2026-07-30.
+        'als 2 %, kann jede Partei eine entsprechende Anpassung der Vergütung in Textform verlangen. ' +
+        'Gleiches gilt bei einer erheblichen Änderung der gesetzlichen Sozialabgaben oder der Material- und ' +
+        'Betriebskosten von mehr als 2 %. Erhöhungen und Senkungen werden gleichermaßen weitergegeben, ' +
+        'maximal 7 % pro Kalenderjahr, wirksam einen Monat nach Mitteilung in Textform unter Angabe der ' +
+        'maßgeblichen Kostenveränderung. Bei Erhöhungen über 5 % hat der Auftraggeber ein ' +
         'Sonderkündigungsrecht mit einer Frist von einem Monat zum Monatsende.'
     ),
     clause(
@@ -388,8 +423,9 @@ export function buildContractDocument(contract) {
         'ist der Auftragnehmer berechtigt, dem Auftraggeber mit jeder Monatsrechnung eine ' +
         'Abnahmeaufforderung gemäß § 640 Abs. 2 BGB zu erteilen. Der Auftraggeber wird darauf hingewiesen, ' +
         'dass die im jeweiligen Monat erbrachten Reinigungsleistungen als abgenommen gelten, sofern er nicht ' +
-        `innerhalb von ${RUEGEFRIST_WERKTAGE} Werktagen (bei Verbrauchern: ${RUEGEFRIST_VERBRAUCHER_WERKTAGE} ` +
-        'Werktagen) nach Zugang der Rechnung in Textform einen oder mehrere Mängel rügt. Die Rüge muss den ' +
+        `innerhalb von ${RUEGEFRIST_WERKTAGE} Werktagen nach Zugang der Rechnung in Textform einen oder ` +
+        'mehrere Mängel rügt. Auf diese Frist und die Folgen ihres Verstreichens wird der Auftraggeber in ' +
+        'jeder Abnahmeaufforderung ausdrücklich und in hervorgehobener Form hingewiesen. Die Rüge muss den ' +
         'Mangel hinreichend konkret beschreiben (Art und Ort); eine Sammelrüge mehrerer Mängel ist zulässig. ' +
         'Das Zahlungsziel richtet sich nach § 3.2.'
     ),
@@ -397,9 +433,8 @@ export function buildContractDocument(contract) {
       '4.2',
       'Bei verdeckten Mängeln, die bei ordnungsgemäßer Untersuchung nicht erkennbar waren, beginnt die ' +
         'Rügefrist abweichend von 4.1 mit dem Zeitpunkt der Entdeckung; die Rüge muss unverzüglich, spätestens ' +
-        `innerhalb von ${RUEGEFRIST_WERKTAGE} Werktagen nach Entdeckung (bei Verbrauchern: ` +
-        `${RUEGEFRIST_VERBRAUCHER_WERKTAGE} Werktagen), in Textform unter Angabe von Zeit, Ort, Art und Umfang ` +
-        'des Mangels erfolgen.'
+        `innerhalb von ${RUEGEFRIST_WERKTAGE} Werktagen nach Entdeckung, in Textform unter Angabe von Zeit, ` +
+        'Ort, Art und Umfang des Mangels erfolgen.'
     ),
     clause(
       '4.3',
@@ -437,18 +472,21 @@ export function buildContractDocument(contract) {
       '5.1',
       'Der Auftragnehmer haftet für Schäden, die er oder seine eingesetzten Mitarbeiter bei der ' +
         'Vertragsdurchführung am Eigentum des Auftraggebers oder Dritter verursachen. Bei Vorsatz und grober ' +
-        'Fahrlässigkeit haftet der Auftragnehmer unbeschränkt. Bei leicht fahrlässiger Verletzung ' +
-        'wesentlicher Vertragspflichten ist die Haftung auf den vertragstypischen, vorhersehbaren Schaden ' +
-        'begrenzt. Bei leicht fahrlässiger Verletzung nicht vertragswesentlicher Nebenpflichten ist die ' +
-        'Haftung ausgeschlossen.'
+        'Fahrlässigkeit haftet der Auftragnehmer unbeschränkt. Bei leicht fahrlässiger Verletzung von ' +
+        'Vertragspflichten ist die Haftung auf den vertragstypischen, vorhersehbaren Schaden begrenzt, ' +
+        `höchstens jedoch auf die zweifache Jahresvergütung nach § 3.1. Diese Haftungsbegrenzung gilt nicht ` +
+        'für Schäden an Zugangsmitteln und Schließanlagen; hierfür gilt ausschließlich § 2.3.'
     ),
     clause(
       '5.2',
       `Der Auftragnehmer verpflichtet sich, eine gültige Betriebshaftpflichtversicherung mit einer ` +
         `Deckungssumme von mindestens ${formatEuro(VERSICHERUNGSSUMME_EUR)} pauschal für Sach- und ` +
-        'Vermögensschäden vorzuhalten. Der Nachweis ist dem Auftraggeber bei Vertragsschluss sowie auf ' +
-        'jährliches Verlangen unverzüglich vorzulegen. Änderungen oder die Kündigung des ' +
-        'Versicherungsvertrages sind dem Auftraggeber unverzüglich mitzuteilen.'
+        'Vermögensschäden vorzuhalten. Ergänzend hält der Auftragnehmer eine Schlüssel- und ' +
+        `Schließanlagenversicherung mit einer Deckungssumme von mindestens ` +
+        `${formatEuro(SCHLUESSEL_SCHLIESSANLAGE_VERSICHERUNG_EUR)} je Schadensfall vor. Die Nachweise sind ` +
+        'dem Auftraggeber bei Vertragsschluss sowie auf jährliches Verlangen unverzüglich vorzulegen. ' +
+        'Änderungen oder die Kündigung des Versicherungsvertrages sind dem Auftraggeber unverzüglich ' +
+        'mitzuteilen.'
     ),
     clause(
       '5.3',
@@ -565,7 +603,8 @@ export function buildContractDocument(contract) {
         ]
           .map((text, i) => `(${i + 1}) ${text}`)
           .join(', ') +
-        '.'
+        '. Abweichend hiervon gehen die Angaben des Leistungsverzeichnisses (Anlage 1) vor, soweit sie Art, ' +
+        'Umfang, Häufigkeit oder örtlichen Geltungsbereich der einzelnen Reinigungsleistungen betreffen.'
     ),
     clause(
       '9.4',
@@ -574,24 +613,10 @@ export function buildContractDocument(contract) {
         'Bundesrepublik Deutschland.'
     ),
 
-    new Paragraph({ text: '', spacing: { before: 200, after: 200 } }),
+    new Paragraph({ text: '', spacing: { before: 200, after: 260 } }),
     signatureBlock(kunde.firma),
 
     new Paragraph({ text: '', spacing: { before: 260 } }),
-    new Paragraph({
-      children: [
-        new TextRun({
-          text:
-            'Hinweis: Diese Vorlage orientiert sich an einem bereits verwendeten Referenzvertrag, wurde aber ' +
-            'für diesen Generator angepasst und automatisiert befüllt. Insbesondere branchenspezifische ' +
-            'Klauseln (§ 7.2) und neu hinzugefügte Formulierungen sollten vor produktivem Einsatz in einem ' +
-            'neuen Anwendungsfall anwaltlich geprüft werden.',
-          italics: true,
-          size: 16,
-          color: GRAY,
-        }),
-      ],
-    }),
     footerNote(),
   ];
 

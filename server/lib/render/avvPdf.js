@@ -12,6 +12,7 @@ import autoTable from 'jspdf-autotable';
 import { DSGVO_VARIANTEN, AVV_VARIANTEN, AUFTRAGNEHMER } from './contractFields.js';
 import { formatDateDE } from './docxHelpers.js';
 import {
+  TEAL,
   INK,
   GRAY,
   LINE,
@@ -21,216 +22,302 @@ import {
   CONTENT_W,
   headingRow,
   clauseRow,
+  paraRow,
   bulletRow,
-  hinweisRow,
+  boldRow,
   drawLetterhead,
   drawFurniture,
   drawSignatureBlock,
   buildAutoTableBody,
 } from './pdfHelpers.js';
 
+// Zweispaltiger Kopf wie im Hauptvertrag (contractPdf.js drawHeaderBox)
+// statt einer schmalen Vier-Zeilen-Box ohne Adresse - Rechts-Audit
+// 2026-07-31: der Verantwortliche braucht dieselbe vollständige Anschrift
+// wie im Hauptvertrag, nicht nur den Firmennamen.
 function drawHeaderBox(doc, { vertragsnummer, datum, kunde }) {
   const y0 = 24;
   doc.setFont('helvetica', 'bold');
-  doc.setFontSize(15);
+  doc.setFontSize(18);
   doc.setTextColor(...INK);
-  doc.text('Anlage 3 — Vereinbarung zur Auftragsverarbeitung (AVV)', MARGIN_X, y0 + 5, { maxWidth: CONTENT_W });
+  doc.text('Vereinbarung zur Auftragsverarbeitung', MARGIN_X, y0 + 6);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...GRAY);
-  doc.text(`gemäß Art. 28 DSGVO, Bestandteil des Reinigungsvertrags ${vertragsnummer || '[Vertragsnummer]'}`, MARGIN_X, y0 + 11);
+  doc.text('gemäß Art. 28 DSGVO', MARGIN_X, y0 + 12);
 
-  const boxY = y0 + 15;
-  const rowH = 5.5;
-  const boxH = rowH * 4;
+  const kundeAdresseZeilen = [
+    kunde.strasse,
+    [kunde.plz, kunde.ort].filter(Boolean).join(' '),
+    AUFTRAGNEHMER.land === 'Deutschland' ? 'Deutschland' : '',
+  ].filter(Boolean);
+
+  const boxY = y0 + 16;
+  const lineHeight = 4.6;
+  const RIGHT_COL_MIN_H = 24;
+  const boxH = Math.max(RIGHT_COL_MIN_H, 9 + kundeAdresseZeilen.length * lineHeight);
+  doc.setDrawColor(...LINE);
+  doc.setLineWidth(0.2);
   doc.setFillColor(...SEC_BG);
   doc.rect(MARGIN_X, boxY, CONTENT_W, boxH, 'F');
+  doc.setDrawColor(...TEAL);
+  doc.setLineWidth(0.8);
+  doc.line(MARGIN_X, boxY, MARGIN_X, boxY + boxH);
 
-  const row = (label, value, i) => {
-    const ry = boxY + i * rowH + rowH / 2 + 1.2;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(...GRAY);
+  doc.text('VERANTWORTLICHER', MARGIN_X + 4, boxY + 5);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...INK);
+  doc.text(kunde.firma || '[Verantwortlicher]', MARGIN_X + 4, boxY + 9.5, { maxWidth: 90 });
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  kundeAdresseZeilen.forEach((line, i) => {
+    doc.text(line, MARGIN_X + 4, boxY + 13.5 + i * lineHeight, { maxWidth: 90 });
+  });
+
+  const rightX = PAGE_W - MARGIN_X - 4;
+  const infoLine = (label, value, offsetY) => {
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
+    doc.setFontSize(6.5);
     doc.setTextColor(...GRAY);
-    doc.text(label, MARGIN_X + 4, ry);
+    doc.text(label, rightX, boxY + offsetY, { align: 'right' });
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8.5);
     doc.setTextColor(...INK);
-    doc.text(value || '—', MARGIN_X + 70, ry);
+    doc.text(value || '—', rightX, boxY + offsetY + 4.5, { align: 'right' });
   };
-  row('Zu Vertrag', vertragsnummer, 0);
-  row('Datum', formatDateDE(datum), 1);
-  row('Verantwortlicher (Auftraggeber)', kunde.firma, 2);
-  row('Auftragsverarbeiter', AUFTRAGNEHMER.firma, 3);
+  infoLine('Zum Vertrag', vertragsnummer, 5);
+  infoLine('Datum', formatDateDE(datum), 12);
+  infoLine('Auftragsverarbeiter', AUFTRAGNEHMER.firma, 19);
 
   return boxY + boxH + 6;
 }
 
 export function buildAvvPdf(renderedData) {
-  const { kunde = {}, vertragsnummer, datum, dsgvoVariante } = renderedData || {};
+  const { kunde = {}, objektAdresse, vertragsnummer, datum, dsgvoVariante } = renderedData || {};
   const dsgvoInfo = DSGVO_VARIANTEN[dsgvoVariante];
   if (!dsgvoInfo || !dsgvoInfo.braucht_avv) {
     throw new Error(`Für die Datenschutz-Variante "${dsgvoVariante}" ist keine AVV erforderlich`);
   }
   const avvInfo = AVV_VARIANTEN[dsgvoVariante] || {
-    kategorienBetroffenerPersonen: '[bitte ergänzen]',
-    datenarten: '[bitte ergänzen]',
+    betroffenePersonen: '[bitte ergänzen]',
+    datenartenListe: ['[bitte ergänzen]'],
   };
 
   const body = [
-    headingRow(1, 'Gegenstand und Dauer der Verarbeitung'),
+    paraRow(
+      `Der Verantwortliche und der Auftragsverarbeiter schließen diese Vereinbarung zur Auftragsverarbeitung ` +
+        `als Anlage 3 zum Reinigungsvertrag ${vertragsnummer || '[Vertragsnummer]'}. Sie konkretisiert die ` +
+        'datenschutzrechtlichen Pflichten der Parteien und gilt für die gesamte Laufzeit des ' +
+        'Reinigungsvertrages.'
+    ),
+
+    headingRow(1, 'Gegenstand, Dauer und Weisungsbindung'),
     clauseRow(
       '1.1',
-      'Gegenstand dieser Vereinbarung ist die Verarbeitung personenbezogener Daten, von denen der ' +
-        'Auftragsverarbeiter im Rahmen der im Hauptvertrag beschriebenen Reinigungsleistungen zufällig ' +
-        'Kenntnis erlangen kann.'
+      'Gegenstand der Verarbeitung ist der Zugang zu personenbezogenen Daten, der im Rahmen der Erbringung ' +
+        `der im Reinigungsvertrag vereinbarten Unterhaltsreinigung im Objekt ${objektAdresse || '[Objektadresse]'} ` +
+        'unvermeidbar entsteht. Eine eigenständige inhaltliche Verarbeitung personenbezogener Daten durch ' +
+        'den Auftragsverarbeiter findet nicht statt.'
     ),
     clauseRow(
       '1.2',
-      'Die Dauer dieser Vereinbarung entspricht der Laufzeit des Hauptvertrags; sie endet nicht automatisch ' +
-        'vor vollständiger Erfüllung der Pflichten aus § 10 (Löschung und Rückgabe).'
+      'Die Dauer der Verarbeitung entspricht der Laufzeit des Reinigungsvertrages. Sie endet automatisch mit ' +
+        'dessen Beendigung.'
+    ),
+    clauseRow(
+      '1.3',
+      'Der Auftragsverarbeiter verarbeitet personenbezogene Daten ausschließlich im Rahmen der getroffenen ' +
+        'Vereinbarungen und nach dokumentierten Weisungen des Verantwortlichen. Weisungen erfolgen ' +
+        'grundsätzlich in Textform. Mündliche Weisungen sind unverzüglich in Textform zu bestätigen.'
+    ),
+    clauseRow(
+      '1.4',
+      'Ist der Auftragsverarbeiter der Auffassung, dass eine Weisung gegen datenschutzrechtliche Vorschriften ' +
+        'verstößt, hat er den Verantwortlichen unverzüglich darauf hinzuweisen. Er ist berechtigt, die ' +
+        'Durchführung der betreffenden Weisung bis zu deren Bestätigung oder Änderung auszusetzen.'
     ),
 
-    headingRow(2, 'Art und Zweck der Verarbeitung'),
+    headingRow(2, 'Art der Daten und Kategorien betroffener Personen'),
     clauseRow(
       '2.1',
-      'Eine gezielte, planmäßige Verarbeitung personenbezogener Daten ist nicht Gegenstand der Beauftragung. ' +
-        'Der Auftragsverarbeiter erlangt ausschließlich zufällig, im Zuge der eigentlichen Reinigungsleistung, ' +
-        'Kenntnis von personenbezogenen Daten (z.B. durch Sichtkontakt zu Unterlagen, Bildschirmen oder ' +
-        'Datenträgern).'
+      'Im Rahmen der Reinigungstätigkeit kann der Auftragsverarbeiter zufällig Kenntnis von folgenden ' +
+        'Datenarten erlangen:'
     ),
-    clauseRow('2.2', 'Zweck der Verarbeitung ist ausschließlich die ordnungsgemäße Erbringung der vereinbarten Reinigungsleistung.'),
+    ...avvInfo.datenartenListe.map((text) => bulletRow(text)),
+    clauseRow('2.2', `Kategorien betroffener Personen sind ${avvInfo.betroffenePersonen}.`),
+    clauseRow(
+      '2.3',
+      'Den Parteien ist bewusst, dass es sich überwiegend um besondere Kategorien personenbezogener Daten ' +
+        'nach Art. 9 DSGVO handelt, die einem erhöhten Schutzbedarf unterliegen.'
+    ),
 
-    headingRow(3, 'Art der Daten und Kategorien betroffener Personen'),
-    bulletRow(`Kategorien betroffener Personen: ${avvInfo.kategorienBetroffenerPersonen}`),
-    bulletRow(`Art der Daten: ${avvInfo.datenarten}`),
+    headingRow(3, 'Pflichten des Auftragsverarbeiters'),
+    clauseRow(
+      '3.1',
+      'Der Auftragsverarbeiter verarbeitet personenbezogene Daten ausschließlich im Gebiet der Europäischen ' +
+        'Union bzw. des Europäischen Wirtschaftsraums. Eine Übermittlung in ein Drittland findet nicht statt.'
+    ),
+    clauseRow(
+      '3.2',
+      'Der Auftragsverarbeiter verpflichtet alle mit der Leistungserbringung befassten Personen vor Aufnahme ' +
+        'ihrer Tätigkeit schriftlich zur Vertraulichkeit nach Art. 28 Abs. 3 lit. b DSGVO sowie zur Wahrung ' +
+        'des Datengeheimnisses. Die Verpflichtung gilt auch nach Beendigung des Beschäftigungsverhältnisses ' +
+        'fort. Entsprechende Nachweise werden dem Verantwortlichen vor dem ersten Einsatz unaufgefordert ' +
+        'vorgelegt.'
+    ),
+    clauseRow(
+      '3.3',
+      'Die eingesetzten Beschäftigten werden ausdrücklich angewiesen, sichtbare Unterlagen, ' +
+        'Bildschirminhalte, Karteikarten und sonstige Datenträger weder einzusehen noch zu bewegen, zu ' +
+        'kopieren, zu fotografieren oder Dritten zugänglich zu machen. Ordner und Schränke werden nicht ' +
+        'geöffnet.'
+    ),
+    clauseRow(
+      '3.4',
+      'Der Auftragsverarbeiter setzt die nach Art. 32 DSGVO erforderlichen technischen und organisatorischen ' +
+        'Maßnahmen gemäß § 6 dieser Vereinbarung um und hält sie während der Vertragslaufzeit aufrecht.'
+    ),
+    clauseRow(
+      '3.5',
+      'Der Auftragsverarbeiter unterstützt den Verantwortlichen im erforderlichen Umfang bei der Erfüllung ' +
+        'von Betroffenenrechten nach Art. 12 bis 23 DSGVO sowie bei den Pflichten nach Art. 32 bis 36 DSGVO. ' +
+        'Richtet eine betroffene Person ein Auskunfts-, Berichtigungs- oder Löschersuchen unmittelbar an den ' +
+        'Auftragsverarbeiter, leitet dieser das Ersuchen unverzüglich an den Verantwortlichen weiter und ' +
+        'beantwortet es nicht selbst.'
+    ),
+    clauseRow(
+      '3.6',
+      `Der Auftragsverarbeiter benennt eine für den Datenschutz verantwortliche Kontaktperson. Diese ist ` +
+        `erreichbar unter ${AUFTRAGNEHMER.email}.`
+    ),
+    clauseRow(
+      '3.7',
+      'Der Auftragsverarbeiter führt ein Verzeichnis aller Kategorien von Verarbeitungstätigkeiten nach ' +
+        'Art. 30 Abs. 2 DSGVO.'
+    ),
 
-    headingRow(4, 'Weisungsgebundenheit'),
+    headingRow(4, 'Meldung von Datenschutzverletzungen'),
     clauseRow(
       '4.1',
-      'Der Auftragsverarbeiter verarbeitet personenbezogene Daten ausschließlich auf dokumentierte Weisung ' +
-        'des Verantwortlichen (Art. 29, Art. 28 Abs. 3 lit. a DSGVO), es sei denn, er ist nach dem Recht der ' +
-        'Union oder der Mitgliedstaaten zur Verarbeitung verpflichtet.'
+      'Der Auftragsverarbeiter meldet dem Verantwortlichen jede Verletzung des Schutzes personenbezogener ' +
+        'Daten unverzüglich, spätestens jedoch innerhalb von 24 Stunden nach Kenntniserlangung, in Textform.'
     ),
     clauseRow(
       '4.2',
-      'Da die Verarbeitung nach § 2 auf zufällige Kenntnisnahme beschränkt ist, besteht die maßgebliche ' +
-        'Weisung im Kern in der Einhaltung von § 5 (Vertraulichkeit) dieser Vereinbarung sowie der ' +
-        'einschlägigen Klauseln des Hauptvertrags (insbesondere § 7 Datenschutz und Vertraulichkeit).'
+      'Die Meldung enthält, soweit verfügbar, eine Beschreibung der Art der Verletzung, die betroffenen ' +
+        'Datenkategorien, die ungefähre Zahl betroffener Personen, die wahrscheinlichen Folgen sowie die ' +
+        'ergriffenen oder vorgeschlagenen Abhilfemaßnahmen.'
+    ),
+    clauseRow(
+      '4.3',
+      'Der Auftragsverarbeiter unterstützt den Verantwortlichen bei dessen Melde- und ' +
+        'Benachrichtigungspflichten nach Art. 33 und 34 DSGVO.'
     ),
 
-    headingRow(5, 'Vertraulichkeit'),
+    headingRow(5, 'Unterauftragsverarbeiter'),
     clauseRow(
       '5.1',
-      'Der Auftragsverarbeiter stellt sicher, dass sich alle zur Verarbeitung befugten Personen zur ' +
-        'Vertraulichkeit verpflichtet haben (Art. 28 Abs. 3 lit. b, Art. 29, Art. 32 Abs. 4 DSGVO) oder einer ' +
-        'angemessenen gesetzlichen Verschwiegenheitspflicht unterliegen, bevor sie erstmals eingesetzt werden.'
+      'Der Einsatz weiterer Auftragsverarbeiter (Subunternehmer im Sinne des § 2.6 des Reinigungsvertrages) ' +
+        'bedarf der vorherigen gesonderten schriftlichen Genehmigung des Verantwortlichen.'
     ),
-
-    headingRow(6, 'Technische und organisatorische Maßnahmen'),
+    clauseRow('5.2', 'Zum Zeitpunkt des Vertragsschlusses werden keine Unterauftragsverarbeiter eingesetzt.'),
     clauseRow(
-      '6.1',
-      'Der Auftragsverarbeiter trifft die zur Gewährleistung eines dem Risiko angemessenen Schutzniveaus ' +
-        'erforderlichen technischen und organisatorischen Maßnahmen gemäß Art. 32 DSGVO. Dazu zählen ' +
-        'insbesondere: schriftliche Vertraulichkeitsverpflichtung des Personals vor Tätigkeitsbeginn (siehe ' +
-        '§ 5), Anweisung, sichtbare Unterlagen/Bildschirminhalte/Datenträger weder zu lesen noch zu kopieren, ' +
-        'zu fotografieren oder zu bewegen, sowie eine unverzügliche interne Meldekette bei erkannten ' +
-        'Auffälligkeiten (siehe § 9).'
+      '5.3',
+      'Beabsichtigt der Auftragsverarbeiter den Einsatz eines Unterauftragsverarbeiters, teilt er dies dem ' +
+        'Verantwortlichen mindestens vier Wochen vorher in Textform mit. Der Verantwortliche kann der ' +
+        'Beauftragung innerhalb von zwei Wochen aus wichtigem datenschutzrechtlichem Grund widersprechen.'
     ),
     clauseRow(
-      '6.2',
-      'Der Auftragsverarbeiter weist die Umsetzung der Maßnahmen auf Verlangen des Verantwortlichen nach ' +
-        '(siehe § 11).'
+      '5.4',
+      'Der Auftragsverarbeiter verpflichtet einen Unterauftragsverarbeiter vertraglich auf dieselben ' +
+        'Datenschutzpflichten, die ihn selbst aus dieser Vereinbarung treffen, und haftet für dessen Verhalten ' +
+        'wie für eigenes.'
     ),
 
-    headingRow(7, 'Unterauftragsverarbeiter'),
+    headingRow(6, 'Technische und organisatorische Maßnahmen (Art. 32 DSGVO)'),
+    paraRow('Der Auftragsverarbeiter trifft insbesondere die folgenden Maßnahmen:'),
+    boldRow('Zutrittskontrolle'),
+    bulletRow('Zugangsmittel werden namentlich dokumentiert ausgegeben und zurückgenommen'),
+    bulletRow('Schlüssel und Transponder werden ausschließlich an namentlich benannte, verpflichtete Beschäftigte ausgegeben'),
+    bulletRow('Weitergabe von Zugangsmitteln an Dritte ist untersagt'),
+    bulletRow('Verlust ist unverzüglich zu melden; Regelungen nach § 2.3 des Reinigungsvertrages gelten ergänzend'),
+    boldRow('Zugangs- und Zugriffskontrolle'),
+    bulletRow('Keine Nutzung von IT-Systemen, Endgeräten oder Netzwerken des Verantwortlichen'),
+    bulletRow('Keine Einsichtnahme in Unterlagen, Bildschirminhalte oder Datenträger'),
+    bulletRow('Verbot der Anfertigung von Fotografien, Kopien oder Scans in den Räumlichkeiten'),
+    bulletRow('Private Mobiltelefone dürfen in Behandlungs- und Praxisräumen nicht zur Bildaufnahme verwendet werden'),
+    boldRow('Organisation und Personal'),
+    bulletRow('Schriftliche Verpflichtung auf Vertraulichkeit und Datengeheimnis vor Tätigkeitsbeginn'),
+    bulletRow('Datenschutzunterweisung bei Einstellung und danach mindestens jährlich, dokumentiert'),
+    bulletRow('Feste, dem Verantwortlichen benannte Einsatzkräfte; Wechsel werden vorab mitgeteilt'),
+    bulletRow('Führung einer Einsatzdokumentation mit Datum, Uhrzeit und eingesetzten Personen'),
+    boldRow('Weitergabe- und Auftragskontrolle'),
+    bulletRow('Keine Weitergabe personenbezogener Daten an Dritte'),
+    bulletRow('Kein Transport von Unterlagen oder Datenträgern aus den Räumlichkeiten'),
+    bulletRow('Aufgefundene Unterlagen werden unberührt gelassen und dem Verantwortlichen gemeldet'),
+    bulletRow('Keine Entsorgung von Papierabfällen aus Bereichen mit Patientenbezug ohne ausdrückliche Weisung; Aktenvernichtung ist nicht Gegenstand des Auftrags'),
+
+    headingRow(7, 'Nachweise und Kontrollrechte'),
     clauseRow(
       '7.1',
-      'Setzt der Auftragsverarbeiter gemäß § 2.6 des Hauptvertrags Subunternehmer ein, gilt dies als ' +
-        'allgemeine Genehmigung zur Beauftragung weiterer Auftragsverarbeiter im Sinne von Art. 28 Abs. 2 ' +
-        'DSGVO. Der Auftragsverarbeiter informiert den Verantwortlichen über jede beabsichtigte Änderung in ' +
-        'Bezug auf die Hinzuziehung oder Ersetzung solcher Subunternehmer, sodass der Verantwortliche ' +
-        'ausreichend Zeit hat, gegen diese Änderungen Einspruch zu erheben.'
+      'Der Auftragsverarbeiter weist dem Verantwortlichen auf Anforderung die Einhaltung der in dieser ' +
+        'Vereinbarung festgelegten Pflichten in geeigneter Weise nach.'
     ),
     clauseRow(
       '7.2',
-      'Der Auftragsverarbeiter verpflichtet eingesetzte Subunternehmer auf die gleichen Datenschutzpflichten, ' +
-        'wie sie sich aus dieser Vereinbarung ergeben.'
+      'Der Verantwortliche ist berechtigt, sich nach vorheriger Anmeldung mit angemessener Frist von der ' +
+        'Einhaltung der Maßnahmen zu überzeugen. Kontrollen erfolgen zu üblichen Geschäftszeiten und ohne ' +
+        'vermeidbare Störung des Betriebsablaufs.'
+    ),
+    clauseRow(
+      '7.3',
+      'Der Auftragsverarbeiter stellt dem Verantwortlichen alle erforderlichen Informationen zum Nachweis der ' +
+        'Einhaltung der Pflichten nach Art. 28 DSGVO zur Verfügung.'
     ),
 
-    headingRow(8, 'Unterstützung bei der Wahrnehmung von Betroffenenrechten'),
+    headingRow(8, 'Beendigung, Rückgabe und Löschung'),
     clauseRow(
       '8.1',
-      'Soweit möglich, unterstützt der Auftragsverarbeiter den Verantwortlichen mit geeigneten technischen ' +
-        'und organisatorischen Maßnahmen bei der Erfüllung von dessen Pflicht zur Beantwortung von Anträgen ' +
-        'auf Wahrnehmung der Betroffenenrechte (Art. 12 bis 22 DSGVO). Da der Auftragsverarbeiter selbst ' +
-        'keine strukturierten personenbezogenen Daten des Verantwortlichen speichert (siehe § 2), beschränkt ' +
-        'sich dies praktisch auf die unverzügliche Weiterleitung entsprechender Anfragen an den ' +
-        'Verantwortlichen.'
+      'Nach Beendigung des Reinigungsvertrages gibt der Auftragsverarbeiter sämtliche überlassenen ' +
+        'Zugangsmittel, Unterlagen und etwaige Aufzeichnungen unverzüglich, spätestens am letzten Werktag der ' +
+        'Vertragslaufzeit, zurück.'
+    ),
+    clauseRow(
+      '8.2',
+      'Etwaige beim Auftragsverarbeiter vorhandene Aufzeichnungen mit Personenbezug werden nach Wahl des ' +
+        'Verantwortlichen zurückgegeben oder datenschutzkonform gelöscht bzw. vernichtet. Die Löschung wird ' +
+        'auf Verlangen in Textform bestätigt.'
+    ),
+    clauseRow(
+      '8.3',
+      'Gesetzliche Aufbewahrungspflichten bleiben unberührt. Für die Dauer der Aufbewahrung gelten die ' +
+        'Pflichten dieser Vereinbarung fort.'
     ),
 
-    headingRow(9, 'Unterstützung bei Sicherheit der Verarbeitung und Meldepflichten'),
+    headingRow(9, 'Haftung und Schlussbestimmungen'),
+    clauseRow('9.1', 'Für die Haftung gelten die Regelungen des Reinigungsvertrages, insbesondere § 5, sowie Art. 82 DSGVO.'),
+    clauseRow('9.2', 'Die Vertragsstrafenregelung nach § 7.5 des Reinigungsvertrages bleibt unberührt.'),
     clauseRow(
-      '9.1',
-      'Stellt der Auftragsverarbeiter bei seiner Tätigkeit Anhaltspunkte für eine Verletzung des Schutzes ' +
-        'personenbezogener Daten fest (z.B. offensichtlich unbefugten Zugriff Dritter auf Unterlagen oder ' +
-        'IT-Systeme), informiert er den Verantwortlichen unverzüglich, spätestens innerhalb von 24 Stunden ' +
-        'nach Kenntnisnahme (siehe bereits § 7 des Hauptvertrags), damit dieser seinen Melde- und ' +
-        'Benachrichtigungspflichten nach Art. 33, 34 DSGVO nachkommen kann.'
-    ),
-    clauseRow(
-      '9.2',
-      'Der Auftragsverarbeiter unterstützt den Verantwortlichen auf Anfrage bei der Erstellung von ' +
-        'Datenschutz-Folgenabschätzungen (Art. 35 DSGVO), soweit die Verarbeitung durch den ' +
-        'Auftragsverarbeiter davon betroffen ist.'
-    ),
-
-    headingRow(10, 'Löschung und Rückgabe'),
-    clauseRow(
-      '10.1',
-      'Der Auftragsverarbeiter verarbeitet und speichert im Rahmen seiner Tätigkeit grundsätzlich keine ' +
-        'personenbezogenen Daten des Verantwortlichen in eigenen Systemen (siehe § 2). Sollten im Einzelfall ' +
-        'dennoch Aufzeichnungen entstehen (z.B. Fotodokumentation eines Schadensfalls, die zufällig ' +
-        'personenbezogene Daten enthält), löscht der Auftragsverarbeiter diese unverzüglich nach Wegfall des ' +
-        'ursprünglichen Zwecks, spätestens mit Beendigung des Hauptvertrags, sofern keine gesetzliche ' +
-        'Aufbewahrungspflicht entgegensteht.'
-    ),
-
-    headingRow(11, 'Kontrollrechte des Verantwortlichen'),
-    clauseRow(
-      '11.1',
-      'Der Verantwortliche hat das Recht, die Einhaltung der in dieser Vereinbarung festgelegten Pflichten ' +
-        'beim Auftragsverarbeiter zu überprüfen bzw. durch beauftragte Dritte überprüfen zu lassen, ' +
-        'insbesondere durch Einholung von Auskünften und Einsicht in die Nachweise über die Umsetzung der ' +
-        'technischen und organisatorischen Maßnahmen (§ 6). Kontrollen vor Ort werden mit angemessenem ' +
-        'zeitlichem Vorlauf (mindestens 5 Werktage) schriftlich angekündigt und finden während der üblichen ' +
-        'Geschäftszeiten statt.'
-    ),
-
-    headingRow(12, 'Haftung'),
-    clauseRow(
-      '12.1',
-      'Für die Haftung gelten die Regelungen des Hauptvertrags (§ 5 Haftung und Versicherung) entsprechend, ' +
-        'soweit diese Vereinbarung keine abweichenden Regelungen trifft. Zwingende gesetzliche ' +
-        'Haftungsvorschriften der DSGVO (insbesondere Art. 82 DSGVO) bleiben unberührt.'
-    ),
-
-    headingRow(13, 'Schlussbestimmungen'),
-    clauseRow(
-      '13.1',
-      'Diese Vereinbarung ist Bestandteil des Hauptvertrags. Bei Widersprüchen zwischen dieser Vereinbarung ' +
-        'und dem Hauptvertrag gehen die Regelungen dieser Vereinbarung in datenschutzrechtlichen Fragen vor.'
+      '9.3',
+      'Änderungen und Ergänzungen dieser Vereinbarung bedürfen der Schriftform. Dies gilt auch für die ' +
+        'Aufhebung dieses Schriftformerfordernisses.'
     ),
     clauseRow(
-      '13.2',
-      'Endet der Hauptvertrag, endet auch diese Vereinbarung, unbeschadet fortwirkender Pflichten nach § 10 ' +
-        '(Löschung und Rückgabe) und § 5 (Vertraulichkeit, die gemäß § 7.1 des Hauptvertrags für fünf Jahre ' +
-        'nach Vertragsende fortgilt).'
+      '9.4',
+      'Sollte eine Bestimmung dieser Vereinbarung unwirksam sein, bleibt die Wirksamkeit der übrigen ' +
+        'Bestimmungen unberührt. Die Parteien ersetzen die unwirksame Bestimmung durch eine wirksame ' +
+        'Regelung, die dem verfolgten Zweck am nächsten kommt.'
     ),
-
-    hinweisRow(
-      'Hinweis: Diese Vorlage ist eine allgemeine, branchenspezifisch angepasste AVV nach Art. 28 DSGVO, keine ' +
-        'Einzelfallberatung - vor produktivem Einsatz in einem neuen Anwendungsfall anwaltlich prüfen lassen.'
+    clauseRow(
+      '9.5',
+      'Bei Widersprüchen zwischen dieser Vereinbarung und dem Reinigungsvertrag gehen die Regelungen dieser ' +
+        'Vereinbarung vor, soweit sie den Datenschutz betreffen.'
     ),
+    clauseRow('9.6', 'Es gilt das Recht der Bundesrepublik Deutschland. Gerichtsstand ist, soweit gesetzlich zulässig, Köln.'),
   ];
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
@@ -239,7 +326,7 @@ export function buildAvvPdf(renderedData) {
 
   autoTable(doc, buildAutoTableBody(doc, { startY, body }));
 
-  drawSignatureBlock(doc, kunde.firma);
+  drawSignatureBlock(doc, kunde.firma, { leftLabel: 'Auftragsverarbeiter', rightLabel: 'Verantwortlicher' });
   drawFurniture(doc);
   return Buffer.from(doc.output('arraybuffer'));
 }

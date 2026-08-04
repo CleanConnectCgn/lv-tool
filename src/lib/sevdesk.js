@@ -126,6 +126,41 @@ export async function getNextOfferNumber(token) {
   return data?.objects || null;
 }
 
+// Bereits erstellte Angebote (sevDesk-Orders, orderType "AN") eines Kunden -
+// für den Vertragsgenerator (DbContractForm.jsx), damit Angebotsnummer/-datum
+// aus einem echten, bereits existierenden Angebot übernommen werden können,
+// statt sie manuell einzutippen (dafür gab es bisher gar kein Feld).
+export async function listOffersForContact(token, contactId) {
+  const data = await sevRequest(
+    token,
+    'GET',
+    `/Order?contact[id]=${contactId}&contact[objectName]=Contact&orderType=AN&limit=100`
+  );
+  const list = data?.objects ?? [];
+  return list
+    .map((o) => ({
+      id: o.id,
+      orderNumber: o.orderNumber || '',
+      // Auf ISO-Datum (YYYY-MM-DD) reduziert, wie es contractDocx.js
+      // erwartet - sevDesk liefert orderDate mal als Unix-Timestamp (Sekunden,
+      // z.B. beim Schreiben über die Factory), mal als ISO-String beim Lesen
+      // des Objekts, daher beide Formen abfangen statt eine anzunehmen.
+      orderDate: parseSevDeskDate(o.orderDate),
+      header: o.header || '',
+    }))
+    .filter((o) => o.orderNumber)
+    .sort((a, b) => (b.orderDate || '').localeCompare(a.orderDate || ''));
+}
+
+function parseSevDeskDate(value) {
+  if (!value) return null;
+  if (/^\d+$/.test(String(value))) {
+    return new Date(Number(value) * 1000).toISOString().slice(0, 10);
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
 function formatDateDE(isoStr) {
   if (!isoStr) return '';
   const [y, m, d] = isoStr.split('-');

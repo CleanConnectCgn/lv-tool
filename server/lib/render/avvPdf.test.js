@@ -19,7 +19,7 @@ const BASE = {
   kunde: { firma: 'Praxis Musterfrau' },
   vertragsnummer: 'VT-2001',
   datum: '2026-07-29',
-  dsgvoVariante: 'gesundheitsdaten',
+  dsgvoVariante: 'physiotherapiepraxis',
 };
 
 describe('buildAvvPdf', () => {
@@ -36,13 +36,15 @@ describe('buildAvvPdf', () => {
   it('enthält die Pflichtangaben nach Art. 28 Abs. 3 DSGVO (Gliederungspunkte)', async () => {
     const text = await extractText(await buildAvvPdf(BASE));
     for (const abschnitt of [
-      'Gegenstand und Dauer der Verarbeitung',
-      'Weisungsgebundenheit',
-      'Vertraulichkeit',
-      'Technische und organisatorische Maßnahmen',
+      'Gegenstand, Dauer und Weisungsbindung',
+      'Art der Daten und Kategorien betroffener Personen',
+      'Pflichten des Auftragsverarbeiters',
+      'Meldung von Datenschutzverletzungen',
       'Unterauftragsverarbeiter',
-      'Löschung und Rückgabe',
-      'Kontrollrechte',
+      'Technische und organisatorische Maßnahmen',
+      'Nachweise und Kontrollrechte',
+      'Beendigung, Rückgabe und Löschung',
+      'Haftung und Schlussbestimmungen',
     ]) {
       expect(text).toContain(abschnitt);
     }
@@ -55,9 +57,9 @@ describe('buildAvvPdf', () => {
 
   it('zeigt die Kopf-Infobox mit Vertragsnummer, Datum, Verantwortlichem und Auftragsverarbeiter', async () => {
     const text = await extractText(await buildAvvPdf(BASE));
-    expect(text).toContain('Zu Vertrag');
+    expect(text).toContain('Zum Vertrag');
     expect(text).toContain('29.07.2026');
-    expect(text).toContain('Verantwortlicher (Auftraggeber)');
+    expect(text).toContain('Verantwortlicher');
     expect(text).toContain('Auftragsverarbeiter');
     expect(text).toContain('Clean Connect Gebäudereinigung UG');
   });
@@ -78,8 +80,10 @@ describe('buildAvvPdf', () => {
       kunde: { firma: 'Eine Ganz Besonders Lange Firmenbezeichnung Gesellschaft mit beschränkter Haftung & Co. KG' },
     });
     const text = await extractText(buffer);
-    expect(text).toContain('Auftragnehmer');
-    expect(text).toContain('Auftraggeber');
+    // AVV nutzt "Auftragsverarbeiter"/"Verantwortlicher" statt "Auftragnehmer"/
+    // "Auftraggeber" (Rechts-Audit gegen die echte Referenz-AVV, 2026-07-31).
+    expect(text).toContain('Auftragsverarbeiter');
+    expect(text).toContain('Verantwortlicher');
     expect(text).toMatch(/Clean Connect Gebäudereinigung UG · Amtsgericht Köln/);
   });
 });

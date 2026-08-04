@@ -109,7 +109,10 @@ export function drawFurniture(doc) {
 // überlappte mit der Rollen-Bezeichnung bzw. der Fußzeile, sobald ein Name
 // zweizeilig umbrach. Zeilenzahl wird jetzt vorher mit splitTextToSize
 // gemessen, Boxhöhe und Fußzeilen-Abstand richten sich danach.
-export function drawSignatureBlock(doc, kundeFirma) {
+// leftLabel/rightLabel: siehe docxHelpers.js signatureBlock() - Hauptvertrag
+// "als Auftragnehmer"/"als Auftraggeber", AVV "Auftragsverarbeiter"/
+// "Verantwortlicher" (ohne "als").
+export function drawSignatureBlock(doc, kundeFirma, { leftLabel = 'als Auftragnehmer', rightLabel = 'als Auftraggeber' } = {}) {
   const colW = CONTENT_W / 2 - 4;
   const nameWidth = colW - 6;
   const lineH = 3.6;
@@ -150,8 +153,31 @@ export function drawSignatureBlock(doc, kundeFirma) {
     doc.setTextColor(...GRAY);
     doc.text(title, x + 3, ty + 0.5);
   };
-  cell(MARGIN_X, 'Auftragnehmer', leftLines);
-  cell(MARGIN_X + colW + 8, 'Auftraggeber', rightLines);
+  cell(MARGIN_X, leftLabel, leftLines);
+  cell(MARGIN_X + colW + 8, rightLabel, rightLines);
+}
+
+// Bug gefunden 2026-07-31 (Kundenfeedback): jspdf-autotable bricht Seiten
+// rein nach verfügbarem Platz um, ohne Rücksicht auf Sinnzusammenhänge - eine
+// §-Überschrift (oder eine AVV-Unterüberschrift wie "Zutrittskontrolle")
+// landete dadurch manchmal als letzte Zeile einer Seite, der zugehörige Text
+// erst auf der nächsten. Erkennung rein über die Zeilen-Formatierung (fett -
+// nutzen NUR heading()/boldRow(), nie clause()/bullet()/para()), kein
+// Content-Pattern nötig. willDrawCell ist der von jspdf-autotable dafür
+// vorgesehene Hook: erlaubt einen manuellen Seitenumbruch VOR dem Zeichnen
+// einer Zeile, wenn nicht mehr genug Platz für die Überschrift plus
+// mindestens eine Textzeile bleibt.
+function avoidOrphanedHeadings(data) {
+  if (data.section !== 'body') return;
+  const isHeadingRow = data.row.raw?.[0]?.styles?.fontStyle === 'bold';
+  if (!isHeadingRow) return;
+  const pageH = data.doc.internal.pageSize.getHeight();
+  const remaining = pageH - MARGIN_BOTTOM - data.cursor.y;
+  const MIN_SPACE_FOR_HEADING_PLUS_LINE = 26;
+  if (remaining < MIN_SPACE_FOR_HEADING_PLUS_LINE) {
+    data.doc.addPage();
+    data.cursor.y = MARGIN_TOP;
+  }
 }
 
 export function buildAutoTableBody(doc, { startY, body }) {
@@ -169,5 +195,6 @@ export function buildAutoTableBody(doc, { startY, body }) {
       cellPadding: { top: 1, bottom: 1, left: 0, right: 0 },
     },
     columnStyles: { 0: { cellWidth: CONTENT_W } },
+    willDrawCell: avoidOrphanedHeadings,
   };
 }

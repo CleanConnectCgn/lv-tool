@@ -117,7 +117,12 @@ export function footerNote() {
   });
 }
 
-export function signatureBlock(kundeFirma) {
+// leftLabel/rightLabel: Referenzvertrag VT-1265 nutzt im Hauptvertrag "als
+// Auftragnehmer"/"als Auftraggeber", in der AVV dagegen "Auftragsverarbeiter"/
+// "Verantwortlicher" (ohne "als") - beide Dokumente teilten sich vorher
+// dieselben hartcodierten Auftragnehmer/Auftraggeber-Label, was für die AVV
+// falsch war (Rechts-Audit 2026-07-31).
+export function signatureBlock(kundeFirma, { leftLabel = 'als Auftragnehmer', rightLabel = 'als Auftraggeber' } = {}) {
   const cell = (title, name) =>
     new TableCell({
       width: { size: 50, type: WidthType.PERCENTAGE },
@@ -141,8 +146,8 @@ export function signatureBlock(kundeFirma) {
     rows: [
       new TableRow({
         children: [
-          cell('Auftragnehmer', `${AUFTRAGNEHMER.firma} · ${AUFTRAGNEHMER.geschaeftsfuehrung} (Geschäftsführer)`),
-          cell('Auftraggeber', kundeFirma || '[Auftraggeber]'),
+          cell(leftLabel, `${AUFTRAGNEHMER.firma} · ${AUFTRAGNEHMER.geschaeftsfuehrung} (Geschäftsführer)`),
+          cell(rightLabel, kundeFirma || '[Auftraggeber]'),
         ],
       }),
     ],

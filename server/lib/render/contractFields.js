@@ -18,7 +18,11 @@ export const AUFTRAGNEHMER = {
   ort: 'Köln',
   land: 'Deutschland',
   telefon: '+49 221 95490625',
-  email: 'service@reinigungsdienstcleanconnect.de',
+  // Gegen den echten, unterschriebenen Referenzvertrag VT-1265 (Briefkopf +
+  // § 2.7) abgeglichen (2026-07-31) - die vorherige Adresse
+  // (service@reinigungsdienstcleanconnect.de) war eine andere, nicht die im
+  // aktuell genutzten Vertrag stehende Domain.
+  email: 'service@cleanconnect.de',
   web: 'www.cleanconnect.de',
   amtsgericht: 'Amtsgericht Köln',
   hrNummer: 'HRB 119725',
@@ -30,17 +34,29 @@ export const AUFTRAGNEHMER = {
   bic: 'COLSDE33XXX',
 };
 
-// Feste Vertragsstandards aus dem Referenzvertrag - im Formular bewusst nicht
-// pro Vertrag änderbar, damit sie nicht versehentlich verwässert werden.
+// Feste Vertragsstandards - abgeglichen gegen den echten, unterschriebenen
+// Referenzvertrag VT-1265 (Rafael Weiss, Anlage 3 + Hauptvertrag,
+// 30.07.2026). Im Formular bewusst nicht pro Vertrag änderbar, damit sie
+// nicht versehentlich verwässert werden.
 export const VERSICHERUNGSSUMME_EUR = 1_000_000;
 export const VERTRAGSSTRAFE_EUR = 2500;
-export const HAFTUNG_SCHLUESSEL_EINFACH_EUR = 50;
-export const HAFTUNG_SCHLIESSANLAGE_EUR = 2500;
-export const RUEGEFRIST_WERKTAGE = 10;
-export const RUEGEFRIST_VERBRAUCHER_WERKTAGE = 14;
+// § 2.3/§ 5.2 im Referenzvertrag: EINE Schlüssel-/Schließanlagenversicherung
+// mit einer Deckungssumme, nicht zwei getrennte Haftungshöchstbeträge - eine
+// frühere Zwei-Stufen-Fassung (50 EUR einfacher Schlüssel / 2.500 EUR
+// Schließanlage) wich hiervon ab und wurde beim Rechts-Audit gegen VT-1265
+// verworfen (2026-07-30).
+export const SCHLUESSEL_SCHLIESSANLAGE_VERSICHERUNG_EUR = 10_000;
+// § 4.1/4.2 im Referenzvertrag: 14 Werktage, einheitlich (der Vertrag
+// erklärt den Auftraggeber in § 1.4 ausdrücklich zum Unternehmer i.S.v.
+// § 14 BGB - eine gesonderte, kürzere Verbraucher-Frist ist daher hier nicht
+// vorgesehen).
+export const RUEGEFRIST_WERKTAGE = 14;
 export const NACHERFUELLUNG_WERKTAGE = 5;
-export const VERZUGSZINSSATZ_PUNKTE = 9;
-export const ZAHLUNGSZIEL_WERKTAGE = 10;
+// § 3.2 im Referenzvertrag nennt (Kalender-)Tage, nicht Werktage, und
+// erwähnt Verzugszinsen an dieser Stelle nicht gesondert (§ 288 BGB gilt
+// ohnehin gesetzlich) - Feldname bleibt ZAHLUNGSZIEL_WERKTAGE (bestehende
+// API/DB-Feldbezeichnung), der gerenderte Text spricht aber von "Tagen".
+export const ZAHLUNGSZIEL_WERKTAGE = 14;
 
 export const STANDARD_MWST = 19;
 
@@ -52,15 +68,20 @@ export const CONTRACT_TEMPLATE_VERSION = 'contract-v2-2026-07-29';
 
 // Bewusst nur zwei Kategorien, keine feinere Branchenausdifferenzierung -
 // deckt sich mit der tatsächlichen Kundenstruktur (überwiegend Büro/
-// Treppenhaus, gelegentlich Arzt-/Physio-/Psychologenpraxen). Mehr
-// Varianten würden die Wahrscheinlichkeit einer Fehlauswahl erhöhen, ohne
-// echten Nutzen für nicht vorkommende Fälle (Kanzlei, Kindergarten o.ä.) -
-// bewusst entfernt (Rückfrage 2026-07-29 beantwortet).
+// Treppenhaus, gelegentlich Arzt-/Physio-/Psychologenpraxen). Kanzlei/
+// Kindergarten bleiben bewusst außen vor (Rückfrage 2026-07-29 beantwortet).
+// Die drei Praxis-Typen wurden am 2026-07-31 wieder in eigene Branchen
+// aufgesplittet (vorher eine gemeinsame "praxis"-Branche) - Rückfrage
+// beantwortet: der echte Referenzvertrag VT-1265 benennt in § 7.2 konkret
+// "Physiotherapiepraxis", eine verallgemeinerte Sammelformulierung wirkte
+// beim tatsächlichen Kunden unpräzise/unpassend.
 export const BRANCHEN = [
   { key: 'buero', label: 'Büro' },
   { key: 'treppenhaus', label: 'Treppenhaus / Wohnanlage' },
   { key: 'gewerbehalle', label: 'Gewerbehalle / Produktion' },
-  { key: 'praxis', label: 'Arzt-/Physio-/Psychologenpraxis' },
+  { key: 'physiotherapiepraxis', label: 'Physiotherapiepraxis' },
+  { key: 'arztpraxis', label: 'Arztpraxis' },
+  { key: 'psychologenpraxis', label: 'Psychologen-/Psychotherapiepraxis' },
   { key: 'sonstiges', label: 'Sonstiges' },
 ];
 
@@ -96,26 +117,54 @@ unbefugten Zugriff Dritter auf Unterlagen oder IT-Systeme), informiert er den Au
 unverzüglich, spätestens innerhalb von 24 Stunden nach Kenntnisnahme, damit dieser seinen
 Meldepflichten nach Art. 33 DSGVO nachkommen kann.`,
   },
-  // Einzige Sonder-Variante, deckt Arzt-, Physiotherapie- und
-  // Psychologenpraxen gemeinsam ab (statt einzelner Branchen-Varianten) -
-  // rechtlich tragfähig, weil alle drei über Art. 9 DSGVO (Gesundheitsdaten)
-  // abgedeckt sind, unabhängig davon, ob im Einzelfall zusätzlich eine
-  // berufsständische Schweigepflicht (z.B. ärztlich) einschlägig ist.
-  gesundheitsdaten: {
-    label: 'Erhöhter Schutz — Arzt-/Physio-/Psychologenpraxis (Art. 9 DSGVO, AVV)',
+  // Wortlaut 1:1 aus dem echten, unterschriebenen Referenzvertrag VT-1265
+  // (§ 7.2) übernommen - keine Verallgemeinerung mehr.
+  physiotherapiepraxis: {
+    label: 'Physiotherapiepraxis (Art. 9 DSGVO, AVV)',
     braucht_avv: true,
-    text: `Da die Reinigung in einer Arzt-, Physiotherapie- oder Psychologenpraxis (oder einer
-vergleichbaren Einrichtung mit Gesundheitsdaten) erfolgt und dabei zufällig Kenntnis von
-Patienten- bzw. Klientendaten entstehen kann, verpflichtet sich der Auftragnehmer, alle
-eingesetzten Mitarbeiter ausdrücklich auf das Datenschutzgeheimnis sowie - soweit im
-Einzelfall einschlägig - die ärztliche bzw. berufliche Schweigepflicht zu verpflichten. Die
-Mitarbeiter werden angewiesen, sichtbare Patienten- bzw. Behandlungsunterlagen nicht
+    text: `Da die Reinigung in einer Physiotherapiepraxis erfolgt und dabei zufällig Kenntnis von
+Patientendaten entstehen kann, verpflichtet sich der Auftragnehmer, alle eingesetzten
+Mitarbeiter ausdrücklich auf das Datenschutzgeheimnis und die Schweigepflicht zu
+verpflichten. Die Mitarbeiter werden angewiesen, sichtbare Patientenunterlagen nicht
 einzusehen und Vertraulichkeit zu wahren. Da der Auftraggeber als Verantwortlicher im Sinne
 der DSGVO gilt und der Auftragnehmer als Auftragsverarbeiter tätig wird, sind die Parteien
 gemäß Art. 28 DSGVO verpflichtet, eine Vereinbarung zur Auftragsverarbeitung (AVV)
 abzuschließen. Die als Anlage 3 beigefügte Vereinbarung zur Auftragsverarbeitung (AVV) ist
 vor Beginn der Reinigungstätigkeit von beiden Parteien zu unterzeichnen und wird Bestandteil
 dieses Vertrages.`,
+  },
+  // Analog zur Physiotherapiepraxis-Variante abgeleitet (keine eigene
+  // Referenz-Unterschrift vorhanden), ergänzt um die ärztliche
+  // Schweigepflicht (§ 203 StGB), die für Arztpraxen einschlägig ist.
+  arztpraxis: {
+    label: 'Arztpraxis (Art. 9 DSGVO, AVV)',
+    braucht_avv: true,
+    text: `Da die Reinigung in einer Arztpraxis erfolgt und dabei zufällig Kenntnis von
+Patientendaten entstehen kann, verpflichtet sich der Auftragnehmer, alle eingesetzten
+Mitarbeiter ausdrücklich auf das Datenschutzgeheimnis sowie die ärztliche Schweigepflicht
+(§ 203 StGB) zu verpflichten. Die Mitarbeiter werden angewiesen, sichtbare
+Patientenunterlagen nicht einzusehen und Vertraulichkeit zu wahren. Da der Auftraggeber als
+Verantwortlicher im Sinne der DSGVO gilt und der Auftragnehmer als Auftragsverarbeiter tätig
+wird, sind die Parteien gemäß Art. 28 DSGVO verpflichtet, eine Vereinbarung zur
+Auftragsverarbeitung (AVV) abzuschließen. Die als Anlage 3 beigefügte Vereinbarung zur
+Auftragsverarbeitung (AVV) ist vor Beginn der Reinigungstätigkeit von beiden Parteien zu
+unterzeichnen und wird Bestandteil dieses Vertrages.`,
+  },
+  // Analog abgeleitet, ergänzt um die psychotherapeutische Schweigepflicht
+  // (§ 203 StGB) und "Klienten" statt "Patienten" als übliche Bezeichnung.
+  psychologenpraxis: {
+    label: 'Psychologen-/Psychotherapiepraxis (Art. 9 DSGVO, AVV)',
+    braucht_avv: true,
+    text: `Da die Reinigung in einer Psychologen- bzw. Psychotherapiepraxis erfolgt und dabei
+zufällig Kenntnis von Klientendaten entstehen kann, verpflichtet sich der Auftragnehmer, alle
+eingesetzten Mitarbeiter ausdrücklich auf das Datenschutzgeheimnis sowie die
+psychotherapeutische Schweigepflicht (§ 203 StGB) zu verpflichten. Die Mitarbeiter werden
+angewiesen, sichtbare Klientenunterlagen nicht einzusehen und Vertraulichkeit zu wahren. Da
+der Auftraggeber als Verantwortlicher im Sinne der DSGVO gilt und der Auftragnehmer als
+Auftragsverarbeiter tätig wird, sind die Parteien gemäß Art. 28 DSGVO verpflichtet, eine
+Vereinbarung zur Auftragsverarbeitung (AVV) abzuschließen. Die als Anlage 3 beigefügte
+Vereinbarung zur Auftragsverarbeitung (AVV) ist vor Beginn der Reinigungstätigkeit von beiden
+Parteien zu unterzeichnen und wird Bestandteil dieses Vertrages.`,
   },
 };
 
@@ -128,21 +177,46 @@ export const BRANCHE_ZU_DSGVO = {
   buero: 'standard',
   treppenhaus: 'standard',
   gewerbehalle: 'standard',
-  praxis: 'gesundheitsdaten',
+  physiotherapiepraxis: 'physiotherapiepraxis',
+  arztpraxis: 'arztpraxis',
+  psychologenpraxis: 'psychologenpraxis',
   sonstiges: 'standard',
 };
 
 // Angaben für den AVV-Baustein (avvDocx.js, Anlage 3) - nur für die eine
 // DSGVO-Variante mit braucht_avv: true. Bewusst kurze, strukturierte Felder
 // statt Fließtext - der Renderer baut daraus die Art.-28-Abs.-3-DSGVO-
-// Pflichtangaben (Gegenstand/Art/Zweck/Kategorien).
+// Pflichtangaben (§ 2 Art der Daten/Kategorien betroffener Personen).
+// datenartenListe/betroffenePersonen 1:1 gegen die echte, unterschriebene
+// Referenz-AVV (Anlage3_AVV_Rafael_Weiss_VT-1265) abgeglichen (2026-07-30).
+const PATIENTEN_DATENARTEN = [
+  'Patientenstammdaten (Name, Anschrift, Kontaktdaten, Geburtsdatum)',
+  'Gesundheitsdaten im Sinne des Art. 9 Abs. 1 DSGVO (z.B. Behandlungsunterlagen, Terminlisten, Befunde)',
+  'Abrechnungs- und Vertragsdaten',
+  'Beschäftigtendaten des Verantwortlichen (z.B. Dienstpläne)',
+];
+const PATIENTEN_BETROFFENE_PERSONEN =
+  'Patientinnen und Patienten des Verantwortlichen, dessen Beschäftigte sowie Geschäftspartner und Besucher';
+
 export const AVV_VARIANTEN = {
-  gesundheitsdaten: {
-    kategorienBetroffenerPersonen:
-      'Patientinnen und Patienten bzw. Klientinnen und Klienten des Auftraggebers sowie ggf. dessen Mitarbeiter',
-    datenarten:
-      'Gesundheitsdaten im Sinne von Art. 9 DSGVO (z.B. auf sichtbaren Unterlagen, Bildschirmen oder in ' +
-      'Gesprächen zufällig wahrnehmbare Angaben zu Diagnosen, Behandlungen oder Terminen) sowie allgemeine ' +
-      'personenbezogene Daten (Namen, Kontaktdaten)',
+  physiotherapiepraxis: {
+    betroffenePersonen: PATIENTEN_BETROFFENE_PERSONEN,
+    datenartenListe: PATIENTEN_DATENARTEN,
+  },
+  arztpraxis: {
+    betroffenePersonen: PATIENTEN_BETROFFENE_PERSONEN,
+    datenartenListe: PATIENTEN_DATENARTEN,
+  },
+  // "Klienten" statt "Patienten" - üblichere Bezeichnung bei
+  // Psychologen-/Psychotherapiepraxen.
+  psychologenpraxis: {
+    betroffenePersonen:
+      'Klientinnen und Klienten des Verantwortlichen, dessen Beschäftigte sowie Geschäftspartner und Besucher',
+    datenartenListe: [
+      'Klientenstammdaten (Name, Anschrift, Kontaktdaten, Geburtsdatum)',
+      'Gesundheitsdaten im Sinne des Art. 9 Abs. 1 DSGVO (z.B. Behandlungsunterlagen, Terminlisten, Befunde)',
+      'Abrechnungs- und Vertragsdaten',
+      'Beschäftigtendaten des Verantwortlichen (z.B. Dienstpläne)',
+    ],
   },
 };
