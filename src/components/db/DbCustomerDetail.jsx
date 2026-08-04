@@ -1,10 +1,26 @@
 import React, { useEffect, useState } from 'react';
-import { getDbCustomer, createDbObject, bulkCreateDbObjects, unlinkSevdesk } from '../../lib/dbCrm.js';
+import {
+  getDbCustomer,
+  createDbObject,
+  bulkCreateDbObjects,
+  unlinkSevdesk,
+  listCustomerDocuments,
+  uploadCustomerDocument,
+} from '../../lib/dbCrm.js';
+
+function formatDateTimeDE(iso) {
+  if (!iso) return '';
+  return new Date(iso).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
+}
 
 export default function DbCustomerDetail({ customerId, onBack, onOpenObject }) {
   const [customer, setCustomer] = useState(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
+
+  const [documents, setDocuments] = useState(null); // null = noch nicht geladen/nicht erreichbar
+  const [documentsError, setDocumentsError] = useState('');
+  const [uploadingDocument, setUploadingDocument] = useState(false);
 
   const [showAddObject, setShowAddObject] = useState(false);
   const [street, setStreet] = useState('');
@@ -31,6 +47,33 @@ export default function DbCustomerDetail({ customerId, onBack, onOpenObject }) {
   }
 
   useEffect(load, [customerId]);
+
+  function loadDocuments() {
+    setDocumentsError('');
+    listCustomerDocuments(customerId)
+      .then((r) => setDocuments(r.files))
+      .catch((err) => {
+        setDocuments(null);
+        setDocumentsError(err?.message || 'Dokumente konnten nicht geladen werden');
+      });
+  }
+
+  useEffect(loadDocuments, [customerId]);
+
+  async function handleUploadDocument(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingDocument(true);
+    try {
+      await uploadCustomerDocument(customerId, file);
+      loadDocuments();
+    } catch (err) {
+      alert(err?.message || 'Dokument konnte nicht hochgeladen werden');
+    } finally {
+      setUploadingDocument(false);
+    }
+  }
 
   async function handleAddObject(e) {
     e.preventDefault();
@@ -178,6 +221,41 @@ export default function DbCustomerDetail({ customerId, onBack, onOpenObject }) {
             </div>
           ))}
         </div>
+
+        <div className="modal-subheading" style={{ marginTop: 16 }}>
+          Dokumente (Google Drive)
+        </div>
+        <p className="modal-hint">
+          Verträge, Leistungsverzeichnisse und Angebote landen hier automatisch. Scans (z.B.
+          Schlüsselübergabeprotokolle, unterschriebene Papierverträge) können manuell hochgeladen werden.
+        </p>
+        <label className="import-toggle-btn" style={{ display: 'inline-block', cursor: 'pointer' }}>
+          {uploadingDocument ? 'Lädt hoch...' : '📎 Dokument hochladen'}
+          <input type="file" onChange={handleUploadDocument} disabled={uploadingDocument} style={{ display: 'none' }} />
+        </label>
+
+        {documentsError && <div className="modal-message error">{documentsError}</div>}
+        {documents !== null && (
+          <div className="overview-list" style={{ marginTop: 12 }}>
+            {documents.length === 0 && <p className="modal-hint">Noch keine Dokumente in Drive.</p>}
+            {documents.map((f) => (
+              <a
+                key={f.id}
+                className="overview-row"
+                href={f.webViewLink}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <div className="overview-row-main">
+                  <div className="overview-row-title">{f.name}</div>
+                </div>
+                <div className="overview-row-meta">
+                  <span>{formatDateTimeDE(f.createdTime)}</span>
+                </div>
+              </a>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

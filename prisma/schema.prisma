@@ -134,6 +134,10 @@ model Customer {
   paymentTermDays  Int?     @map("payment_term_days") // Zahlungsziel in Tagen
   instantlyLeadId  String?  @unique @map("instantly_lead_id")
   sevdeskContactId String?  @unique @map("sevdesk_contact_id")
+  // Google-Drive-Ordner-ID des Kunden-Unterordners unter "LV-Tool Kunden"
+  // (server/lib/drive.js) - einmalig angelegt, danach gecacht statt bei
+  // jedem Dokument erneut per Namenssuche aufgelöst zu werden.
+  driveFolderId    String?  @map("drive_folder_id")
   ownerId          String?  @map("owner_id")
   createdAt        DateTime @default(now()) @map("created_at")
 

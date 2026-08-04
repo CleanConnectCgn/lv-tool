@@ -15,6 +15,8 @@ import { buildContractPdf } from './render/contractPdf.js';
 import { buildAvvPdf } from './render/avvPdf.js';
 import { validateContract } from './render/contractRules.js';
 import { withTimeout } from './withTimeout.js';
+import { getGoogleOAuthClient } from './googleAuth.js';
+import { uploadBufferToDrive } from './drive.js';
 import {
   DSGVO_VARIANTEN,
   CONTRACT_TEMPLATE_VERSION,
@@ -55,6 +57,64 @@ async function loadSpecsForPdf(specIds) {
 // auch bei gleichzeitigen Anfragen. Nächste vergebene Nummer: VT-2001
 // (bewusst über der höchsten bekannten realen Papier-Vertragsnummer, siehe
 // VT-1264 im Referenzvertrag, um Kollisionen auszuschließen).
+// Best-effort: rendert Vertrag (+ AVV, falls die DSGVO-Variante das
+// verlangt) als DOCX+PDF und lädt sie in den Google-Drive-Kundenordner hoch,
+// direkt beim Anlegen (Auftrag "Verträge/LVs/Angebote/Protokolle immer im
+// Kundenordner"). Wird bewusst NICHT awaited beim Aufrufer, damit ein
+// langsamer/fehlschlagender Drive-Upload das Anlegen des Vertrags selbst nie
+// verzögert oder blockiert - exakt dasselbe Muster wie
+// uploadDocumentToDriveIfConnected in server/index.js.
+async function archiveContractToDriveIfConnected(req, customer, renderedData, vertragsnummer) {
+  try {
+    const oauthClient = await getGoogleOAuthClient(req);
+    if (!oauthClient) return;
+
+    const [docxBuffer, pdfBuffer] = await Promise.all([
+      buildContractDocument(renderedData),
+      buildContractPdf(renderedData),
+    ]);
+    await uploadBufferToDrive({
+      oauthClient,
+      customer,
+      filename: `${vertragsnummer}.docx`,
+      buffer: docxBuffer,
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    await uploadBufferToDrive({
+      oauthClient,
+      customer,
+      filename: `${vertragsnummer}.pdf`,
+      buffer: pdfBuffer,
+      mimeType: 'application/pdf',
+    });
+
+    const dsgvoVariante = renderedData.dsgvoVariante || 'standard';
+    const dsgvoInfo = DSGVO_VARIANTEN[dsgvoVariante];
+    if (dsgvoInfo?.braucht_avv) {
+      const [avvDocxBuffer, avvPdfBuffer] = await Promise.all([
+        buildAvvDocument(renderedData),
+        buildAvvPdf(renderedData),
+      ]);
+      await uploadBufferToDrive({
+        oauthClient,
+        customer,
+        filename: `${vertragsnummer}-AVV.docx`,
+        buffer: avvDocxBuffer,
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+      await uploadBufferToDrive({
+        oauthClient,
+        customer,
+        filename: `${vertragsnummer}-AVV.pdf`,
+        buffer: avvPdfBuffer,
+        mimeType: 'application/pdf',
+      });
+    }
+  } catch (err) {
+    console.error('Vertrags-Archivierung nach Drive fehlgeschlagen:', err?.message || err);
+  }
+}
+
 async function nextVertragsnummer() {
   const seq = await prisma.sequence.upsert({
     where: { name: 'vertragsnummer' },
@@ -171,6 +231,7 @@ export function registerDocumentRoutes(app) {
       });
 
       res.status(201).json({ ...result, warnings });
+      archiveContractToDriveIfConnected(req, object.customer, renderedData, vertragsnummer);
     } catch (err) {
       res.status(500).json({ error: err?.message || 'Vertrag konnte nicht angelegt werden' });
     }

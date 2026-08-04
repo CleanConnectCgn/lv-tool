@@ -157,7 +157,7 @@ describe('GET /api/db/contracts/:id/avv-docx', () => {
   it('liefert 200 + echtes DOCX für eine AVV-pflichtige Variante', async () => {
     const created = await request(app)
       .post(`/api/db/objects/${objectId}/contract`)
-      .send({ dsgvoVariante: 'gesundheitsdaten' })
+      .send({ dsgvoVariante: 'physiotherapiepraxis' })
       .expect(201);
     contractIdsToClean.push(created.body.contract.id);
 

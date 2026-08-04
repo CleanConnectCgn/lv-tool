@@ -12,10 +12,18 @@ import { customerKeyFor } from '../src/lib/crmKeys.js';
 import { registerAuthRoutes, requireAuth, requireAdmin } from './lib/auth.js';
 import { mailTransporter } from './lib/mailer.js';
 import { uploadDocumentToDrive, DRIVE_UPLOAD_SCOPE } from './lib/drive.js';
+import {
+  oauth2ClientFor,
+  loadCalendarTokens,
+  saveCalendarTokens,
+  getGoogleOAuthClient,
+  CALENDAR_TOKEN_FILE,
+} from './lib/googleAuth.js';
 import { registerDbCrmRoutes } from './lib/dbCrm.js';
 import { registerSevdeskLinkRoutes } from './lib/sevdeskLink.js';
 import { registerUploadRoutes } from './lib/uploads.js';
 import { registerDocumentRoutes } from './lib/documentRoutes.js';
+import { registerCustomerDocumentRoutes } from './lib/customerDocuments.js';
 import { withTimeout } from './lib/withTimeout.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -41,7 +49,6 @@ const CUSTOMERS_DIR = path.join(CRM_DIR, 'customers');
 const AUFTRAEGE_DIR = path.join(CRM_DIR, 'auftraege');
 const MITARBEITER_DIR = path.join(CRM_DIR, 'mitarbeiter');
 const OBJEKTE_DIR = path.join(CRM_DIR, 'objekte');
-const CALENDAR_TOKEN_FILE = path.join(CRM_DIR, 'calendar-token.json');
 const LAST_DIGEST_FILE = path.join(CRM_DIR, 'last-digest.json');
 
 app.use(express.json({ limit: '5mb' }));
@@ -65,6 +72,7 @@ registerSevdeskLinkRoutes(app);
 registerUploadRoutes(app);
 // Block 8: Dokumentenausgabe (LV-PDF, Vertrag) - siehe server/lib/documentRoutes.js.
 registerDocumentRoutes(app);
+registerCustomerDocumentRoutes(app);
 
 // Verhindert unbeabsichtigte Kostenexplosion bei den KI-Endpoints (Gemini/
 // Claude/Vision) - z.B. durch versehentliches Mehrfachklicken oder einen
@@ -1054,47 +1062,6 @@ app.delete('/api/crm/objekte/:id', async (req, res) => {
 // für unseren eigenen Kalender, nicht für sevDesk. Der Refresh-Token wird
 // verschlüsselt-über-Volume (nicht im Git) unter CALENDAR_TOKEN_FILE abgelegt.
 // ---------------------------------------------------------------------------
-
-// req ist optional: für Aufrufe außerhalb eines echten HTTP-Requests (z.B.
-// der automatische tägliche E-Mail-Digest per setInterval) gibt es keinen
-// req - dann wird Railways automatisch gesetzte RAILWAY_PUBLIC_DOMAIN als
-// Fallback für die Redirect-URI verwendet. Diese wird für reine
-// Token-Refreshs ohnehin nicht wirklich gebraucht, nur für den eigentlichen
-// OAuth-Consent-Flow.
-function oauth2ClientFor(req) {
-  const host = req ? req.get('host') : process.env.RAILWAY_PUBLIC_DOMAIN;
-  const protocol = req ? req.protocol : 'https';
-  const redirectUri = host ? `${protocol}://${host}/api/calendar/oauth/callback` : undefined;
-  return new google.auth.OAuth2(process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_CLIENT_SECRET, redirectUri);
-}
-
-async function loadCalendarTokens() {
-  try {
-    return JSON.parse(await fs.readFile(CALENDAR_TOKEN_FILE, 'utf-8'));
-  } catch {
-    return null;
-  }
-}
-
-async function saveCalendarTokens(tokens) {
-  await fs.mkdir(CRM_DIR, { recursive: true });
-  await fs.writeFile(CALENDAR_TOKEN_FILE, JSON.stringify(tokens, null, 2));
-}
-
-// Baut den rohen authentifizierten OAuth2-Client auf Basis des gespeicherten
-// Refresh-Tokens (googleapis erneuert den Access-Token automatisch) - wird
-// sowohl für den Calendar-Client als auch für den Drive-Upload (Block 4)
-// genutzt, da beide dieselbe Firmenverbindung/denselben Token teilen.
-async function getGoogleOAuthClient(req) {
-  const tokens = await loadCalendarTokens();
-  if (!tokens?.refresh_token) return null;
-  const client = oauth2ClientFor(req);
-  client.setCredentials(tokens);
-  client.on('tokens', async (newTokens) => {
-    await saveCalendarTokens({ ...tokens, ...newTokens });
-  });
-  return client;
-}
 
 async function getCalendarClient(req) {
   const client = await getGoogleOAuthClient(req);

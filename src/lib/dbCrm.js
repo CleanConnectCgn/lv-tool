@@ -83,3 +83,18 @@ export const avvPdfUrl = (contractId) => `/api/db/contracts/${contractId}/avv-pd
 export const updateContractStatus = (contractId, status) =>
   request('PATCH', `/api/db/contracts/${contractId}/status`, { status });
 export const runContractAiReview = (contractId) => request('POST', `/api/db/contracts/${contractId}/ai-review`);
+
+// Google-Drive-Kundenordner: Verträge/LVs/Angebote landen automatisch dort
+// (documentRoutes.js), Scans (Schlüsselübergabeprotokolle etc.) über diesen
+// manuellen Upload (raw-binary Body, wie uploadDocumentForExtraction oben).
+export const listCustomerDocuments = (customerId) => request('GET', `/api/db/customers/${customerId}/documents`);
+export async function uploadCustomerDocument(customerId, file) {
+  const res = await fetch(`/api/db/customers/${customerId}/documents?mimeType=${encodeURIComponent(file.type)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
+    body: await file.arrayBuffer(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw new Error(data?.error || `Fehler (${res.status})`);
+  return data;
+}
