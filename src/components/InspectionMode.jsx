@@ -87,7 +87,11 @@ export default function InspectionMode({ sections, setSections, internalNotes, s
   function applyGlobalWeekdays(days) {
     setGlobalWeekdays(days);
     setTasks((prev) =>
-      prev.map((t) => (t.selected && t.col === 'woechentlich' ? { ...t, wochentage: days } : t))
+      prev.map((t) =>
+        t.selected && t.col === 'woechentlich'
+          ? { ...t, wochentage: days, val: days.length > 0 ? `${days.length}x` : t.val }
+          : t
+      )
     );
   }
 
@@ -335,7 +339,15 @@ export default function InspectionMode({ sections, setSections, internalNotes, s
                   <WeekdaySelector
                     compact
                     value={focusedTask.wochentage || []}
-                    onChange={(wochentage) => patchTask(focusedTask.id, { wochentage })}
+                    onChange={(wochentage) =>
+                      // Wochentage anklicken passte das Wöchentlich-Intervall
+                      // vorher nicht an (analog zu RowEditor.jsx) - jetzt
+                      // synchron, solange mindestens ein Tag ausgewählt ist.
+                      patchTask(focusedTask.id, {
+                        wochentage,
+                        val: wochentage.length > 0 ? `${wochentage.length}x` : focusedTask.val,
+                      })
+                    }
                   />
                 </div>
               )}

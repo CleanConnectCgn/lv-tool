@@ -145,7 +145,16 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
           <WeekdaySelector
             compact
             value={row.wochentage || []}
-            onChange={(wochentage) => onChange({ wochentage })}
+            onChange={(wochentage) =>
+              // Kundenfeedback: Wochentage anklicken passte das Wöchentlich-
+              // Intervall vorher nicht an (z.B. 2 angeklickte Tage, aber
+              // Intervall blieb auf "1x" stehen) - jetzt synchron, solange
+              // mindestens ein Tag ausgewählt ist.
+              onChange({
+                wochentage,
+                intervalValue: wochentage.length > 0 ? `${wochentage.length}x` : row.intervalValue,
+              })
+            }
           />
         )}
       </td>
