@@ -141,11 +141,12 @@ model Customer {
   ownerId          String?  @map("owner_id")
   createdAt        DateTime @default(now()) @map("created_at")
 
-  objects   Property[]
-  documents Document[]
-  contracts Contract[]
-  tasks     Task[]
-  uploads   Upload[]
+  objects        Property[]
+  documents      Document[]
+  contracts      Contract[]
+  tasks          Task[]
+  uploads        Upload[]
+  inboxDocuments InboxDocument[]
 
   @@map("customers")
 }
@@ -494,4 +495,39 @@ model Upload {
   @@index([customerId])
   @@index([objectId])
   @@map("uploads")
+}
+
+// Eingangs-Ablage (Posteingang): Dokumente, die nicht im Tool erzeugt
+// wurden und noch keinem Kunden zugeordnet sind (z.B. ein
+// Schlüsselübergabeprotokoll). Nach dem Hochladen liest Gemini
+// Kundenname/Objekt/Dokumenttyp aus (server/lib/extraction/geminiInbox.js),
+// server/lib/customerMatching.js schlägt passende Kunden vor. Erst nach
+// menschlicher Bestätigung (status: confirmed) wandert die Datei in den
+// Drive-Kundenordner (server/lib/drive.js) - bis dahin liegt sie nur lokal.
+model InboxDocument {
+  id       String  @id @default(uuid())
+  filename String
+  mimeType String  @map("mime_type")
+  // Dateiname im lokalen Zwischenspeicher (server/lib/inbox.js), nicht die
+  // öffentlich sichtbare Bezeichnung - siehe `filename`.
+  storagePath String @map("storage_path")
+
+  extractedCustomerName String? @map("extracted_customer_name")
+  extractedAddress      String? @map("extracted_address")
+  extractedDocType      String? @map("extracted_doc_type")
+  extractedDate         String? @map("extracted_date")
+  // Bis zu drei Kandidaten mit Ähnlichkeits-Score, vom Menschen im UI
+  // auswählbar statt eines einzelnen (evtl. falschen) Auto-Matches.
+  matchCandidates        Json?     @map("match_candidates")
+  matchedCustomerId       String?   @map("matched_customer_id")
+  matchedCustomer         Customer? @relation(fields: [matchedCustomerId], references: [id])
+
+  // pending: wartet auf Bestätigung, confirmed: in Drive abgelegt,
+  // rejected: verworfen (Datei bleibt bis zum manuellen Aufräumen liegen).
+  status    String   @default("pending")
+  ownerId   String?  @map("owner_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([status])
+  @@map("inbox_documents")
 }

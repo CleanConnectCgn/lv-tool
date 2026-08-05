@@ -3,6 +3,7 @@ import { listDocuments, deleteDocument, getDocument } from '../lib/documents.js'
 import MiniGame from './MiniGame.jsx';
 import ExportedPdfsList from './ExportedPdfsList.jsx';
 import CrmDashboardWidget from './CrmDashboardWidget.jsx';
+import PosteingangCard from './PosteingangCard.jsx';
 
 function formatDateDE(isoStr) {
   if (!isoStr) return '';
@@ -149,6 +150,8 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
       {backupMessage && (
         <div className={`modal-message ${backupStatus === 'error' ? 'error' : 'success'}`}>{backupMessage}</div>
       )}
+
+      {variant === 'page' && <PosteingangCard />}
 
       {status === 'loading' && <p className="modal-hint">Lädt...</p>}
       {status === 'error' && <div className="modal-message error">{error}</div>}

@@ -24,6 +24,7 @@ import { registerSevdeskLinkRoutes } from './lib/sevdeskLink.js';
 import { registerUploadRoutes } from './lib/uploads.js';
 import { registerDocumentRoutes } from './lib/documentRoutes.js';
 import { registerCustomerDocumentRoutes } from './lib/customerDocuments.js';
+import { registerInboxRoutes } from './lib/inbox.js';
 import { withTimeout } from './lib/withTimeout.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -73,6 +74,9 @@ registerUploadRoutes(app);
 // Block 8: Dokumentenausgabe (LV-PDF, Vertrag) - siehe server/lib/documentRoutes.js.
 registerDocumentRoutes(app);
 registerCustomerDocumentRoutes(app);
+// Posteingang: Datei -> KI-Auslesung -> Kunden-Vorschlag -> Drive-Ablage
+// nach Bestätigung - siehe server/lib/inbox.js.
+registerInboxRoutes(app);
 
 // Verhindert unbeabsichtigte Kostenexplosion bei den KI-Endpoints (Gemini/
 // Claude/Vision) - z.B. durch versehentliches Mehrfachklicken oder einen

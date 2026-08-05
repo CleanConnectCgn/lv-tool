@@ -98,3 +98,20 @@ export async function uploadCustomerDocument(customerId, file) {
   if (!res.ok || data?.error) throw new Error(data?.error || `Fehler (${res.status})`);
   return data;
 }
+
+// Posteingang: Datei ohne bekannten Kunden hochladen, KI schlägt einen
+// Kunden vor (server/lib/inbox.js), erst nach Bestätigung landet sie im
+// Drive-Kundenordner.
+export async function uploadInboxDocument(file) {
+  const res = await fetch(`/api/inbox/upload?mimeType=${encodeURIComponent(file.type)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
+    body: await file.arrayBuffer(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw new Error(data?.error || `Fehler (${res.status})`);
+  return data;
+}
+export const listInboxDocuments = () => request('GET', '/api/inbox');
+export const confirmInboxDocument = (id, customerId) => request('POST', `/api/inbox/${id}/confirm`, { customerId });
+export const rejectInboxDocument = (id) => request('POST', `/api/inbox/${id}/reject`);

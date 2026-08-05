@@ -770,6 +770,49 @@ tr.drag-over td {
   outline-color: var(--teal);
 }
 
+.posteingang-card {
+  margin-bottom: var(--space-5);
+}
+
+.posteingang-dropzone {
+  border: 2px dashed var(--brand-line-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--brand-text-dim);
+  cursor: pointer;
+  margin-bottom: var(--space-3);
+}
+
+.posteingang-dropzone.drag-over {
+  border-color: var(--teal);
+  background: var(--brand-surface-2);
+}
+
+.posteingang-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.posteingang-item {
+  border: 1px solid var(--brand-line);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+}
+
+.posteingang-item-header {
+  margin-bottom: 4px;
+}
+
+.posteingang-item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
 .quick-setup-card {
   max-width: 560px;
 }
