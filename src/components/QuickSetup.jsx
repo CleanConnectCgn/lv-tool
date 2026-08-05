@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { searchContacts, createContact, getContactAddress } from '../lib/sevdesk.js';
-import { AREA_DEFINITIONS, AREA_ORDER, buildSectionsFromSetup } from '../templates/checklistAreas.js';
+import {
+  AREA_DEFINITIONS,
+  AREA_ORDER,
+  buildSectionsFromSetup,
+  buildSingleServiceMain,
+} from '../templates/checklistAreas.js';
 import WeekdaySelector from './WeekdaySelector.jsx';
 
 const TOKEN_KEY = 'lv-tool:sevdesk-token';
@@ -28,6 +33,13 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
   const [ncStadt, setNcStadt] = useState('');
   const [ncEmail, setNcEmail] = useState('');
   const searchTimer = useRef(null);
+
+  // 'unterhalt' = normales Unterhaltsreinigungs-LV (Standard, wie bisher),
+  // 'einzelleistung' = eigenständiges LV NUR für eine Leistung, ohne
+  // Unterhaltsreinigungs-Basis (z.B. nur Glasreinigung als Auftrag).
+  const [mode, setMode] = useState('unterhalt');
+  const [singleService, setSingleService] = useState('glasreinigung');
+  const [singleServiceTitle, setSingleServiceTitle] = useState('');
 
   // Schritt 1-3
   const [frequency, setFrequency] = useState('2x');
@@ -90,16 +102,19 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
   }
 
   async function handleGenerate() {
-    const { main, children } = buildSectionsFromSetup({
-      frequency,
-      wochentage,
-      areas,
-      glas: { enabled: glasEnabled, rahmen, lamellen, lamellenFreq },
-      grundreinigung,
-      winterdienst,
-      hausmeisterservice,
-      erstreinigung: { enabled: erstreinigung, stunden: erstreinigungStunden },
-    });
+    const { main, children, lvTitle } =
+      mode === 'einzelleistung'
+        ? { ...buildSingleServiceMain(singleService, singleServiceTitle), children: [] }
+        : buildSectionsFromSetup({
+            frequency,
+            wochentage,
+            areas,
+            glas: { enabled: glasEnabled, rahmen, lamellen, lamellenFreq },
+            grundreinigung,
+            winterdienst,
+            hausmeisterservice,
+            erstreinigung: { enabled: erstreinigung, stunden: erstreinigungStunden },
+          });
 
     let customer = null;
     if (showNewContact && ncFirma.trim()) {
@@ -135,7 +150,7 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
       };
     }
 
-    onGenerate({ sections: main, children, customer });
+    onGenerate({ sections: main, children, customer, lvTitle });
   }
 
   return (
@@ -221,107 +236,162 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
         )}
 
         <hr className="modal-section-divider" />
-        <div className="modal-subheading">Schritt 1 — Reinigungsfrequenz</div>
-        <label className="modal-field">
-          Wie oft pro Woche?
-          <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-            {FREQUENCIES.map((f) => (
-              <option key={f} value={f}>
-                {f}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="modal-field">
-          An welchen Wochentagen? (optional)
-          <WeekdaySelector
-            value={wochentage}
-            onChange={(days) => {
-              setWochentage(days);
-              if (days.length > 0) setFrequency(`${days.length}x`);
-            }}
-          />
-        </label>
-
-        <hr className="modal-section-divider" />
-        <div className="modal-subheading">Schritt 2 — Bereiche auswählen</div>
-        <div className="quick-setup-static-item">Unterhaltsreinigung — immer aktiv</div>
-        <div className="quick-setup-checkbox-list">
-          {AREA_ORDER.map((key) => (
-            <label key={key} className="quick-setup-checkbox">
-              <input type="checkbox" checked={areas[key]} onChange={() => toggleArea(key)} />
-              {AREA_DEFINITIONS[key].label}
-            </label>
-          ))}
-        </div>
-
-        <hr className="modal-section-divider" />
-        <div className="modal-subheading">Schritt 3 — Zusatzleistungen</div>
+        <div className="modal-subheading">Art des Auftrags</div>
         <div className="quick-setup-checkbox-list">
           <label className="quick-setup-checkbox">
-            <input type="checkbox" checked={glasEnabled} onChange={(e) => setGlasEnabled(e.target.checked)} />
-            Glasreinigung
+            <input
+              type="radio"
+              name="quick-setup-mode"
+              checked={mode === 'unterhalt'}
+              onChange={() => setMode('unterhalt')}
+            />
+            Unterhaltsreinigung (Standard)
           </label>
-          {glasEnabled && (
-            <div className="quick-setup-suboptions">
+          <label className="quick-setup-checkbox">
+            <input
+              type="radio"
+              name="quick-setup-mode"
+              checked={mode === 'einzelleistung'}
+              onChange={() => setMode('einzelleistung')}
+            />
+            Nur Einzelleistung (ohne Unterhaltsreinigung)
+          </label>
+        </div>
+
+        {mode === 'einzelleistung' ? (
+          <>
+            <hr className="modal-section-divider" />
+            <div className="modal-subheading">Welche Leistung?</div>
+            <label className="modal-field">
+              Leistung
+              <select value={singleService} onChange={(e) => setSingleService(e.target.value)}>
+                <option value="glasreinigung">Glasreinigung</option>
+                <option value="grundreinigung">Grundreinigung</option>
+                <option value="sonstiges">Sonstige Leistung (freier Titel)</option>
+              </select>
+            </label>
+            {singleService === 'sonstiges' && (
+              <label className="modal-field">
+                Titel der Leistung
+                <input
+                  type="text"
+                  value={singleServiceTitle}
+                  onChange={(e) => setSingleServiceTitle(e.target.value)}
+                  placeholder="z.B. Teppichreinigung"
+                />
+              </label>
+            )}
+          </>
+        ) : (
+          <>
+            <hr className="modal-section-divider" />
+            <div className="modal-subheading">Schritt 1 — Reinigungsfrequenz</div>
+            <label className="modal-field">
+              Wie oft pro Woche?
+              <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
+                {FREQUENCIES.map((f) => (
+                  <option key={f} value={f}>
+                    {f}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="modal-field">
+              An welchen Wochentagen? (optional)
+              <WeekdaySelector
+                value={wochentage}
+                onChange={(days) => {
+                  setWochentage(days);
+                  if (days.length > 0) setFrequency(`${days.length}x`);
+                }}
+              />
+            </label>
+
+            <hr className="modal-section-divider" />
+            <div className="modal-subheading">Schritt 2 — Bereiche auswählen</div>
+            <div className="quick-setup-static-item">Unterhaltsreinigung — immer aktiv</div>
+            <div className="quick-setup-checkbox-list">
+              {AREA_ORDER.map((key) => (
+                <label key={key} className="quick-setup-checkbox">
+                  <input type="checkbox" checked={areas[key]} onChange={() => toggleArea(key)} />
+                  {AREA_DEFINITIONS[key].label}
+                </label>
+              ))}
+            </div>
+
+            <hr className="modal-section-divider" />
+            <div className="modal-subheading">Schritt 3 — Zusatzleistungen</div>
+            <div className="quick-setup-checkbox-list">
               <label className="quick-setup-checkbox">
-                <input type="checkbox" checked={rahmen} onChange={(e) => setRahmen(e.target.checked)} />
-                Rahmenreinigung inklusive
+                <input type="checkbox" checked={glasEnabled} onChange={(e) => setGlasEnabled(e.target.checked)} />
+                Glasreinigung
+              </label>
+              {glasEnabled && (
+                <div className="quick-setup-suboptions">
+                  <label className="quick-setup-checkbox">
+                    <input type="checkbox" checked={rahmen} onChange={(e) => setRahmen(e.target.checked)} />
+                    Rahmenreinigung inklusive
+                  </label>
+                  <label className="quick-setup-checkbox">
+                    <input type="checkbox" checked={lamellen} onChange={(e) => setLamellen(e.target.checked)} />
+                    Lamellenreinigung inklusive
+                  </label>
+                  {lamellen && (
+                    <label className="modal-field quick-setup-sub-field">
+                      Häufigkeit (jährlich)
+                      <select value={lamellenFreq} onChange={(e) => setLamellenFreq(e.target.value)}>
+                        {LAMELLEN_FREQUENCIES.map((f) => (
+                          <option key={f} value={f}>
+                            {f}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                </div>
+              )}
+              <label className="quick-setup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={grundreinigung}
+                  onChange={(e) => setGrundreinigung(e.target.checked)}
+                />
+                Grundreinigung (einmalig, 50% Rabatt)
               </label>
               <label className="quick-setup-checkbox">
-                <input type="checkbox" checked={lamellen} onChange={(e) => setLamellen(e.target.checked)} />
-                Lamellenreinigung inklusive
+                <input type="checkbox" checked={winterdienst} onChange={(e) => setWinterdienst(e.target.checked)} />
+                Winterdienst
               </label>
-              {lamellen && (
+              <label className="quick-setup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={hausmeisterservice}
+                  onChange={(e) => setHausmeisterservice(e.target.checked)}
+                />
+                Hausmeisterservice
+              </label>
+              <label className="quick-setup-checkbox">
+                <input
+                  type="checkbox"
+                  checked={erstreinigung}
+                  onChange={(e) => setErstreinigung(e.target.checked)}
+                />
+                Erstreinigung (Stunden × 32 EUR)
+              </label>
+              {erstreinigung && (
                 <label className="modal-field quick-setup-sub-field">
-                  Häufigkeit (jährlich)
-                  <select value={lamellenFreq} onChange={(e) => setLamellenFreq(e.target.value)}>
-                    {LAMELLEN_FREQUENCIES.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </select>
+                  Stunden
+                  <input
+                    type="number"
+                    value={erstreinigungStunden}
+                    onChange={(e) => setErstreinigungStunden(e.target.value)}
+                    placeholder="0"
+                  />
                 </label>
               )}
             </div>
-          )}
-          <label className="quick-setup-checkbox">
-            <input
-              type="checkbox"
-              checked={grundreinigung}
-              onChange={(e) => setGrundreinigung(e.target.checked)}
-            />
-            Grundreinigung (einmalig, 50% Rabatt)
-          </label>
-          <label className="quick-setup-checkbox">
-            <input type="checkbox" checked={winterdienst} onChange={(e) => setWinterdienst(e.target.checked)} />
-            Winterdienst
-          </label>
-          <label className="quick-setup-checkbox">
-            <input
-              type="checkbox"
-              checked={hausmeisterservice}
-              onChange={(e) => setHausmeisterservice(e.target.checked)}
-            />
-            Hausmeisterservice
-          </label>
-          <label className="quick-setup-checkbox">
-            <input type="checkbox" checked={erstreinigung} onChange={(e) => setErstreinigung(e.target.checked)} />
-            Erstreinigung (Stunden × 32 EUR)
-          </label>
-          {erstreinigung && (
-            <label className="modal-field quick-setup-sub-field">
-              Stunden
-              <input
-                type="number"
-                value={erstreinigungStunden}
-                onChange={(e) => setErstreinigungStunden(e.target.value)}
-                placeholder="0"
-              />
-            </label>
-          )}
-        </div>
+          </>
+        )}
 
         <div className="modal-actions">
           <button onClick={onCancel}>Abbrechen</button>

@@ -110,8 +110,8 @@ export default function App() {
     setIntervallInfo(computeIntervalSummary(mainDoc.sections));
   }, [mainDoc.sections]);
 
-  function handleSetupGenerated({ sections: mainSections, children, customer: newCustomer }) {
-    setMainDoc({ id: null, lvTitle: 'Leistungsverzeichnis Unterhaltsreinigung', sections: mainSections });
+  function handleSetupGenerated({ sections: mainSections, children, customer: newCustomer, lvTitle }) {
+    setMainDoc({ id: null, lvTitle: lvTitle || 'Leistungsverzeichnis Unterhaltsreinigung', sections: mainSections });
     setChildDocs(
       (children || []).map((c) => ({ id: null, docType: c.docType, lvTitle: c.lvTitle, sections: c.sections }))
     );
@@ -620,7 +620,23 @@ export default function App() {
           datum={datum}
           intervallInfo={intervallInfo}
           docGroups={[
-            { key: 'main', label: 'Unterhaltsreinigung', sections: mainDoc.sections, optional: false },
+            {
+              key: 'main',
+              label: (mainDoc.lvTitle || 'Leistungsverzeichnis Unterhaltsreinigung').replace(
+                'Leistungsverzeichnis ',
+                ''
+              ),
+              sections: mainDoc.sections,
+              optional: false,
+              // Eigenständige Einzelleistungs-LVs (z.B. nur Grundreinigung) sind
+              // keine laufende Unterhaltsreinigung - der Fallback "Monatlicher
+              // Pauschalpreis" in sevdesk.js passt nur, wenn main tatsächlich
+              // die Unterhaltsreinigung ist.
+              priceLabel:
+                mainDoc.lvTitle && mainDoc.lvTitle !== 'Leistungsverzeichnis Unterhaltsreinigung'
+                  ? 'Pauschalpreis pro Einsatz'
+                  : undefined,
+            },
             ...childDocs.map((c) => ({
               key: c.docType,
               label: c.lvTitle.replace('Leistungsverzeichnis ', ''),

@@ -3,7 +3,7 @@
 // fills the LV with hard-coded intervals, the user checks which areas apply
 // and picks a frequency; buildSectionsFromSetup() assembles the LV from that.
 
-import { cloneTemplate, cloneOptionalSection } from './templates.js';
+import { cloneTemplate, cloneOptionalSection, newSection } from './templates.js';
 
 let idCounter = 100000; // separate id space from templates.js, avoids collisions
 const uid = () => `q${idCounter++}-${Math.random().toString(36).slice(2, 8)}`;
@@ -199,6 +199,33 @@ function buildErstreinigungSection(stunden) {
   return section('Erstreinigung', [
     row(`Einmalige Erstreinigung (${std} Std. à 32,00 EUR = ${total} EUR)`, { bedarf: true }),
   ]);
+}
+
+const SINGLE_SERVICE_TITLES = {
+  glasreinigung: 'Leistungsverzeichnis Glasreinigung',
+  grundreinigung: 'Leistungsverzeichnis Grundreinigung',
+};
+
+// Eigenständiges LV NUR für eine Einzelleistung (z.B. nur Glasreinigung),
+// ohne die sonst erzwungene Unterhaltsreinigungs-Basis - anders als
+// buildSectionsFromSetup() landet die Leistung hier direkt in `main`
+// (keine Unterhaltsreinigung existiert, die sie als `children` begleiten
+// könnte), und der Titel richtet sich nach der gewählten Leistung statt
+// hart "Leistungsverzeichnis Unterhaltsreinigung" zu sein.
+export function buildSingleServiceMain(serviceKey, customTitle) {
+  if (serviceKey === 'sonstiges') {
+    const title = (customTitle || '').trim() || 'Sonstige Leistung';
+    return { main: [newSection(title)], lvTitle: `Leistungsverzeichnis ${title}` };
+  }
+  const cloned = cloneOptionalSection(serviceKey);
+  if (!cloned) return { main: [], lvTitle: 'Leistungsverzeichnis' };
+  // "(optional)"-Zusatz im Titel passt nur im Zusatzleistungs-Modus
+  // (buildSectionsFromSetup), nicht wenn die Leistung das eigenständige LV ist.
+  cloned.title = cloned.title.replace(/\s*\(optional\)$/, '');
+  return {
+    main: [cloned],
+    lvTitle: SINGLE_SERVICE_TITLES[serviceKey] || `Leistungsverzeichnis ${cloned.title}`,
+  };
 }
 
 // setup = {

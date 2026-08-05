@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSectionsFromSetup, AREA_ORDER } from './checklistAreas.js';
+import { buildSectionsFromSetup, buildSingleServiceMain, AREA_ORDER } from './checklistAreas.js';
 
 describe('buildSectionsFromSetup', () => {
   it('fills empty woechentlich rows with the chosen frequency and weekdays', () => {
@@ -27,6 +27,33 @@ describe('buildSectionsFromSetup', () => {
       glas: { enabled: true, rahmen: false, lamellen: false },
     });
     expect(children.some((c) => c.docType === 'glasreinigung')).toBe(true);
+  });
+});
+
+describe('buildSingleServiceMain', () => {
+  it('builds a standalone Glasreinigung LV without any Unterhaltsreinigung basis', () => {
+    const { main, lvTitle } = buildSingleServiceMain('glasreinigung');
+    expect(lvTitle).toBe('Leistungsverzeichnis Glasreinigung');
+    expect(main.length).toBe(1);
+    expect(main[0].title).toBe('Glasreinigung');
+    expect(main[0].rows.length).toBeGreaterThan(0);
+  });
+
+  it('builds a standalone Grundreinigung LV', () => {
+    const { main, lvTitle } = buildSingleServiceMain('grundreinigung');
+    expect(lvTitle).toBe('Leistungsverzeichnis Grundreinigung');
+    expect(main[0].title).toBe('Grundreinigung');
+  });
+
+  it('builds a free-text "sonstiges" LV with the given title', () => {
+    const { main, lvTitle } = buildSingleServiceMain('sonstiges', 'Teppichreinigung');
+    expect(lvTitle).toBe('Leistungsverzeichnis Teppichreinigung');
+    expect(main[0].title).toBe('Teppichreinigung');
+  });
+
+  it('falls back to a generic title for "sonstiges" without custom text', () => {
+    const { lvTitle } = buildSingleServiceMain('sonstiges', '');
+    expect(lvTitle).toBe('Leistungsverzeichnis Sonstige Leistung');
   });
 
   it('produces a winterdienst child document from the winterdienst template', () => {
