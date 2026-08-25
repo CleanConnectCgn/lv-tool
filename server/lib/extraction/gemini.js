@@ -3,6 +3,7 @@
 // GEMINI_API_KEY.
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { withTimeout } from '../withTimeout.js';
+import { geminiErrorMessage } from './geminiError.js';
 
 export const modelName = 'gemini-flash-latest';
 
@@ -63,14 +64,19 @@ export async function extract({ fileBuffer, mimeType, catalog }) {
   // aller KI-Checkups; 90s analog zu den anderen Vision-Aufrufen (siehe
   // server/index.js), da eine reale Testmessung mit einem echten Dokument
   // bereits ~19s brauchte.
-  const result = await withTimeout(
-    model.generateContent([
-      buildPrompt(catalog),
-      { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
-    ]),
-    90000,
-    'Gemini'
-  );
+  let result;
+  try {
+    result = await withTimeout(
+      model.generateContent([
+        buildPrompt(catalog),
+        { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
+      ]),
+      90000,
+      'Gemini'
+    );
+  } catch (err) {
+    throw new Error(geminiErrorMessage(err));
+  }
 
   const text = result?.response?.text() || '{}';
   const usage = result?.response?.usageMetadata || null;

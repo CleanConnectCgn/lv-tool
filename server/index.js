@@ -25,6 +25,7 @@ import { registerUploadRoutes } from './lib/uploads.js';
 import { registerDocumentRoutes } from './lib/documentRoutes.js';
 import { registerCustomerDocumentRoutes } from './lib/customerDocuments.js';
 import { registerInboxRoutes } from './lib/inbox.js';
+import { geminiErrorMessage } from './lib/extraction/geminiError.js';
 import { withTimeout } from './lib/withTimeout.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -349,7 +350,7 @@ Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
     res.json(parsed);
   } catch (err) {
     console.error('[checkup/gemini] fehlgeschlagen:', err?.message || err);
-    res.status(502).json({ error: err?.message || err?.toString() || 'Gemini Anfrage fehlgeschlagen' });
+    res.status(502).json({ error: geminiErrorMessage(err) });
   }
 });
 
@@ -483,7 +484,7 @@ wenn erkennbar. Beispiel: "Hartböden feucht wischen (bis 180 cm Höhe alle Ober
       res.json(parsed);
     } catch (err) {
       console.error('[lv/from-image] fehlgeschlagen:', err?.message || err);
-      res.status(502).json({ error: err?.message || err?.toString() || 'Gemini Vision Anfrage fehlgeschlagen' });
+      res.status(502).json({ error: geminiErrorMessage(err) });
     }
   }
 );

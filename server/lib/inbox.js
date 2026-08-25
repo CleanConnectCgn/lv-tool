@@ -104,7 +104,10 @@ export function registerInboxRoutes(app) {
 
       const oauthClient = await getGoogleOAuthClient(req);
       if (!oauthClient) {
-        return res.status(409).json({ error: 'Google Drive ist nicht verbunden (siehe Kalender-Verbindung)' });
+        return res.status(409).json({
+          error: 'Google Drive ist nicht verbunden (siehe Kalender-Verbindung)',
+          reconnectUrl: '/api/calendar/oauth/start',
+        });
       }
 
       const fileBuffer = await fs.readFile(path.join(INBOX_DIR, doc.storagePath));

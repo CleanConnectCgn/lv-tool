@@ -113,7 +113,16 @@ export default function PosteingangCard() {
         />
       </div>
 
-      {error && <div className="overview-delete-confirm">{error}</div>}
+      {error && (
+        <>
+          <div className="overview-delete-confirm">{error}</div>
+          {error.includes('nicht verbunden') && (
+            <a className="import-toggle-btn" href="/api/calendar/oauth/start" style={{ display: 'inline-block', marginTop: 8 }}>
+              🔗 Google Kalender/Drive verbinden
+            </a>
+          )}
+        </>
+      )}
 
       {docs.length > 0 && (
         <div className="posteingang-list">

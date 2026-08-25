@@ -7,6 +7,7 @@
 // kürzeren Prompt ohne Katalogbezug.
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { withTimeout } from '../withTimeout.js';
+import { geminiErrorMessage } from './geminiError.js';
 
 export const modelName = 'gemini-flash-latest';
 
@@ -32,11 +33,16 @@ export async function extractInboxDocument({ fileBuffer, mimeType }) {
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
   const model = genAI.getGenerativeModel({ model: modelName });
 
-  const result = await withTimeout(
-    model.generateContent([PROMPT, { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
-    90000,
-    'Gemini'
-  );
+  let result;
+  try {
+    result = await withTimeout(
+      model.generateContent([PROMPT, { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
+      90000,
+      'Gemini'
+    );
+  } catch (err) {
+    throw new Error(geminiErrorMessage(err));
+  }
 
   const text = result?.response?.text() || '{}';
   const jsonMatch = text.match(/\{[\s\S]*\}/);

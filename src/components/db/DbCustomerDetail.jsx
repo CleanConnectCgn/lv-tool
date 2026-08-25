@@ -234,7 +234,16 @@ export default function DbCustomerDetail({ customerId, onBack, onOpenObject }) {
           <input type="file" onChange={handleUploadDocument} disabled={uploadingDocument} style={{ display: 'none' }} />
         </label>
 
-        {documentsError && <div className="modal-message error">{documentsError}</div>}
+        {documentsError && (
+          <>
+            <div className="modal-message error">{documentsError}</div>
+            {documentsError.includes('nicht verbunden') && (
+              <a className="import-toggle-btn" href="/api/calendar/oauth/start" style={{ display: 'inline-block', marginTop: 8 }}>
+                🔗 Google Kalender/Drive verbinden
+              </a>
+            )}
+          </>
+        )}
         {documents !== null && (
           <div className="overview-list" style={{ marginTop: 12 }}>
             {documents.length === 0 && <p className="modal-hint">Noch keine Dokumente in Drive.</p>}
