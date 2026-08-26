@@ -73,12 +73,24 @@ export const listUploads = (params = {}) => {
 // Block 8: Dokumentenausgabe
 export const lvPdfUrl = (specIds) => `/api/db/lv-pdf?specIds=${specIds.join(',')}`;
 export const createContract = (objectId, payload) => request('POST', `/api/db/objects/${objectId}/contract`, payload);
-export const contractDocxUrl = (contractId) => `/api/db/contracts/${contractId}/docx`;
 export const contractPdfUrl = (contractId) => `/api/db/contracts/${contractId}/pdf`;
 export const listContracts = (customerId) => request('GET', `/api/db/contracts?customerId=${customerId}`);
 
+// Vertrags-Import: bestehenden Vertrag (PDF/Foto) hochladen, Kopfdaten als
+// Entwurf zurückbekommen (raw-binary Body, nicht JSON - gleiches Muster wie
+// uploadDocumentForExtraction).
+export async function extractContractDraft(objectId, file) {
+  const res = await fetch(`/api/db/objects/${objectId}/contract/extract?mimeType=${encodeURIComponent(file.type)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type, 'X-Filename': encodeURIComponent(file.name) },
+    body: await file.arrayBuffer(),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data?.error) throw new Error(data?.error || `Fehler (${res.status})`);
+  return data;
+}
+
 // Baustein-System: AVV (Anlage 3), Status-Historie, KI-Gegenkontrolle.
-export const avvDocxUrl = (contractId) => `/api/db/contracts/${contractId}/avv-docx`;
 export const avvPdfUrl = (contractId) => `/api/db/contracts/${contractId}/avv-pdf`;
 export const updateContractStatus = (contractId, status) =>
   request('PATCH', `/api/db/contracts/${contractId}/status`, { status });

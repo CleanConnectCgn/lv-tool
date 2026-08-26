@@ -80,6 +80,26 @@ export default function SevDeskModal({
     setAmounts((prev) => ({ ...prev, [key]: value }));
   }
 
+  // Flexible Angebote: welche Positionen (docGroups) überhaupt in DIESES
+  // Angebot aufgenommen werden, und ob eine aufgenommene Position als
+  // "optional" markiert ist (in sevDesk vom Kunden im PDF an-/abwählbar),
+  // ist jetzt pro Angebot frei einstellbar statt fest aus App.jsx
+  // übernommen (dort weiterhin nur der sinnvolle Vorbelegungs-Default).
+  const [included, setIncluded] = useState(() =>
+    Object.fromEntries((docGroups || []).map((g) => [g.key, true]))
+  );
+  const [optionalFlags, setOptionalFlags] = useState(() =>
+    Object.fromEntries((docGroups || []).map((g) => [g.key, !!g.optional]))
+  );
+
+  function toggleIncluded(key) {
+    setIncluded((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  function toggleOptional(key) {
+    setOptionalFlags((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   const [showTexts, setShowTexts] = useState(true);
   const [anrede, setAnrede] = useState('Sehr geehrte Damen und Herren,');
   const [einleitung, setEinleitung] = useState(
@@ -105,7 +125,9 @@ export default function SevDeskModal({
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState('');
 
-  const gesamtPreis = (docGroups || []).reduce((sum, g) => sum + (Number(amounts[g.key]) || 0), 0);
+  const gesamtPreis = (docGroups || [])
+    .filter((g) => included[g.key])
+    .reduce((sum, g) => sum + (Number(amounts[g.key]) || 0), 0);
 
   useEffect(() => {
     if (token && !tokenFromServer) localStorage.setItem(TOKEN_KEY, token);
@@ -263,7 +285,9 @@ export default function SevDeskModal({
         offerNumber,
         offerDate: leistungsbeginn,
         timeToPay: Number(zahlungsziel) || 14,
-        groups: (docGroups || []).map((g) => ({ ...g, amount: amounts[g.key] })),
+        groups: (docGroups || [])
+          .filter((g) => included[g.key])
+          .map((g) => ({ ...g, amount: amounts[g.key], optional: !!optionalFlags[g.key] })),
         objekt,
         intervallInfo,
         standDatum: datum,
@@ -505,19 +529,40 @@ export default function SevDeskModal({
 
             <div className="modal-subheading">Preise</div>
             <p className="modal-hint">
-              Alle verknüpften Leistungsverzeichnisse werden als Positionen in EINEM Angebot
-              zusammengefasst.
+              Jedes verknüpfte Leistungsverzeichnis ist eine eigene Position mit eigenem Preis.
+              Abwählen lässt eine Position ganz aus diesem Angebot heraus; "optional" markiert sie
+              in sevDesk so, dass der Kunde sie im Angebots-PDF selbst an- oder abwählen kann.
             </p>
             {(docGroups || []).map((g) => (
-              <label className="modal-field" key={g.key}>
-                Nettobetrag {g.label} (€){g.optional ? ' — optional' : ''}
-                <input
-                  type="number"
-                  value={amounts[g.key] || ''}
-                  onChange={(e) => setAmount(g.key, e.target.value)}
-                  placeholder="0.00"
-                />
-              </label>
+              <div className="modal-field-row price-position-row" key={g.key}>
+                <label className="modal-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={!!included[g.key]}
+                    onChange={() => toggleIncluded(g.key)}
+                  />
+                  In Angebot aufnehmen
+                </label>
+                <label className="modal-field">
+                  Nettobetrag {g.label} (€)
+                  <input
+                    type="number"
+                    value={amounts[g.key] || ''}
+                    onChange={(e) => setAmount(g.key, e.target.value)}
+                    placeholder="0.00"
+                    disabled={!included[g.key]}
+                  />
+                </label>
+                <label className="modal-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={!!optionalFlags[g.key]}
+                    onChange={() => toggleOptional(g.key)}
+                    disabled={!included[g.key]}
+                  />
+                  Optional (Kunde kann abwählen)
+                </label>
+              </div>
             ))}
             <div className="price-summary-total">Gesamt: {gesamtPreis.toFixed(2)} €</div>
 

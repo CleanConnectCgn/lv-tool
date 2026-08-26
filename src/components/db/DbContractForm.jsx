@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { createContract, contractPdfUrl, avvPdfUrl, runContractAiReview } from '../../lib/dbCrm.js';
+import {
+  createContract,
+  contractPdfUrl,
+  avvPdfUrl,
+  runContractAiReview,
+  extractContractDraft,
+} from '../../lib/dbCrm.js';
 import { listOffersForContact } from '../../lib/sevdesk.js';
 
 const SEVDESK_TOKEN_KEY = 'lv-tool:sevdesk-token';
@@ -58,6 +64,43 @@ export default function DbContractForm({ objectId, sevdeskContactId, defaultLeis
   const [error, setError] = useState('');
   const [contractId, setContractId] = useState(null);
   const [warnings, setWarnings] = useState([]);
+
+  // Vertrags-Import: bestehenden Vertrag (PDF/Foto) hochladen, Kopfdaten
+  // per KI auslesen lassen und ins Formular übernehmen. Legt nie direkt
+  // einen Vertrag an - füllt nur die Felder unten, die weiterhin frei
+  // editierbar bleiben, bevor auf "Vertrag erstellen" geklickt wird.
+  const [importStatus, setImportStatus] = useState('idle'); // idle | running | done | error
+  const [importError, setImportError] = useState('');
+  const [importInfo, setImportInfo] = useState(null); // { erkannteKundenfirma, objektAdresse }
+
+  async function handleImportFile(file) {
+    if (!file) return;
+    setImportStatus('running');
+    setImportError('');
+    setImportInfo(null);
+    try {
+      const { draft } = await extractContractDraft(objectId, file);
+      if (draft.branche) handleBrancheChange(draft.branche);
+      if (draft.leistungsart) setLeistungsart(draft.leistungsart);
+      if (draft.reinigungsintervall) setReinigungsintervall(draft.reinigungsintervall);
+      if (draft.verguetungNetto !== null) setVerguetungNetto(draft.verguetungNetto);
+      if (draft.vertragsbeginn) setVertragsbeginn(draft.vertragsbeginn);
+      if (draft.kuendigungsfristMonate !== null) setKuendigungsfristMonate(draft.kuendigungsfristMonate);
+      if (draft.laufzeitMonate !== null) setLaufzeitMonate(draft.laufzeitMonate);
+      if (draft.zahlungszielWerktage !== null) setZahlungszielWerktage(draft.zahlungszielWerktage);
+      if (draft.internerAnsprechpartner) setInternerAnsprechpartner(draft.internerAnsprechpartner);
+      // dsgvoVariante erst NACH handleBrancheChange setzen, sonst überschreibt
+      // dessen Branche-zu-DSGVO-Zuordnung den ausgelesenen Wert wieder.
+      if (draft.dsgvoVariante) setDsgvoVariante(draft.dsgvoVariante);
+      if (draft.angebotNummer) setAngebotNummer(draft.angebotNummer);
+      if (draft.angebotDatum) setAngebotDatum(draft.angebotDatum);
+      setImportInfo({ erkannteKundenfirma: draft.erkannteKundenfirma, objektAdresse: draft.objektAdresse });
+      setImportStatus('done');
+    } catch (err) {
+      setImportError(err?.message || 'Vertrag konnte nicht ausgelesen werden');
+      setImportStatus('error');
+    }
+  }
 
   // Angebot (Anlage 2) - statt Angebotsnummer/-datum manuell einzutippen,
   // direkt aus einem bereits existierenden sevDesk-Angebot dieses Kunden
@@ -210,6 +253,25 @@ export default function DbContractForm({ objectId, sevdeskContactId, defaultLeis
     <form className="import-box" onSubmit={handleSubmit}>
       <div className="modal-subheading">Vertrag erstellen</div>
       {error && <div className="modal-message error">{error}</div>}
+
+      <label className="modal-field">
+        Bestehenden Vertrag importieren (PDF, JPG, PNG) - füllt die Felder unten vor
+        <input
+          type="file"
+          accept="image/jpeg,image/png,application/pdf"
+          disabled={importStatus === 'running'}
+          onChange={(e) => handleImportFile(e.target.files?.[0])}
+        />
+      </label>
+      {importStatus === 'running' && <p className="modal-hint">Liest Vertrag aus...</p>}
+      {importStatus === 'error' && <div className="modal-message error">{importError}</div>}
+      {importInfo && (
+        <p className="modal-hint">
+          Erkannt: {importInfo.erkannteKundenfirma || '(keine Firma erkannt)'}
+          {importInfo.objektAdresse ? ` · ${importInfo.objektAdresse}` : ''} — bitte alle Felder unten prüfen,
+          bevor du den Vertrag erstellst.
+        </p>
+      )}
 
       <div className="modal-field-row">
         <label className="modal-field">

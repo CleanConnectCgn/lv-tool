@@ -65,8 +65,8 @@ Läuft live unter https://lv-tool-production.up.railway.app
   Objektanschrift, feste Spalten, gruppiert nach Raumbereich und darin nach
   Elementgruppe in fester Reihenfolge Boden/Wand/Abfall/Inventar; je Objekt
   ein eigener Abschnitt, Duplikate innerhalb eines Abschnitts werden
-  zusammengefasst). Vertrag als DOCX, portiert aus dem separaten
-  vertragsgenerator-Repo (`server/lib/render/contractDocx.js`) - Haftung,
+  zusammengefasst). Vertrag als PDF (`server/lib/render/contractPdf.js`,
+  eigenständiger jsPDF-Renderer, keine DOCX-Ausgabe mehr) - Haftung,
   Gewährleistung und Schlussbestimmungen sind fester Code und nicht
   veränderbar, Datenschutz ist eine feste Standardklausel (für Arztpraxis
   etc. per Auswahl eine zusätzliche feste Verschwiegenheitsklausel), einzig
@@ -74,7 +74,7 @@ Läuft live unter https://lv-tool-production.up.railway.app
   Zahlungsziel/Laufzeit/Kündigungsfrist/Leistungsbeginn/Ansprechpartner/
   optionale Positionen sind variabel. Keine KI ist an der Vertragserstellung
   beteiligt - es wird ausschließlich strukturiertes JSON gespeichert
-  (`renderedData`), das DOCX wird bei Abruf aus diesen Daten neu gerendert
+  (`renderedData`), das PDF wird bei Abruf aus diesen Daten neu gerendert
 - **Migration - Block 9**: einmaliges Skript (`scripts/migrate-legacy-data.js`,
   siehe `MIGRATION.md`) übernimmt die bestehenden dateibasierten Dokumente in
   das Postgres-Modell - Kunden/Objekte werden direkt angelegt (inkl.
@@ -166,11 +166,11 @@ server/lib/extraction/ Austauschbarer Auslese-Adapter (Block 7): index.js
                       (Dispatcher + Katalog-ID-Validierung + Protokollierung),
                       gemini.js (Standard-Implementierung)
 server/lib/render/    Dokumentenausgabe (Block 8): lvPdf.js (LV-PDF gegen
-                      ServiceSpec/Katalog, jsPDF + autoTable), contractDocx.js
-                      (Vertrags-DOCX, aus vertragsgenerator/build_docs_v17
-                      portiert, feste Klauseln + begrenzte Variablenliste),
-                      contractFields.js (Konstanten/DSGVO-Varianten, 1:1 aus
-                      vertragsgenerator übernommen)
+                      ServiceSpec/Katalog, jsPDF + autoTable), contractPdf.js
+                      (Vertrags-PDF, jsPDF, feste Klauseln + begrenzte
+                      Variablenliste - einziges Vertragsformat, keine DOCX-
+                      Ausgabe), contractFields.js (Konstanten/DSGVO-Varianten),
+                      textFormat.js (geteilte Formatierungsfunktionen)
 worker/               Backup-Worker (Block 4), eigener Railway-Dienst:
                       backup.js (pg_dump/gzip/Scheduler), storage.js
                       (austauschbarer Speicher-Adapter), index.js (Prozess-

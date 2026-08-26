@@ -1,16 +1,12 @@
-// PDF-Fassung der AVV (Anlage 3) - eigenständiger Renderer (jsPDF), analog
-// zu contractPdf.js. Gleiches Grundprinzip: KEINE DOCX-zu-PDF-Konvertierung,
-// Klauseltext 1:1 aus server/lib/render/avvDocx.js übernommen.
+// PDF-Fassung der AVV (Anlage 3) - alleiniger Renderer (jsPDF), analog zu
+// contractPdf.js. Der frühere DOCX-Renderer (avvDocx.js) wurde entfernt,
+// AVV wird nur noch als PDF ausgegeben.
 //
-// WICHTIG FÜR KÜNFTIGE ÄNDERUNGEN: Jede inhaltliche Änderung an einer Klausel
-// in avvDocx.js muss hier 1:1 nachgezogen werden (und umgekehrt) - kein
-// automatischer Abgleich. avvPdf.test.js prüft per pdftotext echten
-// Text-Inhalt, das fängt grobe Abweichungen ab, ersetzt aber keinen
-// manuellen Soll-Ist-Vergleich bei Textänderungen.
+// avvPdf.test.js prüft per pdftotext echten Text-Inhalt.
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { DSGVO_VARIANTEN, AVV_VARIANTEN, AUFTRAGNEHMER } from './contractFields.js';
-import { formatDateDE } from './docxHelpers.js';
+import { formatDateDE } from './textFormat.js';
 import {
   TEAL,
   INK,

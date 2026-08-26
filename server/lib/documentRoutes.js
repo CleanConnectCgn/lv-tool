@@ -6,17 +6,17 @@
 // selbst keinen Text in ein Dokument schreibt, sondern nur strukturiert
 // Befunde zurückgibt (Baustein-System, siehe contractRules.js).
 import rateLimit from 'express-rate-limit';
+import express from 'express';
 import Anthropic from '@anthropic-ai/sdk';
 import { prisma } from './prisma.js';
 import { renderLvPdf } from './render/lvPdf.js';
-import { buildContractDocument } from './render/contractDocx.js';
-import { buildAvvDocument } from './render/avvDocx.js';
 import { buildContractPdf } from './render/contractPdf.js';
 import { buildAvvPdf } from './render/avvPdf.js';
 import { validateContract } from './render/contractRules.js';
 import { withTimeout } from './withTimeout.js';
 import { getGoogleOAuthClient } from './googleAuth.js';
 import { uploadBufferToDrive } from './drive.js';
+import { extract as extractContractDraft } from './extraction/contractGemini.js';
 import {
   DSGVO_VARIANTEN,
   CONTRACT_TEMPLATE_VERSION,
@@ -58,7 +58,7 @@ async function loadSpecsForPdf(specIds) {
 // (bewusst über der höchsten bekannten realen Papier-Vertragsnummer, siehe
 // VT-1264 im Referenzvertrag, um Kollisionen auszuschließen).
 // Best-effort: rendert Vertrag (+ AVV, falls die DSGVO-Variante das
-// verlangt) als DOCX+PDF und lädt sie in den Google-Drive-Kundenordner hoch,
+// verlangt) als PDF und lädt es in den Google-Drive-Kundenordner hoch,
 // direkt beim Anlegen (Auftrag "Verträge/LVs/Angebote/Protokolle immer im
 // Kundenordner"). Wird bewusst NICHT awaited beim Aufrufer, damit ein
 // langsamer/fehlschlagender Drive-Upload das Anlegen des Vertrags selbst nie
@@ -69,17 +69,7 @@ async function archiveContractToDriveIfConnected(req, customer, renderedData, ve
     const oauthClient = await getGoogleOAuthClient(req);
     if (!oauthClient) return;
 
-    const [docxBuffer, pdfBuffer] = await Promise.all([
-      buildContractDocument(renderedData),
-      buildContractPdf(renderedData),
-    ]);
-    await uploadBufferToDrive({
-      oauthClient,
-      customer,
-      filename: `${vertragsnummer}.docx`,
-      buffer: docxBuffer,
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
+    const pdfBuffer = await buildContractPdf(renderedData);
     await uploadBufferToDrive({
       oauthClient,
       customer,
@@ -91,17 +81,7 @@ async function archiveContractToDriveIfConnected(req, customer, renderedData, ve
     const dsgvoVariante = renderedData.dsgvoVariante || 'standard';
     const dsgvoInfo = DSGVO_VARIANTEN[dsgvoVariante];
     if (dsgvoInfo?.braucht_avv) {
-      const [avvDocxBuffer, avvPdfBuffer] = await Promise.all([
-        buildAvvDocument(renderedData),
-        buildAvvPdf(renderedData),
-      ]);
-      await uploadBufferToDrive({
-        oauthClient,
-        customer,
-        filename: `${vertragsnummer}-AVV.docx`,
-        buffer: avvDocxBuffer,
-        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      });
+      const avvPdfBuffer = await buildAvvPdf(renderedData);
       await uploadBufferToDrive({
         oauthClient,
         customer,
@@ -237,6 +217,34 @@ export function registerDocumentRoutes(app) {
     }
   });
 
+  // Vertrags-Import: bestehenden Vertrag (PDF/Foto) hochladen, Kopfdaten
+  // per Gemini auslesen und als Entwurf zurückgeben - füllt NUR das
+  // Vertragsformular (DbContractForm.jsx) vor. Legt selbst NIEMALS einen
+  // Vertrag/Document an, exakt wie beim LV-Import (Block 7): ein Mensch
+  // prüft den Entwurf im Formular und bestätigt erst dann per
+  // POST .../contract. mimeType als Query-Param, gleiches Muster wie
+  // POST /api/db/uploads.
+  app.post(
+    '/api/db/objects/:id/contract/extract',
+    aiRateLimiter,
+    express.raw({ type: () => true, limit: '20mb' }),
+    async (req, res) => {
+      const { mimeType } = req.query;
+      if (!mimeType || !Buffer.isBuffer(req.body) || req.body.length === 0) {
+        return res.status(400).json({ error: 'mimeType Query-Parameter und Datei-Body sind erforderlich' });
+      }
+      try {
+        const object = await prisma.property.findUnique({ where: { id: req.params.id }, include: { customer: true } });
+        if (!object) return res.status(404).json({ error: 'Objekt nicht gefunden' });
+
+        const { draft } = await extractContractDraft({ fileBuffer: req.body, mimeType });
+        res.json({ draft });
+      } catch (err) {
+        res.status(500).json({ error: err?.message || 'Vertrag konnte nicht ausgelesen werden' });
+      }
+    }
+  );
+
   app.get('/api/db/contracts', async (req, res) => {
     try {
       const where = req.query.customerId ? { customerId: req.query.customerId } : {};
@@ -247,45 +255,9 @@ export function registerDocumentRoutes(app) {
     }
   });
 
-  app.get('/api/db/contracts/:id/docx', async (req, res) => {
-    try {
-      const contract = await prisma.contract.findUnique({ where: { id: req.params.id }, include: { document: true } });
-      if (!contract) return res.status(404).json({ error: 'Vertrag nicht gefunden' });
-      const buffer = await buildContractDocument(contract.document.renderedData);
-      res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.set(
-        'Content-Disposition',
-        `attachment; filename="${contract.document.renderedData?.vertragsnummer || 'Vertrag'}.docx"`
-      );
-      res.send(buffer);
-    } catch (err) {
-      res.status(500).json({ error: err?.message || 'Vertrag-DOCX konnte nicht erstellt werden' });
-    }
-  });
-
   // AVV (Anlage 3) - nur für Datenschutz-Varianten mit braucht_avv: true.
   // Wird nicht separat gespeichert, sondern bei Bedarf aus denselben
   // renderedData gerendert wie der Hauptvertrag (kein neues DocumentType nötig).
-  app.get('/api/db/contracts/:id/avv-docx', async (req, res) => {
-    try {
-      const contract = await prisma.contract.findUnique({ where: { id: req.params.id }, include: { document: true } });
-      if (!contract) return res.status(404).json({ error: 'Vertrag nicht gefunden' });
-      const dsgvoVariante = contract.document.renderedData?.dsgvoVariante || 'standard';
-      const dsgvoInfo = DSGVO_VARIANTEN[dsgvoVariante];
-      if (!dsgvoInfo || !dsgvoInfo.braucht_avv) {
-        return res.status(409).json({ error: 'Für diese Datenschutz-Variante ist keine AVV erforderlich' });
-      }
-      const buffer = await buildAvvDocument(contract.document.renderedData);
-      res.set('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.set(
-        'Content-Disposition',
-        `attachment; filename="${contract.document.renderedData?.vertragsnummer || 'Vertrag'}-AVV.docx"`
-      );
-      res.send(buffer);
-    } catch (err) {
-      res.status(500).json({ error: err?.message || 'AVV-DOCX konnte nicht erstellt werden' });
-    }
-  });
 
   app.get('/api/db/contracts/:id/pdf', async (req, res) => {
     try {

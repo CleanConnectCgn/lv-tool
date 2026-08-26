@@ -1,19 +1,10 @@
-// PDF-Fassung des Vertragsgenerators - eigenständiger Renderer (jsPDF,
-// gleiche Optik wie server/lib/render/lvPdf.js), KEINE DOCX-zu-PDF-
-// Konvertierung. Bewusste Entscheidung des Betreibers trotz des damit
-// verbundenen Risikos: der Klauseltext lebt jetzt an ZWEI Stellen
-// (server/lib/render/contractDocx.js und hier) statt an einer.
+// PDF-Fassung des Vertragsgenerators - alleiniger Renderer für Verträge
+// (jsPDF, gleiche Optik wie server/lib/render/lvPdf.js). Verträge werden
+// ausschließlich als PDF ausgegeben, der frühere DOCX-Renderer
+// (contractDocx.js) wurde entfernt.
 //
-// WICHTIG FÜR KÜNFTIGE ÄNDERUNGEN: Jede inhaltliche Änderung an einer
-// Vertragsklausel in contractDocx.js muss hier 1:1 nachgezogen werden
-// (und umgekehrt) - es gibt keinen automatischen Abgleich. Die
 // contractPdf.test.js prüft per pdftotext echten Text-Inhalt (nicht nur
-// die PDF-Signatur wie lvPdf.test.js), das fängt grobe Abweichungen ab,
-// ersetzt aber keinen manuellen Soll-Ist-Vergleich bei Textänderungen.
-//
-// Reine Formatierungsfunktionen (formatEuro/formatPercent/formatDateDE)
-// werden direkt aus docxHelpers.js importiert statt dupliziert - die sind
-// reine String-Logik ohne docx-Abhängigkeit, kein Duplizierungsrisiko.
+// die PDF-Signatur wie lvPdf.test.js).
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import {
@@ -28,7 +19,7 @@ import {
   ZAHLUNGSZIEL_WERKTAGE as DEFAULT_ZAHLUNGSZIEL_WERKTAGE,
 } from './contractFields.js';
 import { validateContract } from './contractRules.js';
-import { formatEuro, formatPercent, formatDateDE } from './docxHelpers.js';
+import { formatEuro, formatPercent, formatDateDE } from './textFormat.js';
 import {
   TEAL,
   INK,

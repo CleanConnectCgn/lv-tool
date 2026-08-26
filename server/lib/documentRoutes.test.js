@@ -80,8 +80,8 @@ describe('GET /api/db/lv-pdf', () => {
   });
 });
 
-describe('POST /api/db/objects/:id/contract, GET /api/db/contracts/:id/docx', () => {
-  it('legt Document + Contract an und generiert bei Abruf ein echtes DOCX', async () => {
+describe('POST /api/db/objects/:id/contract, GET /api/db/contracts/:id/pdf', () => {
+  it('legt Document + Contract an und generiert bei Abruf ein echtes PDF', async () => {
     const created = await request(app)
       .post(`/api/db/objects/${objectId}/contract`)
       .send({
@@ -98,8 +98,7 @@ describe('POST /api/db/objects/:id/contract, GET /api/db/contracts/:id/docx', ()
     expect(created.body.document.type).toBe('VERTRAG');
     expect(created.body.document.renderedData.vertragsnummer).toMatch(/^VT-\d+$/);
     expect(created.body.document.renderedData.kunde.firma).toBe('Dokument Test GmbH (Block 8)');
-    // Snapshot des Klauseltexts + Vorlagenversion muss mitgespeichert sein
-    // (Immutability-Fix - siehe contractDocx.test.js).
+    // Snapshot des Klauseltexts + Vorlagenversion muss mitgespeichert sein.
     expect(created.body.document.renderedData.dsgvoKlausel.text).toBeTruthy();
     expect(created.body.document.renderedData.contractTemplateVersion).toBeTruthy();
     // Alle Pflichtfelder waren gesetzt -> keine Warnungen.
@@ -107,8 +106,8 @@ describe('POST /api/db/objects/:id/contract, GET /api/db/contracts/:id/docx', ()
 
     // supertest puffert diesen MIME-Type nicht automatisch in .body - über
     // Content-Length statt res.body.length prüfen, dass echte Bytes zurückkamen.
-    const docxRes = await request(app)
-      .get(`/api/db/contracts/${created.body.contract.id}/docx`)
+    const pdfRes = await request(app)
+      .get(`/api/db/contracts/${created.body.contract.id}/pdf`)
       .buffer(true)
       .parse((res, callback) => {
         const chunks = [];
@@ -116,12 +115,10 @@ describe('POST /api/db/objects/:id/contract, GET /api/db/contracts/:id/docx', ()
         res.on('end', () => callback(null, Buffer.concat(chunks)));
       })
       .expect(200);
-    expect(docxRes.headers['content-type']).toBe(
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-    );
-    expect(docxRes.body.length).toBeGreaterThan(0);
-    // Ein echtes DOCX ist ein ZIP-Archiv (Signatur "PK").
-    expect(docxRes.body.toString('latin1', 0, 2)).toBe('PK');
+    expect(pdfRes.headers['content-type']).toBe('application/pdf');
+    expect(pdfRes.body.length).toBeGreaterThan(0);
+    // Ein echtes PDF beginnt mit der Signatur "%PDF".
+    expect(pdfRes.body.toString('latin1', 0, 4)).toBe('%PDF');
   });
 
   it('erzeugt bei zwei Verträgen zwei unterschiedliche, fortlaufende Vertragsnummern', async () => {
@@ -153,8 +150,8 @@ describe('POST /api/db/objects/:id/contract, GET /api/db/contracts/:id/docx', ()
   });
 });
 
-describe('GET /api/db/contracts/:id/avv-docx', () => {
-  it('liefert 200 + echtes DOCX für eine AVV-pflichtige Variante', async () => {
+describe('GET /api/db/contracts/:id/avv-pdf', () => {
+  it('liefert 200 + echtes PDF für eine AVV-pflichtige Variante', async () => {
     const created = await request(app)
       .post(`/api/db/objects/${objectId}/contract`)
       .send({ dsgvoVariante: 'physiotherapiepraxis' })
@@ -162,7 +159,7 @@ describe('GET /api/db/contracts/:id/avv-docx', () => {
     contractIdsToClean.push(created.body.contract.id);
 
     const avvRes = await request(app)
-      .get(`/api/db/contracts/${created.body.contract.id}/avv-docx`)
+      .get(`/api/db/contracts/${created.body.contract.id}/avv-pdf`)
       .buffer(true)
       .parse((res, callback) => {
         const chunks = [];
@@ -170,7 +167,7 @@ describe('GET /api/db/contracts/:id/avv-docx', () => {
         res.on('end', () => callback(null, Buffer.concat(chunks)));
       })
       .expect(200);
-    expect(avvRes.body.toString('latin1', 0, 2)).toBe('PK');
+    expect(avvRes.body.toString('latin1', 0, 4)).toBe('%PDF');
   });
 
   it('liefert 409 für eine Variante ohne AVV-Pflicht (z.B. standard)', async () => {
@@ -180,11 +177,11 @@ describe('GET /api/db/contracts/:id/avv-docx', () => {
       .expect(201);
     contractIdsToClean.push(created.body.contract.id);
 
-    await request(app).get(`/api/db/contracts/${created.body.contract.id}/avv-docx`).expect(409);
+    await request(app).get(`/api/db/contracts/${created.body.contract.id}/avv-pdf`).expect(409);
   });
 
   it('liefert 404 für einen unbekannten Vertrag', async () => {
-    await request(app).get('/api/db/contracts/00000000-0000-0000-0000-000000000000/avv-docx').expect(404);
+    await request(app).get('/api/db/contracts/00000000-0000-0000-0000-000000000000/avv-pdf').expect(404);
   });
 });
 

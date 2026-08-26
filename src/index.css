@@ -1147,6 +1147,22 @@ textarea::placeholder {
   margin-bottom: 14px;
 }
 
+.price-position-row {
+  align-items: center;
+}
+
+.modal-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.modal-checkbox input[type='checkbox'] {
+  width: auto;
+}
+
 .offer-success-actions {
   display: flex;
   flex-direction: column;
