@@ -62,7 +62,7 @@ export const STANDARD_MWST = 19;
 
 // Stempel, der bei jeder Vertragserstellung mit in renderedData gespeichert
 // wird - rein zur Nachvollziehbarkeit, falls die feste §1-§9-Vorlage
-// (contractDocx.js) je geändert wird. Bei einer inhaltlichen Änderung der
+// (contractPdf.js) je geändert wird. Bei einer inhaltlichen Änderung der
 // Vorlage hier hochzählen.
 export const CONTRACT_TEMPLATE_VERSION = 'contract-v2-2026-07-29';
 
@@ -183,7 +183,7 @@ export const BRANCHE_ZU_DSGVO = {
   sonstiges: 'standard',
 };
 
-// Angaben für den AVV-Baustein (avvDocx.js, Anlage 3) - nur für die eine
+// Angaben für den AVV-Baustein (avvPdf.js, Anlage 3) - nur für die eine
 // DSGVO-Variante mit braucht_avv: true. Bewusst kurze, strukturierte Felder
 // statt Fließtext - der Renderer baut daraus die Art.-28-Abs.-3-DSGVO-
 // Pflichtangaben (§ 2 Art der Daten/Kategorien betroffener Personen).

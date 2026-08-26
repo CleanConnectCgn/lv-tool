@@ -2,14 +2,14 @@
 // codierte Regeln - keine KI. Wird an zwei Stellen aufgerufen:
 // 1. server/lib/documentRoutes.js beim Anlegen eines Vertrags (errors blockieren
 //    mit HTTP 400, warnings werden nur mitgegeben).
-// 2. contractDocx.js bei JEDEM Rendern (auch bei späteren Downloads), damit ein
+// 2. contractPdf.js bei JEDEM Rendern (auch bei späteren Downloads), damit ein
 //    unvollständiger Vertrag nie unbemerkt wie ein fertiger aussieht.
 //
 // errors = technisch unsinnige/widersprüchliche Eingaben, die eine Erstellung
 // verhindern. warnings = fachlich fehlende Angaben, die einen Entwurf nicht
 // verhindern sollen (die bestehende Arbeitsweise "Vertrag erst grob anlegen,
 // Details später ergänzen" bleibt möglich) - sie werden stattdessen sichtbar
-// gemacht (API-Response + Warnbanner im DOCX).
+// gemacht (API-Response + Warnbanner im PDF).
 import { DSGVO_VARIANTEN, BRANCHE_ZU_DSGVO } from './contractFields.js';
 
 export function validateContract(data = {}) {
@@ -40,7 +40,7 @@ export function validateContract(data = {}) {
   // aus Nutzereingaben im Formular - können aber trotzdem leer sein (siehe
   // reale Bestandslücke "ohja events" in MIGRATION.md: keine Adresse
   // vorhanden). Beide führen sonst zu "[Auftraggeber]"/"[Objektadresse]"-
-  // Platzhaltern im Dokumenttext (contractDocx.js) - das muss im Banner
+  // Platzhaltern im Dokumenttext (contractPdf.js) - das muss im Banner
   // genauso sichtbar sein wie die anderen Lücken, sonst wäre der Banner
   // unvollständig gegenüber dem, was tatsächlich im Dokument steht.
   if (!data.kunde?.firma) {

@@ -141,7 +141,7 @@ export async function listOffersForContact(token, contactId) {
     .map((o) => ({
       id: o.id,
       orderNumber: o.orderNumber || '',
-      // Auf ISO-Datum (YYYY-MM-DD) reduziert, wie es contractDocx.js
+      // Auf ISO-Datum (YYYY-MM-DD) reduziert, wie es der Vertragsgenerator
       // erwartet - sevDesk liefert orderDate mal als Unix-Timestamp (Sekunden,
       // z.B. beim Schreiben über die Factory), mal als ISO-String beim Lesen
       // des Objekts, daher beide Formen abfangen statt eine anzunehmen.

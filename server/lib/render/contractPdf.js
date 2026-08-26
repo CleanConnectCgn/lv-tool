@@ -75,7 +75,8 @@ function kontodatenRows() {
   ];
 }
 
-// contract = { ... siehe contractDocx.js - identische Eingabeform ... }
+// contract = renderedData aus documentRoutes.js (siehe dort die Draft-Erzeugung
+// in POST /api/db/objects/:id/contract für die vollständige Feldliste).
 export function buildContractPdf(contract) {
   const {
     kunde = {},
@@ -108,8 +109,8 @@ export function buildContractPdf(contract) {
   const vorgabenMeldungen = [...vorgabenFehler, ...vorgabenHinweise];
 
   // Dreizeilig (Straße / PLZ Ort / Land) statt einer komma-getrennten Zeile -
-  // an contractDocx.js/den Referenzvertrag VT-1265 angeglichen (2026-07-30):
-  // vorher fehlte hier u.a. die Land-Zeile komplett.
+  // an den Referenzvertrag VT-1265 angeglichen (2026-07-30): vorher fehlte
+  // hier u.a. die Land-Zeile komplett.
   const kundeAdresseZeilen = [
     kunde.strasse,
     [kunde.plz, kunde.ort].filter(Boolean).join(' '),
@@ -514,10 +515,9 @@ export function buildContractPdf(contract) {
 }
 
 // Kopfbereich: Label + Wert INLINE auf derselben Zeile (Label grau, Wert
-// fett dahinter) statt gestapelt/GROSSBUCHSTABEN - an contractDocx.js
-// (infoBoxRow) und den Referenzvertrag VT-1265 angeglichen (2026-07-30):
-// vorher wich die PDF-Optik hier sichtbar vom DOCX und vom echten
-// Referenzvertrag ab.
+// fett dahinter) statt gestapelt/GROSSBUCHSTABEN - an den Referenzvertrag
+// VT-1265 angeglichen (2026-07-30): vorher wich die PDF-Optik hier sichtbar
+// vom echten Referenzvertrag ab.
 function drawHeaderBox(doc, { ueberschrift, kunde, kundeAdresseZeilen, vertragsnummer, datum, internerAnsprechpartner }) {
   const y0 = 24;
   doc.setFont('helvetica', 'bold');

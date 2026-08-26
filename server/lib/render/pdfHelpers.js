@@ -109,9 +109,9 @@ export function drawFurniture(doc) {
 // überlappte mit der Rollen-Bezeichnung bzw. der Fußzeile, sobald ein Name
 // zweizeilig umbrach. Zeilenzahl wird jetzt vorher mit splitTextToSize
 // gemessen, Boxhöhe und Fußzeilen-Abstand richten sich danach.
-// leftLabel/rightLabel: siehe docxHelpers.js signatureBlock() - Hauptvertrag
-// "als Auftragnehmer"/"als Auftraggeber", AVV "Auftragsverarbeiter"/
-// "Verantwortlicher" (ohne "als").
+// leftLabel/rightLabel: Hauptvertrag nutzt "als Auftragnehmer"/
+// "als Auftraggeber", AVV dagegen "Auftragsverarbeiter"/"Verantwortlicher"
+// (ohne "als") - siehe avvPdf.js.
 export function drawSignatureBlock(doc, kundeFirma, { leftLabel = 'als Auftragnehmer', rightLabel = 'als Auftraggeber' } = {}) {
   const colW = CONTENT_W / 2 - 4;
   const nameWidth = colW - 6;

@@ -126,9 +126,9 @@ export function registerDocumentRoutes(app) {
   });
 
   // Vertrag erzeugen: legt Document (renderedData = die Eingabefelder, aus
-  // denen gerendert wird) + Contract an. Das DOCX selbst wird nicht als
+  // denen gerendert wird) + Contract an. Das PDF selbst wird nicht als
   // Binärdatei gespeichert, sondern bei Bedarf aus renderedData neu gerendert
-  // (GET .../docx) - konsistent mit "das JSON, aus dem gerendert wurde"
+  // (GET .../pdf) - konsistent mit "das JSON, aus dem gerendert wurde"
   // (Auftrag Block 2, documents.rendered_data).
   app.post('/api/db/objects/:id/contract', async (req, res) => {
     try {
@@ -156,8 +156,8 @@ export function registerDocumentRoutes(app) {
         mwstSatz: req.body?.mwstSatz ?? STANDARD_MWST,
         // Bug gefunden 2026-07-29 beim Testen mit echten Kundendaten: wurde
         // hier als "?? null" gespeichert (Default sollte laut Kommentar erst
-        // beim Rendern greifen), aber ein destructuring-Default in
-        // contractDocx.js greift NUR bei undefined, nicht bei explizitem
+        // beim Rendern greifen), aber ein destructuring-Default im Renderer
+        // greift NUR bei undefined, nicht bei explizitem
         // null - das JSON aus der DB hat aber immer den Schlüssel gesetzt
         // (null statt fehlend). Ergebnis: "innerhalb von null Werktagen zu
         // leisten" im echten Vertrag. Deshalb jetzt wie kuendigungsfristMonate
@@ -178,7 +178,7 @@ export function registerDocumentRoutes(app) {
 
       // Vorgaben (contractRules.js): errors blockieren die Erstellung
       // (technisch unsinnige Eingaben), warnings nicht (Entwurf bleibt
-      // möglich, tauchen aber im Response und als Banner im DOCX auf).
+      // möglich, tauchen aber im Response und als Banner im PDF auf).
       const { errors, warnings } = validateContract(draftData);
       if (errors.length > 0) {
         return res.status(400).json({ error: 'Vertrag verstößt gegen feste Vorgaben', errors });
@@ -189,7 +189,7 @@ export function registerDocumentRoutes(app) {
         ...draftData,
         vertragsnummer,
         // Snapshot des tatsächlich verwendeten Klauseltexts + Vorlagen-Version
-        // (siehe contractDocx.js) - macht das Dokument unabhängig von
+        // (siehe contractPdf.js) - macht das Dokument unabhängig von
         // späteren Textänderungen an DSGVO_VARIANTEN.
         dsgvoKlausel: DSGVO_VARIANTEN[dsgvoVariante] || DSGVO_VARIANTEN.standard,
         contractTemplateVersion: CONTRACT_TEMPLATE_VERSION,
@@ -348,7 +348,7 @@ ${JSON.stringify(errors)}
 Bereits automatisch erkannte Hinweise (warnings, blockieren nicht):
 ${JSON.stringify(warnings)}
 
-Vertragsdaten (renderedData, daraus wird das DOCX gerendert):
+Vertragsdaten (renderedData, daraus wird das PDF gerendert):
 ${JSON.stringify(data, null, 2)}
 
 Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:

@@ -65,9 +65,9 @@ export const AREA_DEFINITIONS = {
       ]),
   },
   buero: {
-    label: 'Büro- und Behandlungsräume',
+    label: 'Büroräume',
     build: () =>
-      section('Büro- und Behandlungsräume', [
+      section('Büroräume', [
         row('Hartböden feucht wischen & Textilbeläge saugen', { column: 'woechentlich' }),
         row('Reinigung der Oberflächen von Arbeits- & Schreibtischen (nur freigeräumte Flächen)', {
           column: 'woechentlich',
@@ -85,10 +85,31 @@ export const AREA_DEFINITIONS = {
         }),
       ]),
   },
-  sanitaer: {
-    label: 'Sanitärbereiche und Dusche',
+  // Bis 2026-08-26 fest mit "Büroräume" zu einem gemeinsamen Bereich
+  // "Büro- und Behandlungsräume" gebündelt - nicht jeder Kunde mit
+  // Büroflächen hat auch Behandlungsräume (und umgekehrt), deshalb jetzt
+  // eigenständig auswählbar (Kundenwunsch).
+  behandlungsraeume: {
+    label: 'Behandlungsräume',
     build: () =>
-      section('Sanitärbereiche und Dusche', [
+      section('Behandlungsräume', [
+        row('Hartböden feucht wischen & desinfizierend reinigen', { column: 'woechentlich' }),
+        row('Behandlungsliegen & -stühle (Auflageflächen) desinfizierend abwischen', { column: 'woechentlich' }),
+        row('Arbeitsflächen & Ablagen desinfizierend abwischen', { column: 'woechentlich' }),
+        row('Feuchte Reinigung der Türblätter & Türklinken', { column: 'woechentlich' }),
+        row('Lichtschalter & Steckdosenrahmen desinfizierend abwischen', { column: 'woechentlich' }),
+        row('Entfernen von Fingerabdrücken & Schlieren von Innenverglasungen & Türen', { column: 'woechentlich' }),
+        row('Abfallbehälter leeren, desinfizieren & Beutel austauschen', { column: 'woechentlich' }),
+        row('Feuchte Reinigung der Fensterbänke & Fußleisten', { column: 'monatlich', value: '2x' }),
+        row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
+          bedarf: true,
+        }),
+      ]),
+  },
+  sanitaer: {
+    label: 'Sanitärbereiche',
+    build: () =>
+      section('Sanitärbereiche', [
         row('Hartböden feucht wischen & Textilbeläge saugen', { column: 'woechentlich' }),
         row('Feuchte Reinigung aller Sanitärobjekte (WC, Waschbecken, Armaturen)', { column: 'woechentlich' }),
         row('WC-Oberflächen, WC-Sitze, Urinale & Spülungen säubern', { column: 'woechentlich' }),
@@ -98,10 +119,23 @@ export const AREA_DEFINITIONS = {
           column: 'woechentlich',
         }),
         row('Abfallbehälter leeren, desinfizieren & Beutel austauschen', { column: 'woechentlich' }),
-        row('Vollreinigung der Dusche inkl. Armaturen & Fliesen', { column: 'monatlich', value: '2x' }),
         row('Entfernen von Staub & Spinnweben an Mobiliar, Decken, Lampen, Wandleuchten, Heizkörpern & in Ecken', {
           bedarf: true,
         }),
+      ]),
+  },
+  // Bis 2026-08-26 fest als eine Zeile innerhalb von "Sanitärbereiche und
+  // Dusche" mitgelaufen - nicht jedes Sanitärobjekt hat eine Dusche
+  // (und umgekehrt gibt es separate Duschräume ohne WC), deshalb jetzt
+  // eigenständig auswählbar (Kundenwunsch).
+  dusche: {
+    label: 'Dusche',
+    build: () =>
+      section('Dusche', [
+        row('Vollreinigung der Dusche inkl. Armaturen & Fliesen', { column: 'woechentlich' }),
+        row('Duschwanne/-kabine entkalken', { column: 'monatlich', value: '2x' }),
+        row('Abflüsse auf Durchgängigkeit prüfen & reinigen', { column: 'monatlich', value: '1x' }),
+        row('Entfernen von Staub & Spinnweben an Decken, Lampen & in Ecken', { bedarf: true }),
       ]),
   },
   kueche: {
@@ -164,7 +198,9 @@ export const AREA_ORDER = [
   'flur',
   'empfang',
   'buero',
+  'behandlungsraeume',
   'sanitaer',
+  'dusche',
   'kueche',
   'treppenhaus',
   'archivlager',
