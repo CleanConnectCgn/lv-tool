@@ -3,10 +3,14 @@ import { searchContacts, createContact, getContactAddress } from '../lib/sevdesk
 import {
   AREA_DEFINITIONS,
   AREA_ORDER,
+  OBJEKT_TYPEN,
+  OBJEKT_TYP_ORDER,
+  areasForObjektTyp,
   buildSectionsFromSetup,
   buildSingleServiceMain,
 } from '../templates/checklistAreas.js';
 import WeekdaySelector from './WeekdaySelector.jsx';
+import DiktatButton from './DiktatButton.jsx';
 
 const TOKEN_KEY = 'lv-tool:sevdesk-token';
 const FREQUENCIES = ['1x', '2x', '3x', '4x', '5x', '6x', '7x'];
@@ -41,7 +45,14 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
   const [singleService, setSingleService] = useState('glasreinigung');
   const [singleServiceTitle, setSingleServiceTitle] = useState('');
 
-  // Schritt 1-3
+  // Besichtigung einsprechen oder eintippen -> Vorbelegung der Schritte 1-3
+  const [besichtigung, setBesichtigung] = useState('');
+  const [besichtigungStatus, setBesichtigungStatus] = useState('idle'); // idle | denkt | fehler
+  const [besichtigungFehler, setBesichtigungFehler] = useState('');
+  const [besichtigungHinweis, setBesichtigungHinweis] = useState('');
+
+  // Schritt 1-4
+  const [objektTyp, setObjektTyp] = useState('');
   const [frequency, setFrequency] = useState('2x');
   const [wochentage, setWochentage] = useState([]);
   const [areas, setAreas] = useState(() =>
@@ -85,6 +96,62 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
         setSuggestions([]);
       }
     }, 300);
+  }
+
+  // Ein Objekttyp ist ein Startpunkt, keine feste Vorlage: er hakt die
+  // typischen Bereiche vor und setzt eine übliche Frequenz. Danach bleibt
+  // alles einzeln änderbar.
+  function pickObjektTyp(key) {
+    setObjektTyp(key);
+    const typ = OBJEKT_TYPEN[key];
+    if (!typ) return;
+    setAreas(areasForObjektTyp(key));
+    setFrequency(typ.frequency);
+    setWochentage([]);
+  }
+
+  // Schickt die geschilderte Besichtigung an den Assistenten und übernimmt
+  // dessen Vorschlag als Vorbelegung. Nichts davon ist endgültig - alle
+  // Haken bleiben danach normal bedienbar.
+  async function besichtigungAuswerten() {
+    const text = besichtigung.trim();
+    if (!text) return;
+    setBesichtigungStatus('denkt');
+    setBesichtigungFehler('');
+    setBesichtigungHinweis('');
+    try {
+      const res = await fetch('/api/lv/setup-aus-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text,
+          areaListe: AREA_ORDER.map((key) => ({ key, label: AREA_DEFINITIONS[key].label })),
+          typListe: OBJEKT_TYP_ORDER.map((key) => ({ key, label: OBJEKT_TYPEN[key].label })),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data?.error) throw new Error(data?.error || 'Unbekannter Fehler');
+
+      if (data.objektTyp) setObjektTyp(data.objektTyp);
+      if (data.frequenz) {
+        setFrequency(data.frequenz);
+        setWochentage([]);
+      }
+      if (Array.isArray(data.areas) && data.areas.length > 0) {
+        const next = Object.fromEntries(AREA_ORDER.map((k) => [k, false]));
+        data.areas.forEach((k) => {
+          if (k in next) next[k] = true;
+        });
+        setAreas(next);
+      }
+      if (data.glas) setGlasEnabled(true);
+      if (data.winterdienst) setWinterdienst(true);
+      setBesichtigungHinweis(data.hinweis || '');
+      setBesichtigungStatus('idle');
+    } catch (err) {
+      setBesichtigungFehler(err?.message || 'Unbekannter Fehler');
+      setBesichtigungStatus('fehler');
+    }
   }
 
   function pickContact(c) {
@@ -285,7 +352,65 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
         ) : (
           <>
             <hr className="modal-section-divider" />
-            <div className="modal-subheading">Schritt 1 — Reinigungsfrequenz</div>
+            <div className="modal-subheading">Besichtigung einsprechen (optional)</div>
+            <p className="modal-hint">
+              Einfach erzählen, was vor Ort steht — zum Beispiel „Erdgeschoss, drei Büros, ein Bad,
+              kleine Küche, zweimal die Woche, Fenster einmal im Jahr". Daraus werden die Schritte
+              unten vorbelegt.
+            </p>
+            <div className="quick-setup-besichtigung">
+              <textarea
+                rows={3}
+                value={besichtigung}
+                onChange={(e) => setBesichtigung(e.target.value)}
+                placeholder="Aufnahme oder Text der Besichtigung…"
+              />
+              <div className="quick-setup-besichtigung-actions">
+                <DiktatButton
+                  disabled={besichtigungStatus === 'denkt'}
+                  onFehler={(m) => setBesichtigungFehler(m)}
+                  onTranskript={(text) => {
+                    setBesichtigungFehler('');
+                    // An Vorhandenes anhängen, damit mehrere Räume nacheinander
+                    // eingesprochen werden können.
+                    setBesichtigung((v) => (v.trim() ? `${v.trim()} ${text}` : text));
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={besichtigungAuswerten}
+                  disabled={besichtigungStatus === 'denkt' || !besichtigung.trim()}
+                >
+                  {besichtigungStatus === 'denkt' ? 'Wertet aus…' : 'Übernehmen'}
+                </button>
+              </div>
+              {besichtigungFehler && <div className="modal-message error">{besichtigungFehler}</div>}
+              {besichtigungHinweis && (
+                <div className="modal-message">Offen geblieben: {besichtigungHinweis}</div>
+              )}
+            </div>
+
+            <hr className="modal-section-divider" />
+            <div className="modal-subheading">Schritt 1 — Art des Objekts</div>
+            <p className="modal-hint">
+              Wählt die typischen Bereiche und eine übliche Frequenz vor. Beides bleibt danach
+              einzeln änderbar.
+            </p>
+            <div className="quick-setup-typ-list">
+              {OBJEKT_TYP_ORDER.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`quick-setup-typ-btn${objektTyp === key ? ' active' : ''}`}
+                  onClick={() => pickObjektTyp(key)}
+                >
+                  {OBJEKT_TYPEN[key].label}
+                </button>
+              ))}
+            </div>
+
+            <hr className="modal-section-divider" />
+            <div className="modal-subheading">Schritt 2 — Reinigungsfrequenz</div>
             <label className="modal-field">
               Wie oft pro Woche?
               <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
@@ -308,7 +433,7 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
             </label>
 
             <hr className="modal-section-divider" />
-            <div className="modal-subheading">Schritt 2 — Bereiche auswählen</div>
+            <div className="modal-subheading">Schritt 3 — Bereiche auswählen</div>
             <div className="quick-setup-static-item">Unterhaltsreinigung — immer aktiv</div>
             <div className="quick-setup-checkbox-list">
               {AREA_ORDER.map((key) => (
@@ -320,7 +445,7 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
             </div>
 
             <hr className="modal-section-divider" />
-            <div className="modal-subheading">Schritt 3 — Zusatzleistungen</div>
+            <div className="modal-subheading">Schritt 4 — Zusatzleistungen</div>
             <div className="quick-setup-checkbox-list">
               <label className="quick-setup-checkbox">
                 <input type="checkbox" checked={glasEnabled} onChange={(e) => setGlasEnabled(e.target.checked)} />

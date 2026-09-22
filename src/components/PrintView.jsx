@@ -21,7 +21,7 @@ function ColumnHead() {
         <th className="pv-col-interval">Wöchentlich</th>
         <th className="pv-col-interval">Monatlich</th>
         <th className="pv-col-interval">Jährlich</th>
-        <th className="pv-col-remarks">Bemerkungen</th>
+        <th className="pv-col-remarks">Leistungsbeschreibung</th>
       </tr>
     </thead>
   );
@@ -57,7 +57,10 @@ function DataRow({ row }) {
           <IntervalCell value={row.intervalColumn === 'jaehrlich' ? row.intervalValue : ''} />
         </>
       )}
-      <td className="pv-col-remarks">{row.bemerkung}</td>
+      <td className="pv-col-remarks">
+        {row.beschreibung ? <span className="pv-beschreibung">{row.beschreibung}</span> : null}
+        {row.bemerkung ? <span className="pv-bemerkung">{row.bemerkung}</span> : null}
+      </td>
     </tr>
   );
 }

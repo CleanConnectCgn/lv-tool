@@ -11,6 +11,12 @@ export default function AIStatusBadge({ status, issues, onClick }) {
   } else if (status === 'error') {
     label = 'KI Check fehlgeschlagen';
     className += ' error';
+  } else if (status === 'stale') {
+    // Das LV wurde nach der letzten Prüfung geändert - das alte Ergebnis
+    // stimmt also nicht mehr. Statt sofort erneut zu prüfen (und dabei
+    // Anfragen zu verbrennen), wird nur darauf hingewiesen.
+    label = 'LV geändert — erneut prüfen';
+    className += ' stale';
   } else if (status === 'done') {
     const redCount = issues.filter((i) => i.type === 'red').length;
     const orangeCount = issues.filter((i) => i.type === 'orange').length;

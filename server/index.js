@@ -26,6 +26,7 @@ import { registerDocumentRoutes } from './lib/documentRoutes.js';
 import { registerCustomerDocumentRoutes } from './lib/customerDocuments.js';
 import { registerInboxRoutes } from './lib/inbox.js';
 import { geminiErrorMessage } from './lib/extraction/geminiError.js';
+import { registerLvAssistantRoutes } from './lib/lvAssistant.js';
 import { withTimeout } from './lib/withTimeout.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -89,6 +90,10 @@ const aiRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Zu viele KI-Anfragen in kurzer Zeit. Bitte in ein paar Minuten erneut versuchen.' },
 });
+
+// Sprach- und Chat-Assistent für das LV (Diktat + Änderungsvorschläge).
+// Liefert nur Vorschläge, angewendet wird im Frontend nach Bestätigung.
+registerLvAssistantRoutes(app, { rateLimiter: aiRateLimiter });
 
 // Google Calendar hat eigene Quotas, aber ein zu aggressiver Client könnte
 // diese ausschöpfen und andere Funktionen blockieren.
@@ -234,66 +239,101 @@ app.get('/api/sevdesk/offer-pdf/:id', async (req, res) => {
   }
 });
 
-// AI quality checkup for the LV: sends the sections to Claude and returns
-// structured feedback (duplicates, typos, missing tasks, wording).
+// Schneller Qualitäts-Check des LV. Läuft seit 2026-09-22 auf Gemini Flash
+// statt Claude Sonnet: Der Check wird häufig ausgelöst (beim Öffnen des
+// Checkup-Fensters, vor dem PDF-Export, vor dem sevDesk-Versand), und dafür
+// ist Flash schnell und günstig genug. Der tiefe, zweistufige Dual-Checkup
+// unter /api/checkup/* nutzt weiterhin zusätzlich Claude.
+//
+// Die Prüfregeln sind an den Fehlern ausgerichtet, die in den tatsächlich
+// ausgelieferten LVs vorkamen (siehe LEARNINGS-2026-09-22.md), nicht an
+// allgemeinen "Qualitätskriterien".
 app.post('/api/ai-check', aiRateLimiter, async (req, res) => {
-  const { sections } = req.body || {};
+  const { sections, lvTitle } = req.body || {};
   if (!sections) {
     return res.status(400).json({ error: 'sections sind erforderlich' });
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY ist nicht konfiguriert' });
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY ist nicht konfiguriert' });
   }
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const prompt = `Du bist ein Experte für Gebäudereinigung und Leistungsverzeichnisse. Analysiere dieses LV und gib strukturiertes Feedback in JSON zurück.
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
 
-LV Daten:
+    const prompt = `Du prüfst ein Leistungsverzeichnis einer Gebäudereinigung auf handwerkliche Fehler.
+Du bewertest ausschließlich die Texte. Du erfindest keine Leistungen und änderst keine Preise.
+
+LV-Titel: ${lvTitle || '(leer)'}
+
+Bereiche und Zeilen:
 ${JSON.stringify(sections, null, 2)}
 
-Gib AUSSCHLIESSLICH valides JSON zurück, kein Markdown, keine Erklärungen:
+Jede Zeile hat:
+- text: die kurze Leistungsbezeichnung
+- beschreibung: die ausformulierte Leistungsbeschreibung (optional)
+- bemerkung: objektspezifische Notiz (optional)
+- bedarf / intervalColumn / intervalValue: das Intervall
+
+MELDE NUR DIESE FÄLLE:
+
+Rot (type "red"), das sind echte Fehler:
+1. Das Wort "desinfizieren" oder "desinfizierend" kommt vor. Das wird in diesem
+   Betrieb nicht zugesichert. Schlage als fix denselben Text mit "feucht
+   reinigen" bzw. "feucht abwischen" statt der Desinfektionsformulierung vor,
+   fixType "replace_row".
+2. Rechtschreib- und Tippfehler im text, in der beschreibung oder in der
+   bemerkung, zum Beispiel "Ausstausch" statt "Austausch", "Hausringangstür"
+   statt "Hauseingangstür", "Bürorbereiche" statt "Bürobereiche",
+   "Gtiffspuren" statt "Griffspuren". fixType "replace_row" mit dem
+   korrigierten Text.
+3. Echte Duplikate: zwei Zeilen im SELBEN Bereich, die dieselbe Leistung
+   meinen. fixType "remove_row" für die zweite.
+4. Widersprüchliche Intervalle für dieselbe Leistung im selben Bereich.
+5. Der LV-Titel ist leer oder nennt keine Leistungsart (er sollte z.B.
+   "Leistungsverzeichnis Unterhaltsreinigung" oder
+   "Leistungsverzeichnis Glasreinigung" lauten). fixType "info".
+
+Orange (type "orange"), das sind Hinweise:
+6. Eine Zeile hat keine beschreibung, obwohl die anderen Zeilen im selben
+   Bereich eine haben. fixType "info".
+7. Eine Leistung fehlt, die in diesem Bereich üblicherweise mit beauftragt
+   wird. fixType "info".
+8. Eine Formulierung ist unklar oder wirft beim Kunden Rückfragen auf.
+   fixType "replace_row" mit der klareren Formulierung.
+
+MELDE AUSDRÜCKLICH NICHT:
+- Dieselbe Leistung in VERSCHIEDENEN Bereichen (z.B. "Abfallbehälter leeren"
+  in Büro und in Küche). Das ist gewollt und richtig.
+- Stilfragen, Geschmacksfragen, Vorschläge zur Umformulierung ohne inhaltlichen
+  Grund.
+- Fehlende Preise oder kaufmännische Angaben. Das LV enthält bewusst keine.
+- Bereiche, die im Objekt schlicht nicht vorkommen.
+
+Antworte AUSSCHLIESSLICH mit validem JSON, kein Markdown, keine Erklärung:
 {
   "issues": [
     {
-      "id": "unique id",
+      "id": "eindeutige id",
       "type": "red" oder "orange",
-      "title": "Kurzer Titel",
-      "description": "Erklärung was das Problem ist",
-      "targetSection": "Bereichsname oder null",
-      "targetRowIndex": Zeilennummer oder null,
-      "fix": "Der verbesserte Text der direkt eingesetzt werden kann, oder null wenn nicht anwendbar",
+      "title": "kurzer Titel",
+      "description": "was genau das Problem ist",
+      "targetSection": "exakter Bereichstitel oder null",
+      "targetRowIndex": Index der Zeile innerhalb des Bereichs (0-basiert) oder null,
+      "fix": "der fertige Ersatztext oder null",
       "fixType": "replace_row" oder "remove_row" oder "rename_section" oder "info"
     }
   ]
 }
 
-Rot Kategorien (type: "red"):
-Duplikate: gleiche oder sehr ähnliche Leistung im selben Bereich, zum Beispiel zweimal Böden wischen.
-Rechtschreibfehler oder offensichtliche Tippfehler.
-Widersprüche: zum Beispiel täglich und wöchentlich für identische Leistung.
+Höchstens 15 Einträge. Lieber wenige echte Funde als viele unsichere.`;
 
-Orange Kategorien (type: "orange"):
-Unklare Formulierungen die beim Kunden Fragen aufwerfen könnten.
-Fehlende wichtige Leistungen die typischerweise in diesem Bereich erwartet werden.
-Verbesserungsvorschläge für professionellere Sprache.
-Intervalle die unüblich sind für diese Art Leistung.
-
-Sei präzise und praxisnah. Max 15 Issues. Nur echte Probleme melden, keine Phantomfehler.`;
-
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2000,
-      messages: [{ role: 'user', content: prompt }],
-    });
-
-    const textBlock = response?.content?.find((b) => b.type === 'text');
-    const raw = textBlock?.text || '{}';
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : raw);
-    res.json(parsed);
+    const result = await withTimeout(model.generateContent(prompt), 60000, 'Gemini');
+    const raw = result?.response?.text() || '{}';
+    const parsed = extractJson(raw);
+    res.json({ issues: Array.isArray(parsed?.issues) ? parsed.issues : [] });
   } catch (err) {
     console.error('[ai-check] fehlgeschlagen:', err?.message || err);
-    res.status(502).json({ error: err?.message || err?.toString() || 'KI Anfrage fehlgeschlagen' });
+    res.status(502).json({ error: geminiErrorMessage(err) });
   }
 });
 

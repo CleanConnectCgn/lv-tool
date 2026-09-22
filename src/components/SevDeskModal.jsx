@@ -7,6 +7,7 @@ import {
   listSevUsers,
   getContactAddress,
 } from '../lib/sevdesk.js';
+import { OFFER_TEXT_VARIANTS, OFFER_TEXT_ORDER, guessOfferVariant } from '../templates/offerTexts.js';
 
 const DEFAULT_SEV_USER = { id: '1361306', fullname: 'Julian Mühlhoff' };
 
@@ -45,6 +46,8 @@ export default function SevDeskModal({
   docGroups,
   initialContact,
   onOfferCreated,
+  lvTitle,
+  sections,
 }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY) || '');
   const [tokenFromServer, setTokenFromServer] = useState(false);
@@ -101,22 +104,35 @@ export default function SevDeskModal({
   }
 
   const [showTexts, setShowTexts] = useState(true);
-  const [anrede, setAnrede] = useState('Sehr geehrte Damen und Herren,');
-  const [einleitung, setEinleitung] = useState(
-    'im Folgenden erhalten Sie unser unverbindliches Angebot zur Reinigung Ihrer Räumlichkeiten. Dieses ist auf Ihre Anforderungen abgestimmt und kann nach Absprache jederzeit angepasst werden.'
-  );
-  const [hinweis, setHinweis] = useState(
-    'Reinigungsmaterialien, Wasseraufbereitung und die Anfahrt sind im Preis enthalten. Die Begehung und Flächenaufnahme erfolgt im Rahmen der Objektbesichtigung.'
-  );
+
+  // Textvariante passend zur Art des Kunden. Wird aus LV-Titel und
+  // Bereichsnamen geraten und bleibt danach frei wählbar; alle Felder
+  // darunter sind weiterhin einzeln editierbar.
+  const [textVariante, setTextVariante] = useState(() => guessOfferVariant({ lvTitle, sections }));
+  const startTexte = OFFER_TEXT_VARIANTS[textVariante] || OFFER_TEXT_VARIANTS.standard;
+
+  const [anrede, setAnrede] = useState(startTexte.anrede);
+  const [einleitung, setEinleitung] = useState(startTexte.einleitung);
+  const [hinweis, setHinweis] = useState(startTexte.hinweis);
   const [zusatzhinweis, setZusatzhinweis] = useState('');
   const [kuendigungsfristMonate, setKuendigungsfristMonate] = useState('3');
-  const [vertragstext, setVertragstext] = useState(
-    'Vertragsunterzeichnung: Nach Auftragserteilung erhalten Sie den Vertrag separat zur Prüfung und Unterzeichnung.'
-  );
-  const [dankText, setDankText] = useState(
-    'Wir danken Ihnen für Ihr Vertrauen und freuen uns auf eine erfolgreiche Zusammenarbeit.\n\nFür Rückfragen stehen wir Ihnen jederzeit gerne zur Verfügung.'
-  );
-  const [grussformel, setGrussformel] = useState('Mit freundlichen Grüßen\n\nIhr Clean Connect Team');
+  const [vertragstext, setVertragstext] = useState(startTexte.vertragstext);
+  const [dankText, setDankText] = useState(startTexte.dankText);
+  const [grussformel, setGrussformel] = useState(startTexte.grussformel);
+
+  // Ein Variantenwechsel setzt die Standardtexte neu. Ein eigener Zusatz-
+  // hinweis bleibt erhalten, weil er objektspezifisch ist.
+  function applyTextVariante(key) {
+    const v = OFFER_TEXT_VARIANTS[key];
+    if (!v) return;
+    setTextVariante(key);
+    setAnrede(v.anrede);
+    setEinleitung(v.einleitung);
+    setHinweis(v.hinweis);
+    setVertragstext(v.vertragstext);
+    setDankText(v.dankText);
+    setGrussformel(v.grussformel);
+  }
 
   const [status, setStatus] = useState('idle');
   const [message, setMessage] = useState('');
@@ -573,6 +589,24 @@ export default function SevDeskModal({
 
             {showTexts && (
               <>
+                <div className="modal-subheading">Textvorlage</div>
+                <div className="quick-setup-typ-list">
+                  {OFFER_TEXT_ORDER.map((key) => (
+                    <button
+                      key={key}
+                      type="button"
+                      className={`quick-setup-typ-btn${textVariante === key ? ' active' : ''}`}
+                      onClick={() => applyTextVariante(key)}
+                    >
+                      {OFFER_TEXT_VARIANTS[key].label}
+                    </button>
+                  ))}
+                </div>
+                <p className="modal-hint">
+                  Setzt die Standardtexte unten neu. Alles bleibt einzeln änderbar, ein eigener
+                  Zusatzhinweis bleibt erhalten.
+                </p>
+
                 <div className="modal-subheading">Kopftext</div>
                 <label className="modal-field">
                   Anrede

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { INTERVAL_COLUMNS, INTERVAL_VALUES } from '../templates/templates.js';
-import { getSuggestions } from '../templates/suggestions.js';
+import { getSuggestions, getRemarkSuggestions, getDescriptionFor } from '../templates/suggestions.js';
 import WeekdaySelector from './WeekdaySelector.jsx';
 
 const COLUMN_LABELS = {
@@ -27,8 +27,12 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
   const [dragOver, setDragOver] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [remarkSuggestions, setRemarkSuggestions] = useState([]);
+  const [showRemarkSuggestions, setShowRemarkSuggestions] = useState(false);
   const blurTimeout = useRef(null);
+  const remarkBlurTimeout = useRef(null);
   const textareaRef = useRef(null);
+  const beschreibungRef = useRef(null);
 
   function autoResize(el) {
     if (!el) return;
@@ -39,6 +43,10 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
   useEffect(() => {
     autoResize(textareaRef.current);
   }, [row.text]);
+
+  useEffect(() => {
+    autoResize(beschreibungRef.current);
+  }, [row.beschreibung]);
 
   const intervalSelectValue = row.bedarf
     ? ''
@@ -68,9 +76,21 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
     setSuggestions(getSuggestions(value));
   }
 
+  // Beim Übernehmen eines Vorschlags wird die ausformulierte
+  // Leistungsbeschreibung aus dem Katalog gleich mitgesetzt - aber nur, wenn
+  // das Feld noch leer ist, damit eine bereits angepasste Beschreibung nicht
+  // überschrieben wird.
   function pickSuggestion(s) {
-    onChange({ text: s });
+    const patch = { text: s };
+    const katalogText = getDescriptionFor(s);
+    if (katalogText && !(row.beschreibung || '').trim()) patch.beschreibung = katalogText;
+    onChange(patch);
     setShowSuggestions(false);
+  }
+
+  function pickRemarkSuggestion(s) {
+    onChange({ bemerkung: s });
+    setShowRemarkSuggestions(false);
   }
 
   return (
@@ -113,7 +133,7 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
             onBlur={() => {
               blurTimeout.current = setTimeout(() => setShowSuggestions(false), 120);
             }}
-            placeholder="Leistungsbeschreibung"
+            placeholder="Leistungsbezeichnung"
           />
           {showSuggestions && suggestions.length > 0 && (
             <ul className="autocomplete-list no-print">
@@ -159,12 +179,42 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
         )}
       </td>
       <td className="col-remarks">
-        <input
-          type="text"
-          value={row.bemerkung}
-          onChange={(e) => onChange({ bemerkung: e.target.value })}
-          placeholder="Bemerkung"
+        <textarea
+          ref={beschreibungRef}
+          rows={1}
+          className="lv-beschreibung-textarea"
+          value={row.beschreibung || ''}
+          onChange={(e) => onChange({ beschreibung: e.target.value })}
+          placeholder="Leistungsbeschreibung"
         />
+        <div className="autocomplete-wrap">
+          <input
+            type="text"
+            className="lv-bemerkung-input"
+            value={row.bemerkung}
+            onChange={(e) => {
+              onChange({ bemerkung: e.target.value });
+              setRemarkSuggestions(getRemarkSuggestions(e.target.value));
+            }}
+            onFocus={() => {
+              setRemarkSuggestions(getRemarkSuggestions(row.bemerkung));
+              setShowRemarkSuggestions(true);
+            }}
+            onBlur={() => {
+              remarkBlurTimeout.current = setTimeout(() => setShowRemarkSuggestions(false), 120);
+            }}
+            placeholder="Bemerkung (objektspezifisch)"
+          />
+          {showRemarkSuggestions && remarkSuggestions.length > 0 && (
+            <ul className="autocomplete-list no-print">
+              {remarkSuggestions.map((s) => (
+                <li key={s} onMouseDown={() => pickRemarkSuggestion(s)}>
+                  {s}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </td>
       <td className="col-actions no-print">
         <button className="icon-btn" title="Zeile entfernen" aria-label="Zeile entfernen" onClick={onRemove}>
