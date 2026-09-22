@@ -3,6 +3,9 @@ import { searchContacts, createContact, getContactAddress } from '../lib/sevdesk
 import {
   AREA_DEFINITIONS,
   AREA_ORDER,
+  OBJEKT_TYPEN,
+  OBJEKT_TYP_ORDER,
+  areasForObjektTyp,
   buildSectionsFromSetup,
   buildSingleServiceMain,
 } from '../templates/checklistAreas.js';
@@ -41,7 +44,8 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
   const [singleService, setSingleService] = useState('glasreinigung');
   const [singleServiceTitle, setSingleServiceTitle] = useState('');
 
-  // Schritt 1-3
+  // Schritt 1-4
+  const [objektTyp, setObjektTyp] = useState('');
   const [frequency, setFrequency] = useState('2x');
   const [wochentage, setWochentage] = useState([]);
   const [areas, setAreas] = useState(() =>
@@ -85,6 +89,18 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
         setSuggestions([]);
       }
     }, 300);
+  }
+
+  // Ein Objekttyp ist ein Startpunkt, keine feste Vorlage: er hakt die
+  // typischen Bereiche vor und setzt eine übliche Frequenz. Danach bleibt
+  // alles einzeln änderbar.
+  function pickObjektTyp(key) {
+    setObjektTyp(key);
+    const typ = OBJEKT_TYPEN[key];
+    if (!typ) return;
+    setAreas(areasForObjektTyp(key));
+    setFrequency(typ.frequency);
+    setWochentage([]);
   }
 
   function pickContact(c) {
@@ -285,7 +301,26 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
         ) : (
           <>
             <hr className="modal-section-divider" />
-            <div className="modal-subheading">Schritt 1 — Reinigungsfrequenz</div>
+            <div className="modal-subheading">Schritt 1 — Art des Objekts</div>
+            <p className="modal-hint">
+              Wählt die typischen Bereiche und eine übliche Frequenz vor. Beides bleibt danach
+              einzeln änderbar.
+            </p>
+            <div className="quick-setup-typ-list">
+              {OBJEKT_TYP_ORDER.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`quick-setup-typ-btn${objektTyp === key ? ' active' : ''}`}
+                  onClick={() => pickObjektTyp(key)}
+                >
+                  {OBJEKT_TYPEN[key].label}
+                </button>
+              ))}
+            </div>
+
+            <hr className="modal-section-divider" />
+            <div className="modal-subheading">Schritt 2 — Reinigungsfrequenz</div>
             <label className="modal-field">
               Wie oft pro Woche?
               <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
@@ -308,7 +343,7 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
             </label>
 
             <hr className="modal-section-divider" />
-            <div className="modal-subheading">Schritt 2 — Bereiche auswählen</div>
+            <div className="modal-subheading">Schritt 3 — Bereiche auswählen</div>
             <div className="quick-setup-static-item">Unterhaltsreinigung — immer aktiv</div>
             <div className="quick-setup-checkbox-list">
               {AREA_ORDER.map((key) => (
@@ -320,7 +355,7 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
             </div>
 
             <hr className="modal-section-divider" />
-            <div className="modal-subheading">Schritt 3 — Zusatzleistungen</div>
+            <div className="modal-subheading">Schritt 4 — Zusatzleistungen</div>
             <div className="quick-setup-checkbox-list">
               <label className="quick-setup-checkbox">
                 <input type="checkbox" checked={glasEnabled} onChange={(e) => setGlasEnabled(e.target.checked)} />

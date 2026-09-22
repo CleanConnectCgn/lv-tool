@@ -26,7 +26,15 @@ const MARGIN_TOP = 18;
 const MARGIN_BOTTOM = 30;
 
 // Spaltenbreiten (Summe = 186)
-const COL_W = { desc: 56, check: 22, woe: 24, mon: 22, jah: 20, bem: 42 };
+//
+// Bis 2026-09-22 gingen 88 mm (47 %) an die vier reinen Häkchen-/Pillen-
+// Spalten, während die Beschreibungsspalte mit 42 mm nur rund 22 Zeichen pro
+// Zeile fasste. Die ausformulierten Leistungsbeschreibungen (150-250 Zeichen)
+// liefen dadurch über 8 bis 12 Zeilen und trieben jedes LV auf eine Seite
+// mehr. Die Intervallspalten brauchen nur die Breite ihrer Pille.
+// Die Intervallspalten sind so bemessen, dass ihre Überschrift einzeilig
+// bleibt ("Wöchentlich" ist die breiteste), nicht breiter.
+const COL_W = { desc: 50, check: 14, woe: 20, mon: 18, jah: 16, bem: 68 };
 
 // Firmenangaben für die Fußzeile - identisch zu unseren sevDesk-Angeboten.
 const FOOTER_COLS = [
@@ -89,7 +97,35 @@ function drawDocHeader(doc, { lvTitle, objekt, datum }, y0) {
   return y0 + h + 4;
 }
 
-const HEAD = [['Einzelleistungen Reinigung', 'Bei Bedarf', 'Wöchentlich', 'Monatlich', 'Jährlich', 'Bemerkungen']];
+const HEAD = [['Einzelleistungen', 'Bei Bedarf', 'Wöchentlich', 'Monatlich', 'Jährlich', 'Leistungsbeschreibung']];
+
+// autoTable bricht ein Wort, das breiter als die Spalte ist, an beliebiger
+// Stelle und ohne Trennstrich um - im ausgelieferten PDF stand dadurch
+// "Sper rmüll-/Entrümpelungsraum". Zusammengesetzte Wörter werden deshalb
+// vorher an ihren eigenen Trennzeichen (Bindestrich, Schrägstrich) umbrochen,
+// was typografisch korrekt ist, weil das Trennzeichen am Zeilenende bleibt.
+const MAX_WORD_LEN = 24;
+
+export function breakLongWords(text) {
+  return (text || '')
+    .split(/(\s+)/)
+    .map((token) => {
+      if (token.length <= MAX_WORD_LEN || /^\s+$/.test(token)) return token;
+      const parts = [];
+      let rest = token;
+      while (rest.length > MAX_WORD_LEN) {
+        // letztes Trennzeichen innerhalb der zulässigen Länge suchen
+        const window = rest.slice(0, MAX_WORD_LEN);
+        const cut = Math.max(window.lastIndexOf('-'), window.lastIndexOf('/'));
+        if (cut <= 0) break; // kein sinnvoller Trennpunkt: unverändert lassen
+        parts.push(rest.slice(0, cut + 1));
+        rest = rest.slice(cut + 1);
+      }
+      parts.push(rest);
+      return parts.join('\n');
+    })
+    .join('');
+}
 
 function intervalCell(row, col) {
   return { content: '', pill: true, value: row.intervalColumn === col ? row.intervalValue || '' : '' };
@@ -118,24 +154,28 @@ function buildBody(sections) {
     rows.forEach((r) => {
       const check = { content: '', checkCell: true, checked: !!r.bedarf };
       const weekdayNote = r.wochentage?.length ? `(${r.wochentage.join(', ')})` : '';
-      const bem = [r.bemerkung, weekdayNote].filter(Boolean).join(' ');
+      // Katalogtext zuerst, objektspezifische Bemerkung darunter.
+      const bem = [r.beschreibung, r.bemerkung, weekdayNote]
+        .filter((part) => (part || '').trim())
+        .map(breakLongWords)
+        .join('\n');
       if (r.intervalColumn === 'aufAnfrage') {
         body.push([
-          r.text,
+          breakLongWords(r.text),
           check,
           { content: '', colSpan: 3, pill: true, value: 'Auf Anfrage' },
           bem,
         ]);
       } else if (r.intervalColumn === 'einmalig') {
         body.push([
-          r.text,
+          breakLongWords(r.text),
           check,
           { content: '', colSpan: 3, pill: true, value: 'Einmalig' },
           bem,
         ]);
       } else {
         body.push([
-          r.text,
+          breakLongWords(r.text),
           check,
           intervalCell(r, 'woechentlich'),
           intervalCell(r, 'monatlich'),
@@ -251,7 +291,7 @@ export function generateLvPdfBlob(docs, { objekt, datum }) {
         lineWidth: 0.1,
         overflow: 'linebreak',
         valign: 'middle',
-        cellPadding: { top: 2, bottom: 2, left: 2.5, right: 2.5 },
+        cellPadding: { top: 1.7, bottom: 1.7, left: 2.2, right: 2.2 },
       },
       headStyles: {
         fillColor: TEAL_BG,
@@ -260,7 +300,7 @@ export function generateLvPdfBlob(docs, { objekt, datum }) {
         fontSize: 7.5,
         lineColor: TEAL,
         lineWidth: { bottom: 0.4, top: 0.1, left: 0.1, right: 0.1 },
-        cellPadding: { top: 2.5, bottom: 2.5, left: 2, right: 2 },
+        cellPadding: { top: 2.5, bottom: 2.5, left: 1.2, right: 1.2 },
       },
       columnStyles: {
         0: { halign: 'left', cellWidth: COL_W.desc },

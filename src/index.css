@@ -408,7 +408,7 @@ a.icon-btn:hover {
 }
 
 .col-desc {
-  width: 34%;
+  width: 30%;
   position: relative;
 }
 
@@ -418,13 +418,16 @@ a.icon-btn:hover {
 }
 
 .col-interval {
-  width: 24%;
+  width: 18%;
   text-align: center;
   border-left: 1px solid #f0f2f3;
 }
 
+/* Trägt seit 2026-09-22 die ausformulierte Leistungsbeschreibung plus die
+   objektspezifische Bemerkung und braucht deshalb deutlich mehr Platz als
+   die alten 22 %. */
 .col-remarks {
-  width: 22%;
+  width: 34%;
 }
 
 .col-actions {
@@ -452,6 +455,32 @@ a.icon-btn:hover {
   overflow: hidden;
   line-height: 1.35;
   display: block;
+}
+
+.lv-beschreibung-textarea {
+  width: 100%;
+  border: 1px solid transparent;
+  background: transparent;
+  padding: 4px;
+  font-size: 11.5px;
+  font-family: inherit;
+  color: var(--gray);
+  resize: none;
+  overflow: hidden;
+  line-height: 1.35;
+  display: block;
+}
+
+.lv-bemerkung-input {
+  margin-top: 2px;
+}
+
+.lv-beschreibung-textarea:hover,
+.lv-beschreibung-textarea:focus {
+  border-color: var(--line);
+  background: #fbfcfd;
+  outline: none;
+  color: var(--ink);
 }
 
 .lv-desc-textarea:hover,
@@ -821,6 +850,34 @@ tr.drag-over td {
   font-size: 13px;
   color: var(--brand-text-dim);
   margin-bottom: 8px;
+}
+
+.quick-setup-typ-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.quick-setup-typ-btn {
+  padding: 8px 14px;
+  border: 1px solid var(--brand-line, var(--line-strong));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--brand-text, var(--ink));
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.quick-setup-typ-btn:hover {
+  border-color: var(--teal);
+}
+
+.quick-setup-typ-btn.active {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #04211f;
+  font-weight: 600;
 }
 
 .quick-setup-checkbox-list {
@@ -1239,6 +1296,11 @@ textarea::placeholder {
   border-color: transparent;
   background: var(--success-bg);
   color: var(--success);
+}
+
+.ai-status-badge.stale {
+  border-color: var(--warning);
+  color: var(--warning);
 }
 
 .ai-status-badge.issues-red {
@@ -1689,11 +1751,23 @@ body.exporting-pdf .print-view {
 }
 
 .pv-col-remarks {
-  width: 25%;
+  width: 34%;
   text-align: left;
   font-size: 11px;
   color: var(--gray);
-  white-space: nowrap;
+  /* Vorher nowrap - die ausformulierten Leistungsbeschreibungen müssen
+     umbrechen dürfen. */
+  white-space: normal;
+}
+
+.pv-beschreibung {
+  display: block;
+}
+
+.pv-bemerkung {
+  display: block;
+  margin-top: 3px;
+  font-style: italic;
 }
 
 .pv-section-row td {

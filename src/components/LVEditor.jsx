@@ -29,7 +29,7 @@ export default function LVEditor({ sections, setSections }) {
           <th className="col-interval" colSpan={3}>
             Intervall
           </th>
-          <th className="col-remarks">Bemerkungen</th>
+          <th className="col-remarks">Leistungsbeschreibung &amp; Bemerkung</th>
           <th className="col-actions no-print"></th>
         </tr>
       </thead>

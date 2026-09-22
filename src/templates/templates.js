@@ -14,6 +14,13 @@ function row(text, opts = {}) {
     intervalColumn: opts.bedarf ? '' : opts.column || '',
     intervalValue: opts.bedarf ? '' : opts.value || '',
     bemerkung: opts.bemerkung || '',
+    // Ausformulierte, vertragsfeste Leistungsbeschreibung aus dem Katalog
+    // (z.B. "Feuchte Reinigung der Hartbodenflächen ... einschließlich
+    // Entfernung von Schmutz, Staub und sonstigen oberflächlichen
+    // Verunreinigungen."). Steht neben `text` (Kurzbezeichnung) und wird im
+    // PDF in der Spalte "Leistungsbeschreibung" ausgegeben. `bemerkung`
+    // bleibt davon getrennt und trägt weiterhin die objektspezifische Notiz.
+    beschreibung: opts.beschreibung || '',
     // Optionale Wochentags-Auswahl (z.B. ["Mo","Mi","Fr"]) zusätzlich zur
     // Intervall-Spalte, siehe WeekdaySelector.jsx.
     wochentage: opts.wochentage || [],

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from './components/Header.jsx';
 import LVEditor from './components/LVEditor.jsx';
 import PrintView from './components/PrintView.jsx';
@@ -257,6 +257,8 @@ export default function App() {
     setView('setup');
   }
 
+  const runAICheckRef = useRef(null);
+
   async function runAICheck() {
     setAiStatus('pending');
     setAiError('');
@@ -264,7 +266,7 @@ export default function App() {
       const res = await fetch('/api/ai-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections }),
+        body: JSON.stringify({ sections, lvTitle }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.error) {
@@ -327,20 +329,34 @@ export default function App() {
     }
   }
 
-  // Auto-run the AI checkup 3s after the last edit to the LV.
+  // Bis 2026-09-22 lief der Check 3 Sekunden nach JEDER Änderung an
+  // `sections` - bei einer Stunde Arbeit am LV also dutzendfach, meist ohne
+  // dass jemand das Ergebnis angesehen hat, und regelmäßig gegen das
+  // Rate-Limit von 20 Anfragen / 5 Minuten. Der Check läuft jetzt nur noch
+  // an den drei Stellen, an denen das Ergebnis auch wirklich gebraucht wird:
+  // beim Öffnen des Checkup-Fensters, vor dem PDF-Export und vor dem
+  // sevDesk-Versand. Eine Änderung danach markiert das Ergebnis nur als
+  // veraltet, statt sofort neu zu prüfen.
+  runAICheckRef.current = runAICheck;
+
   useEffect(() => {
-    const timer = setTimeout(() => {
-      runAICheck();
-    }, 3000);
-    return () => clearTimeout(timer);
+    setAiStatus((prev) => (prev === 'done' ? 'stale' : prev));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections]);
 
   useEffect(() => {
     async function exportPdf() {
+      // Vor dem Export einmal prüfen lassen. Der Export wartet bewusst nicht
+      // darauf - das Ergebnis erscheint gleich danach im Status-Badge.
+      runAICheckRef.current?.();
       const { generateLvPdfBlob } = await import('./lib/lvPdfExport.js');
       const safeObjekt = (objekt || 'Objekt').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '_');
-      const filename = `${lvTitle || 'Leistungsverzeichnis'}_${safeObjekt}_${datum}.pdf`.replace(/\s+/g, '_');
+      // Ein Titel mit Leerzeichen am Ende erzeugte bisher Dateinamen wie
+      // "Leistungsverzeichnis__Rhöndorfer_Str_8_...pdf" - deshalb trimmen und
+      // Mehrfach-Unterstriche zusammenfassen.
+      const filename = `${(lvTitle || 'Leistungsverzeichnis').trim()}_${safeObjekt}_${datum}.pdf`
+        .replace(/\s+/g, '_')
+        .replace(/_{2,}/g, '_');
       const exportDocs = [
         { lvTitle: mainDoc.lvTitle, sections: mainDoc.sections },
         ...childDocs.map((c) => ({ lvTitle: c.lvTitle, sections: c.sections })),
@@ -554,7 +570,14 @@ export default function App() {
             ✨ KI Checkup
           </button>
           <AIStatusBadge status={aiStatus} issues={aiIssues} onClick={() => setShowAICheckup(true)} />
-          <button onClick={() => setShowSevDesk(true)}>An sevDesk senden</button>
+          <button
+            onClick={() => {
+              runAICheck();
+              setShowSevDesk(true);
+            }}
+          >
+            An sevDesk senden
+          </button>
           <button onClick={() => setShowInspection(true)}>Besichtigungsmodus</button>
           <button onClick={handleSave} disabled={saveStatus === 'saving'}>
             {saveStatus === 'saving' ? 'Speichert...' : saveStatus === 'saved' ? '✓ Gespeichert' : 'Speichern'}
