@@ -151,75 +151,76 @@ Reihenfolge nach Wirkung pro Aufwand. `[ ]` offen, `[x]` erledigt.
 
 ### Block 1 — Sprache und Katalog (der größte Zeitfresser)
 
-- [ ] 1.1 „desinfizieren/desinfizierend" aus `checklistAreas.js`,
+- [x] 1.1 „desinfizieren/desinfizierend" aus `checklistAreas.js`,
   `inspectionTasks.js`, `suggestions.js` entfernen und durch die
   Formulierungen ersetzen, die du tatsächlich benutzt
   („feuchte Reinigung …", „… mit Hygienereiniger")
-- [ ] 1.2 Optionaler Schalter „Hygieneanforderung" im QuickSetup: nur wenn
-  gesetzt (Praxis, Kita), kommen desinfizierende Positionen überhaupt ins LV
-- [ ] 1.3 Zweistufiger Katalog: jede Katalogzeile bekommt neben dem Kurztext
+- [~] 1.2 Hygiene-Schalter — entfällt auf deine Entscheidung hin (siehe unten)
+- [x] 1.3 Zweistufiger Katalog: jede Katalogzeile bekommt neben dem Kurztext
   eine feste, ausformulierte `beschreibung` (= dein neuer Stil, siehe A2).
   Quelle: die Langtexte aus Rhöndorfer/Herthastraße
-- [ ] 1.4 Umschalter im Editor: „Kurzform" ↔ „Ausformuliert" für das ganze LV,
-  statt jede Bemerkung einzeln zu tippen
+- [x] 1.4 Kein Umschalter, sondern zwei getrennte Felder je Zeile:
+  Leistungsbeschreibung (aus dem Katalog vorbelegt) und Bemerkung
+  (objektspezifisch). Damit muss nichts umgeschaltet werden
 
 ### Block 2 — Fehlende Bereiche und Vorlagen
 
-- [ ] 2.1 Neuer Objekttyp „Wohnanlage / WEG" mit den Bereichen aus A3
-- [ ] 2.2 Hausmeisterservice von 1 auf die 5 echten Positionen erweitern
-- [ ] 2.3 Bereiche ergänzen: Treppenhaus und Stufen, Keller und Waschraum,
-  Aufzug, Eingangsbereich, Umkleide, Ladenlokal
-- [ ] 2.4 QuickSetup: Objekttyp wählen (Büro / Praxis / Wohnanlage /
+- [x] 2.1 Neuer Objekttyp „Wohnanlage / WEG" mit den Bereichen aus A3
+- [x] 2.2 Hausmeisterservice von 1 auf die 5 echten Positionen erweitern
+- [x] 2.3 Bereiche ergänzt: Flur- und Eingangsbereich, Aufzug, Keller und
+  Waschraum. Umkleide und Ladenlokal sind **nicht** als eigene Bereiche
+  dazugekommen (Ladenlokal gibt es als Objekttyp)
+- [x] 2.4 QuickSetup: Objekttyp wählen (Büro / Praxis / Wohnanlage /
   Gewerbe / Einzelleistung) → Bereiche und Frequenz sind sinnvoll vorbelegt
 
 ### Block 3 — Gemini-Checkup (dein Kernwunsch)
 
-- [ ] 3.1 `/api/ai-check` auf Gemini umstellen (Flash, günstig und schnell),
+- [x] 3.1 `/api/ai-check` auf Gemini umstellen (Flash, günstig und schnell),
   Claude bleibt für den tiefen Dual-Checkup
-- [ ] 3.2 Prüfregeln neu schreiben, an deinen echten Fehlern ausgerichtet:
+- [x] 3.2 Prüfregeln neu schreiben, an deinen echten Fehlern ausgerichtet:
   - echte Duplikate im selben Bereich (bewusste Wiederholung über
     verschiedene Bereiche hinweg wird **nicht** gemeldet)
   - Tippfehler („Ausstausch")
   - „desinfizieren" als eigene Kategorie mit Ein-Klick-Ersatz
   - Intervall-Widersprüche
   - fehlender/unvollständiger LV-Titel
-- [ ] 3.3 Auto-Check entschärfen: nicht bei jedem Tastendruck, sondern beim
+- [x] 3.3 Auto-Check entschärfen: nicht bei jedem Tastendruck, sondern beim
   Öffnen des Checkup-Fensters, vor dem PDF-Export und vor dem sevDesk-Versand
-- [ ] 3.4 Timeout und Fehlertexte für `/api/ai-check` wie bei `/checkup/*`
+- [x] 3.4 Timeout und Fehlertexte für `/api/ai-check` wie bei `/checkup/*`
 
 ### Block 4 — Empfehlungen aus deinen eigenen Daten
 
-- [ ] 4.1 Aus den 142 LVs die tatsächlich benutzten Leistungen und
+- [x] 4.1 Aus den 142 LVs die tatsächlich benutzten Leistungen und
   Bemerkungen als Datensatz extrahieren
-- [ ] 4.2 „Fehlt hier was?" im Editor: zeigt pro Bereich die Leistungen an,
+- [x] 4.2 „Fehlt hier was?" im Editor: zeigt pro Bereich die Leistungen an,
   die du bei vergleichbaren Objekten fast immer drin hattest
-- [ ] 4.3 Bemerkungs-Bausteine als Auswahl statt Freitext
+- [x] 4.3 Bemerkungs-Bausteine als Auswahl statt Freitext
   („Wird immer am ersten Reinigungstag der Woche gereinigt.",
   „Verbrauchsmaterial wird vom Auftragnehmer gestellt." …)
-- [ ] 4.4 Autovervollständigung von 64 auf die echten ~400 Formulierungen
+- [x] 4.4 Autovervollständigung von 64 auf die echten ~400 Formulierungen
   erweitern, nach Häufigkeit sortiert
 
 ### Block 5 — PDF und Layout
 
-- [ ] 5.1 Spaltenbreiten an den ausformulierten Stil anpassen
+- [x] 5.1 Spaltenbreiten an den ausformulierten Stil anpassen
   (Beschreibung breiter, Intervallspalten schmaler)
-- [ ] 5.2 Worttrennung reparieren („Sper rmüll")
-- [ ] 5.3 LV-Titel darf nicht leer sein (Pflichtfeld oder Ableitung aus
+- [x] 5.2 Worttrennung reparieren („Sper rmüll")
+- [x] 5.3 LV-Titel darf nicht leer sein (Pflichtfeld oder Ableitung aus
   Leistungsart)
-- [ ] 5.4 Dateiname ohne doppelte Unterstriche
+- [x] 5.4 Dateiname ohne doppelte Unterstriche
 
 ### Block 6 — Angebot
 
-- [ ] 6.1 Angebotstexte als Vorlagen je Objekttyp statt generisch
-- [ ] 6.2 Preisvorschlag aus vergleichbaren, bereits versendeten Angeboten
-- [ ] 6.3 Angebotsvorschau vor dem sevDesk-Versand
+- [x] 6.1 Angebotstexte als Vorlagen je Objekttyp statt generisch
+- [ ] 6.2 Preisvorschlag aus vergleichbaren Angeboten — offen, siehe unten
+- [ ] 6.3 Angebotsvorschau vor dem sevDesk-Versand — offen, siehe unten
 
 ### Block 7 — Diktat / Chat (größter Brocken, zuletzt)
 
-- [ ] 7.1 Besichtigung einsprechen: „Erdgeschoss, drei Büros, ein Bad,
+- [x] 7.1 Besichtigung einsprechen: „Erdgeschoss, drei Büros, ein Bad,
   Küche, zweimal die Woche" → Gemini baut daraus den QuickSetup-Vorschlag
-- [ ] 7.2 Chat-Leiste im Editor: „mach Sanitär auf 3x", „nimm den Aufzug raus"
-- [ ] 7.3 Jede KI-Änderung erst als Vorschlag mit Bestätigung, nie direkt
+- [x] 7.2 Chat-Leiste im Editor: „mach Sanitär auf 3x", „nimm den Aufzug raus"
+- [x] 7.3 Jede KI-Änderung erst als Vorschlag mit Bestätigung, nie direkt
   ins Dokument
 
 ---
@@ -233,3 +234,30 @@ Reihenfolge nach Wirkung pro Aufwand. `[ ]` offen, `[x]` erledigt.
 2. **Deploy:** Läuft über `railway up`, kein GitHub-Autodeploy. Änderungen sind
    erst nach einem Deploy live.
 3. **„desinfizieren":** ganz raus, oder nur hinter dem Hygiene-Schalter?
+
+
+---
+
+## Stand der Umsetzung (22.09.2026)
+
+Umgesetzt und getestet: Blöcke 1 bis 5, 6.1 und 7 vollständig.
+160 automatische Tests laufen grün; die zwei roten sind die
+Postgres-Backup-Tests, die ohne lokale Datenbank nicht laufen und schon vor
+dieser Arbeit rot waren.
+
+Nicht umgesetzt, jeweils mit Grund:
+
+- **1.2 Hygiene-Schalter** — entfällt auf deine Entscheidung hin.
+  "Desinfizieren" ist ersatzlos aus dem gesamten Katalog verschwunden, auch
+  für Arztpraxis und Kita. Ein Test in `checklistAreas.test.js` hält das
+  dauerhaft fest, damit das Wort nicht über eine spätere Ergänzung
+  zurückkommt.
+- **6.2 Preisvorschlag aus vergleichbaren Angeboten** — dafür braucht es die
+  versendeten Angebote samt Beträgen und Flächen aus der Datenbank. Eine
+  Preisempfehlung aus zu wenigen Datenpunkten wäre eher irreführend als
+  hilfreich. Sinnvoll, sobald genug Angebote im Postgres-Modell liegen.
+- **6.3 Angebotsvorschau** — das Angebots-PDF entsteht bei sevDesk, nicht
+  hier. Eine Vorschau müsste das sevDesk-Layout nachbauen und würde
+  auseinanderlaufen, sobald sich dort etwas ändert. Der bestehende Weg
+  (Angebot anlegen, PDF über `/api/sevdesk/offer-pdf/:id` laden) zeigt das
+  echte Dokument.

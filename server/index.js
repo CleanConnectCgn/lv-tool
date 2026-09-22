@@ -26,6 +26,7 @@ import { registerDocumentRoutes } from './lib/documentRoutes.js';
 import { registerCustomerDocumentRoutes } from './lib/customerDocuments.js';
 import { registerInboxRoutes } from './lib/inbox.js';
 import { geminiErrorMessage } from './lib/extraction/geminiError.js';
+import { registerLvAssistantRoutes } from './lib/lvAssistant.js';
 import { withTimeout } from './lib/withTimeout.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -89,6 +90,10 @@ const aiRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: 'Zu viele KI-Anfragen in kurzer Zeit. Bitte in ein paar Minuten erneut versuchen.' },
 });
+
+// Sprach- und Chat-Assistent für das LV (Diktat + Änderungsvorschläge).
+// Liefert nur Vorschläge, angewendet wird im Frontend nach Bestätigung.
+registerLvAssistantRoutes(app, { rateLimiter: aiRateLimiter });
 
 // Google Calendar hat eigene Quotas, aber ein zu aggressiver Client könnte
 // diese ausschöpfen und andere Funktionen blockieren.

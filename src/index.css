@@ -236,6 +236,65 @@ a.icon-btn:hover {
   border: 1px dashed var(--teal);
 }
 
+/* "Fehlt hier was?" - Vorschläge aus dem Katalog für einen Bereich. */
+.section-suggest-toggle {
+  margin-left: 10px;
+  border: none;
+  background: transparent;
+  color: var(--teal-dark);
+  font-size: 12px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.section-suggest-cell {
+  background: var(--sec-bg);
+  padding: 8px 10px;
+}
+
+.section-suggest-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--gray);
+  margin-bottom: 6px;
+}
+
+.section-suggest-all {
+  border: 1px solid var(--teal);
+  background: transparent;
+  color: var(--teal-dark);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.section-suggest-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.section-suggest-chip {
+  border: 1px solid var(--line-strong);
+  background: #fff;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.section-suggest-chip:hover {
+  border-color: var(--teal);
+  background: var(--teal-bg);
+}
+
 .add-row-btn:hover {
   background: var(--teal-bg);
 }
@@ -408,17 +467,19 @@ a.icon-btn:hover {
 }
 
 .col-desc {
-  width: 30%;
+  width: 28%;
   position: relative;
 }
 
 .col-check {
-  width: 9%;
+  width: 8%;
   text-align: center;
 }
 
 .col-interval {
-  width: 18%;
+  /* Muss die Wochentags-Auswahl (7 Schalter) vollständig fassen - bei 18 %
+     wurde "So" abgeschnitten. */
+  width: 22%;
   text-align: center;
   border-left: 1px solid #f0f2f3;
 }
@@ -427,7 +488,7 @@ a.icon-btn:hover {
    objektspezifische Bemerkung und braucht deshalb deutlich mehr Platz als
    die alten 22 %. */
 .col-remarks {
-  width: 34%;
+  width: 32%;
 }
 
 .col-actions {
@@ -1381,14 +1442,24 @@ textarea::placeholder {
   gap: 4px;
 }
 
+.col-interval .weekday-btn {
+  width: 27px;
+  font-size: 11px;
+}
+
 .weekday-selector-days {
   display: flex;
   gap: 4px;
+  /* In der Intervallspalte darf die Reihe umbrechen, statt am rechten Rand
+     abgeschnitten zu werden (fiel bei schmalem Fenster auf "So"). */
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .weekday-btn {
   width: 30px;
   height: 26px;
+  flex: 0 0 auto;
   border-radius: 6px;
   border: 1px solid var(--line-strong);
   background: #fff;
@@ -2306,4 +2377,122 @@ body.exporting-pdf .print-view {
   border-radius: 8px;
   word-break: break-word;
   margin: 16px 0;
+}
+
+/* ---- Sprach- und Chat-Assistent ---- */
+
+.lv-assistant-modal {
+  /* .modal setzt eine feste Breite von 380px - für den Dialog mit Verlauf
+     und Vorschlagsliste zu schmal. */
+  width: min(640px, 92vw);
+  max-width: 640px;
+  display: flex;
+  flex-direction: column;
+}
+
+.lv-assistant-verlauf {
+  max-height: 260px;
+  overflow-y: auto;
+  border: 1px solid var(--brand-line, var(--line));
+  border-radius: 8px;
+  padding: 10px;
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lv-assistant-zeile {
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  line-height: 1.4;
+  max-width: 88%;
+}
+
+.lv-assistant-ich {
+  align-self: flex-end;
+  background: var(--teal);
+  color: #04211f;
+}
+
+.lv-assistant-assistent {
+  align-self: flex-start;
+  background: var(--sec-bg);
+  color: var(--ink);
+}
+
+.lv-assistant-system {
+  align-self: center;
+  font-size: 12px;
+  color: var(--gray);
+  font-style: italic;
+  max-width: 100%;
+}
+
+.lv-assistant-vorschlaege {
+  border: 1px solid var(--teal);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: var(--teal-bg);
+}
+
+.lv-assistant-vorschlaege-head {
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.lv-assistant-vorschlaege ul {
+  margin: 0 0 10px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.lv-assistant-vorschlaege-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lv-assistant-eingabe {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.lv-assistant-eingabe input {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.lv-assistant-mic {
+  white-space: nowrap;
+}
+
+.lv-assistant-mic.recording {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+.quick-setup-besichtigung {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.quick-setup-besichtigung textarea {
+  width: 100%;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.quick-setup-besichtigung-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }

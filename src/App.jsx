@@ -6,6 +6,7 @@ import SevDeskModal from './components/SevDeskModal.jsx';
 import CustomerModal from './components/CustomerModal.jsx';
 import InspectionMode from './components/InspectionMode.jsx';
 import AICheckupModal from './components/AICheckupModal.jsx';
+import LvAssistant from './components/LvAssistant.jsx';
 import AIStatusBadge from './components/AIStatusBadge.jsx';
 import Overview from './components/Overview.jsx';
 import QuickSetup from './components/QuickSetup.jsx';
@@ -63,6 +64,7 @@ export default function App() {
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showInspection, setShowInspection] = useState(false);
   const [showAICheckup, setShowAICheckup] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
   const [aiStatus, setAiStatus] = useState('idle');
   const [aiIssues, setAiIssues] = useState([]);
   const [aiError, setAiError] = useState('');
@@ -569,6 +571,7 @@ export default function App() {
           >
             ✨ KI Checkup
           </button>
+          <button onClick={() => setShowAssistant(true)}>🎤 Assistent</button>
           <AIStatusBadge status={aiStatus} issues={aiIssues} onClick={() => setShowAICheckup(true)} />
           <button
             onClick={() => {
@@ -642,6 +645,8 @@ export default function App() {
           objekt={objekt}
           datum={datum}
           intervallInfo={intervallInfo}
+          lvTitle={lvTitle}
+          sections={sections}
           docGroups={[
             {
               key: 'main',
@@ -690,6 +695,17 @@ export default function App() {
           internalNotes={internalNotes}
           setInternalNotes={setInternalNotes}
           onClose={() => setShowInspection(false)}
+        />
+      )}
+
+      {showAssistant && (
+        <LvAssistant
+          sections={sections}
+          setSections={setSections}
+          lvTitle={lvTitle}
+          setLvTitle={setLvTitle}
+          objekt={objekt}
+          onClose={() => setShowAssistant(false)}
         />
       )}
 

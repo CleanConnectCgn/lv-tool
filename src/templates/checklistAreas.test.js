@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { buildSectionsFromSetup, buildSingleServiceMain, AREA_ORDER } from './checklistAreas.js';
+import {
+  buildSectionsFromSetup,
+  buildSingleServiceMain,
+  getMissingRowsForSection,
+  AREA_ORDER,
+  AREA_DEFINITIONS,
+  OBJEKT_TYPEN,
+  areasForObjektTyp,
+} from './checklistAreas.js';
 
 describe('buildSectionsFromSetup', () => {
   it('fills empty woechentlich rows with the chosen frequency and weekdays', () => {
@@ -67,5 +75,87 @@ describe('buildSingleServiceMain', () => {
     const areas = Object.fromEntries(AREA_ORDER.map((k) => [k, true]));
     const { main } = buildSectionsFromSetup({ frequency: '1x', areas });
     expect(main.length).toBe(AREA_ORDER.length);
+  });
+});
+
+describe('getMissingRowsForSection', () => {
+  function bereichMitFrequenz(key, freq) {
+    const s = AREA_DEFINITIONS[key].build();
+    s.rows = s.rows.map((r) =>
+      r.intervalColumn === 'woechentlich' && !r.intervalValue ? { ...r, intervalValue: freq } : r
+    );
+    return s;
+  }
+
+  it('schlägt genau die fehlenden Katalogzeilen vor', () => {
+    const s = bereichMitFrequenz('treppenhaus', '2x');
+    const entfernt = s.rows.shift();
+    const fehlend = getMissingRowsForSection(s);
+    expect(fehlend.map((r) => r.text)).toEqual([entfernt.text]);
+  });
+
+  it('übernimmt für die vorgeschlagene Zeile die im Bereich übliche Frequenz', () => {
+    // Ohne diesen Schritt käme die Zeile mit leerem Intervall in den Editor
+    // und stünde dort als "kein Intervall".
+    const s = bereichMitFrequenz('treppenhaus', '3x');
+    s.rows.shift();
+    const [vorschlag] = getMissingRowsForSection(s);
+    expect(vorschlag.intervalColumn).toBe('woechentlich');
+    expect(vorschlag.intervalValue).toBe('3x');
+  });
+
+  it('schlägt nichts vor, wenn der Bereich vollständig ist', () => {
+    expect(getMissingRowsForSection(bereichMitFrequenz('sanitaer', '2x'))).toEqual([]);
+  });
+
+  it('schlägt nichts vor für einen Bereich, den der Katalog nicht kennt', () => {
+    expect(getMissingRowsForSection({ title: 'Bootssteg', rows: [] })).toEqual([]);
+  });
+
+  it('erkennt einen umbenannten Bereich über den Teiltreffer', () => {
+    const s = bereichMitFrequenz('sanitaer', '2x');
+    s.title = 'Sanitärbereiche EG';
+    s.rows.shift();
+    expect(getMissingRowsForSection(s)).toHaveLength(1);
+  });
+});
+
+describe('Objekttypen', () => {
+  it('hakt für eine Wohnanlage genau die WEG-Bereiche an', () => {
+    const areas = areasForObjektTyp('wohnanlage');
+    expect(areas.eingangsbereich).toBe(true);
+    expect(areas.hausmeisterservice).toBe(true);
+    expect(areas.behandlungsraeume).toBe(false);
+  });
+
+  it('liefert für einen unbekannten Typ alle Bereiche abgewählt', () => {
+    const areas = areasForObjektTyp('raumstation');
+    expect(Object.values(areas).every((v) => v === false)).toBe(true);
+  });
+
+  it('verweist nur auf Bereiche, die es wirklich gibt', () => {
+    Object.values(OBJEKT_TYPEN).forEach((typ) => {
+      typ.areas.forEach((key) => expect(AREA_ORDER).toContain(key));
+    });
+  });
+});
+
+describe('Sprache im Katalog', () => {
+  it('sichert nirgends eine Desinfektion zu', () => {
+    AREA_ORDER.forEach((key) => {
+      const s = AREA_DEFINITIONS[key].build();
+      s.rows.forEach((r) => {
+        expect(`${r.text} ${r.beschreibung} ${r.bemerkung}`.toLowerCase()).not.toContain('desinfizier');
+      });
+    });
+  });
+
+  it('gibt jeder Katalogzeile eine ausformulierte Leistungsbeschreibung', () => {
+    AREA_ORDER.forEach((key) => {
+      const s = AREA_DEFINITIONS[key].build();
+      s.rows.forEach((r) => {
+        expect(r.beschreibung, `${key} / ${r.text}`).toBeTruthy();
+      });
+    });
   });
 });

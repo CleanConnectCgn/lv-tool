@@ -820,3 +820,65 @@ export function buildSectionsFromSetup(setup) {
 
   return { main, children };
 }
+
+// Findet zu einem Bereich im LV die passende Katalogdefinition. Zuerst über
+// den exakten Titel, sonst über den Titel der Definition (der Bereich kann
+// im LV umbenannt worden sein, z.B. "Büroräume" -> "Büro 1. OG").
+function findAreaDefinition(sectionTitle) {
+  const title = (sectionTitle || '').trim().toLowerCase();
+  if (!title) return null;
+  const exact = AREA_ORDER.find((k) => AREA_DEFINITIONS[k].build().title.toLowerCase() === title);
+  if (exact) return AREA_DEFINITIONS[exact];
+  // Teiltreffer: "Sanitärbereiche EG" findet "Sanitärbereiche".
+  const partial = AREA_ORDER.find((k) => {
+    const defTitle = AREA_DEFINITIONS[k].build().title.toLowerCase();
+    return title.includes(defTitle) || defTitle.includes(title);
+  });
+  return partial ? AREA_DEFINITIONS[partial] : null;
+}
+
+// Liefert die Leistungen, die für diesen Bereich üblich sind, im LV aber
+// noch fehlen - als Vorschlag im Editor ("Fehlt hier was?"). Verglichen wird
+// über die Kurzbezeichnung, damit eine umformulierte Zeile nicht doppelt
+// vorgeschlagen wird.
+export function getMissingRowsForSection(section) {
+  const def = findAreaDefinition(section?.title);
+  if (!def) return [];
+  const vorhanden = new Set(
+    (section.rows || []).map((r) => (r.text || '').trim().toLowerCase()).filter(Boolean)
+  );
+  return def
+    .build()
+    .rows.filter((r) => {
+      const t = (r.text || '').trim().toLowerCase();
+      if (!t || vorhanden.has(t)) return false;
+      // Auch als vorhanden werten, wenn eine Zeile im LV den Katalogtext
+      // enthält oder umgekehrt (z.B. "Böden feucht wischen (EG)").
+      return ![...vorhanden].some((v) => v.includes(t) || t.includes(v));
+    })
+    .map((r) => ({
+      ...r,
+      id: uid(),
+      // Katalogzeilen tragen bei "wöchentlich" absichtlich keinen Wert - der
+      // kommt sonst aus der im Assistenten gewählten Frequenz. Beim direkten
+      // Hinzufügen im Editor gibt es die nicht, also die im Bereich übliche
+      // Frequenz übernehmen statt die Zeile ohne Intervall einzufügen.
+      intervalValue:
+        r.intervalColumn === 'woechentlich' && !r.intervalValue
+          ? wochenfrequenzImBereich(section)
+          : r.intervalValue,
+    }));
+}
+
+// Häufigste wöchentliche Angabe innerhalb eines Bereichs, sonst im ganzen LV
+// übliche Vorgabe.
+function wochenfrequenzImBereich(section, fallback = '2x') {
+  const zaehler = new Map();
+  (section?.rows || []).forEach((r) => {
+    if (r.intervalColumn === 'woechentlich' && r.intervalValue) {
+      zaehler.set(r.intervalValue, (zaehler.get(r.intervalValue) || 0) + 1);
+    }
+  });
+  if (zaehler.size === 0) return fallback;
+  return [...zaehler.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}

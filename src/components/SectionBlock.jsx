@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import RowEditor from './RowEditor.jsx';
 import { newEmptyRow } from '../templates/templates.js';
+import { getMissingRowsForSection } from '../templates/checklistAreas.js';
 
 export default function SectionBlock({ section, index, onChange, onRemove, onMove }) {
   const [dragOver, setDragOver] = useState(false);
@@ -19,6 +20,19 @@ export default function SectionBlock({ section, index, onChange, onRemove, onMov
 
   function addRow() {
     setRows([...section.rows, newEmptyRow()]);
+  }
+
+  // Leistungen, die für diesen Bereich üblich sind, hier aber noch fehlen.
+  // Nur ein Angebot - nichts wird automatisch hinzugefügt.
+  const fehlende = useMemo(() => getMissingRowsForSection(section), [section]);
+  const [vorschlaegeOffen, setVorschlaegeOffen] = useState(false);
+
+  function addSuggested(vorschlag) {
+    setRows([...section.rows, vorschlag]);
+  }
+
+  function addAllSuggested() {
+    setRows([...section.rows, ...fehlende]);
   }
 
   function moveRow(fromIndex, toIndex) {
@@ -81,8 +95,44 @@ export default function SectionBlock({ section, index, onChange, onRemove, onMov
           <button className="add-row-btn" onClick={addRow}>
             + Zeile hinzufügen
           </button>
+          {fehlende.length > 0 && (
+            <button
+              type="button"
+              className="section-suggest-toggle"
+              onClick={() => setVorschlaegeOffen((v) => !v)}
+            >
+              {vorschlaegeOffen
+                ? 'Vorschläge ausblenden'
+                : `Fehlt hier was? (${fehlende.length})`}
+            </button>
+          )}
         </td>
       </tr>
+      {vorschlaegeOffen && fehlende.length > 0 && (
+        <tr className="no-print">
+          <td colSpan={7} className="section-suggest-cell">
+            <div className="section-suggest-head">
+              <span>Bei vergleichbaren Objekten steht hier üblicherweise auch:</span>
+              <button type="button" className="section-suggest-all" onClick={addAllSuggested}>
+                Alle übernehmen
+              </button>
+            </div>
+            <div className="section-suggest-chips">
+              {fehlende.map((v) => (
+                <button
+                  key={v.id}
+                  type="button"
+                  className="section-suggest-chip"
+                  title={v.beschreibung || ''}
+                  onClick={() => addSuggested(v)}
+                >
+                  + {v.text}
+                </button>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
     </>
   );
 }
