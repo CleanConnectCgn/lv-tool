@@ -6,7 +6,7 @@
 // Übergabemechanismus + Timeout wie gemini.js, aber einen eigenen, viel
 // kürzeren Prompt ohne Katalogbezug.
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { withTimeout } from '../withTimeout.js';
+import { geminiMitRetry } from '../geminiCall.js';
 import { geminiErrorMessage } from './geminiError.js';
 
 export const modelName = 'gemini-flash-latest';
@@ -35,10 +35,10 @@ export async function extractInboxDocument({ fileBuffer, mimeType }) {
 
   let result;
   try {
-    result = await withTimeout(
-      model.generateContent([PROMPT, { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
-      90000,
-      'Gemini'
+    result = await geminiMitRetry(
+      () =>
+        model.generateContent([PROMPT, { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
+      { timeoutMs: 90000 }
     );
   } catch (err) {
     throw new Error(geminiErrorMessage(err));

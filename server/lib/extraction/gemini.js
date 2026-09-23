@@ -2,7 +2,7 @@
 // (EXTRACTION_PROVIDER unset oder "gemini") - nutzt den bereits hinterlegten
 // GEMINI_API_KEY.
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { withTimeout } from '../withTimeout.js';
+import { geminiMitRetry } from '../geminiCall.js';
 import { geminiErrorMessage } from './geminiError.js';
 
 export const modelName = 'gemini-flash-latest';
@@ -66,13 +66,13 @@ export async function extract({ fileBuffer, mimeType, catalog }) {
   // bereits ~19s brauchte.
   let result;
   try {
-    result = await withTimeout(
-      model.generateContent([
-        buildPrompt(catalog),
-        { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
-      ]),
-      90000,
-      'Gemini'
+    result = await geminiMitRetry(
+      () =>
+        model.generateContent([
+          buildPrompt(catalog),
+          { inlineData: { data: fileBuffer.toString('base64'), mimeType } },
+        ]),
+      { timeoutMs: 90000 }
     );
   } catch (err) {
     throw new Error(geminiErrorMessage(err));

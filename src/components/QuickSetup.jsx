@@ -354,9 +354,9 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
             <hr className="modal-section-divider" />
             <div className="modal-subheading">Besichtigung einsprechen (optional)</div>
             <p className="modal-hint">
-              Einfach erzählen, was vor Ort steht — zum Beispiel „Erdgeschoss, drei Büros, ein Bad,
-              kleine Küche, zweimal die Woche, Fenster einmal im Jahr". Daraus werden die Schritte
-              unten vorbelegt.
+              Erzählen, was vor Ort steht („Erdgeschoss, drei Büros, ein Bad, kleine Küche,
+              zweimal die Woche") oder einfach sagen, was gebraucht wird („Leistungsverzeichnis
+              für eine Logopädiepraxis, Standard"). Daraus werden die Schritte unten vorbelegt.
             </p>
             <div className="quick-setup-besichtigung">
               <textarea

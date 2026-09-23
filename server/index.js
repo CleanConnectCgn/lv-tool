@@ -26,7 +26,7 @@ import { registerCustomerDocumentRoutes } from './lib/customerDocuments.js';
 import { registerInboxRoutes } from './lib/inbox.js';
 import { geminiErrorMessage } from './lib/extraction/geminiError.js';
 import { registerLvAssistantRoutes } from './lib/lvAssistant.js';
-import { withTimeout } from './lib/withTimeout.js';
+import { geminiMitRetry } from './lib/geminiCall.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -309,7 +309,7 @@ Regeln:
 - Bereichsnamen und Zeilennummern exakt so, wie sie oben stehen.
 - Findest du nichts Belastbares, gib "issues": [] zurück.`;
 
-    const result = await withTimeout(model.generateContent(prompt), 45000, 'Gemini');
+    const result = await geminiMitRetry(() => model.generateContent(prompt), { timeoutMs: 45000 });
     const parsed = extractJson(result?.response?.text() || '{}');
     const issues = (Array.isArray(parsed?.issues) ? parsed.issues : []).slice(0, 8).map((i, idx) => ({
       ...i,
@@ -377,13 +377,13 @@ Antworte NUR als JSON im folgenden Format:
 Formuliere alle Leistungen im Clean Connect Stil: professionell, präzise, mit Bodenbelag-Angabe
 wenn erkennbar. Beispiel: "Hartböden feucht wischen (bis 180 cm Höhe alle Oberflächen abwischen)"`;
 
-      const result = await withTimeout(
-        model.generateContent([
-          prompt,
-          { inlineData: { data: req.body.toString('base64'), mimeType } },
-        ]),
-        90000,
-        'Gemini'
+      const result = await geminiMitRetry(
+        () =>
+          model.generateContent([
+            prompt,
+            { inlineData: { data: req.body.toString('base64'), mimeType } },
+          ]),
+        { timeoutMs: 90000 }
       );
       const raw = result?.response?.text() || '{}';
       const parsed = extractJson(raw);

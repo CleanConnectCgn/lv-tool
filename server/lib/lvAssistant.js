@@ -14,7 +14,7 @@
 
 import express from 'express';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { withTimeout } from './withTimeout.js';
+import { geminiMitRetry } from './geminiCall.js';
 import { geminiErrorMessage } from './extraction/geminiError.js';
 
 const MODEL = 'gemini-flash-latest';
@@ -170,7 +170,7 @@ export function registerLvAssistantRoutes(app, { rateLimiter } = {}) {
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
         const model = genAI.getGenerativeModel({ model: MODEL });
-        const result = await withTimeout(
+        const result = await geminiMitRetry(() =>
           model.generateContent([
             {
               text: `Schreibe wortgetreu auf, was in dieser Aufnahme gesagt wird. Es geht um die
@@ -179,9 +179,7 @@ Besonderheiten. Gib nur den Wortlaut zurück, keine Deutung, keine Zusammenfassu
 Anführungszeichen. Wenn nichts Verständliches gesagt wird, gib einen leeren Text zurück.`,
             },
             { inlineData: { mimeType, data: req.body.toString('base64') } },
-          ]),
-          90000,
-          'Gemini'
+          ]), { timeoutMs: 90000 }
         );
         res.json({ transkript: (result?.response?.text() || '').trim() });
       } catch (err) {
@@ -205,10 +203,14 @@ Anführungszeichen. Wenn nichts Verständliches gesagt wird, gib einen leeren Te
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
       const model = genAI.getGenerativeModel({ model: MODEL });
-      const prompt = `Jemand schildert die Besichtigung eines Objekts für ein Reinigungsangebot.
-Leite daraus ab, welche Bereiche ins Leistungsverzeichnis gehören und wie oft gereinigt wird.
+      const prompt = `Jemand beschreibt ein Objekt, für das ein Reinigungsangebot entstehen soll.
+Das kann eine Schilderung der Besichtigung sein ("Erdgeschoss, drei Büros, ein Bad") oder ein
+direkter Auftrag ("Erstelle mir ein Leistungsverzeichnis für eine Logopädiepraxis, Standard").
+Leite in beiden Fällen ab, welche Bereiche ins Leistungsverzeichnis gehören und wie oft gereinigt
+wird. Wenn nur die Art des Objekts genannt wird, wähle die Bereiche, die dort praktisch immer
+vorkommen, und schreibe in "hinweis", was noch zu klären ist.
 
-Schilderung:
+Beschreibung:
 "${String(text).slice(0, 4000)}"
 
 Mögliche Objekttypen (key: Bezeichnung):
@@ -231,7 +233,7 @@ Regeln:
 - Nur keys aus den Listen oben, nichts erfinden.
 - Nur Bereiche, die in der Schilderung wirklich vorkommen.
 - Was nicht gesagt wurde, bleibt leer bzw. false - und kommt in "hinweis".`;
-      const result = await withTimeout(model.generateContent(prompt), 60000, 'Gemini');
+      const result = await geminiMitRetry(() => model.generateContent(prompt), { timeoutMs: 60000 });
       const parsed = extractJson(result?.response?.text() || '{}');
       res.json(
         validateSetup(parsed, {
@@ -268,7 +270,7 @@ Regeln:
         katalogTexte: Array.isArray(katalogTexte) ? katalogTexte : [],
         areaListe: Array.isArray(areaListe) ? areaListe : [],
       });
-      const result = await withTimeout(model.generateContent(prompt), 60000, 'Gemini');
+      const result = await geminiMitRetry(() => model.generateContent(prompt), { timeoutMs: 60000 });
       const parsed = extractJson(result?.response?.text() || '{}');
       const aktionen = validateAktionen(parsed?.aktionen, {
         sections,

@@ -6,6 +6,21 @@
 export function geminiErrorMessage(err) {
   const raw = err?.message || String(err);
 
+  // Vorübergehende Überlastung auf Googles Seite. Der Aufruf wird intern
+  // bereits mehrfach wiederholt (server/lib/geminiCall.js); wenn die Meldung
+  // hier ankommt, waren alle Versuche betroffen.
+  if (
+    err?.status === 503 ||
+    /503|overloaded|high demand|service unavailable/i.test(raw)
+  ) {
+    return 'Gemini ist gerade überlastet. Das ist vorübergehend - bitte in einer Minute noch einmal versuchen.';
+  }
+  if (err?.status === 500 || err?.status === 502 || err?.status === 504) {
+    return 'Gemini hat mit einem Serverfehler geantwortet. Bitte gleich noch einmal versuchen.';
+  }
+  if (/hat nicht innerhalb von .* geantwortet/i.test(raw)) {
+    return 'Gemini hat zu lange gebraucht und wurde abgebrochen. Bitte noch einmal versuchen.';
+  }
   if (err?.status === 429 || /429|quota|exceeded/i.test(raw)) {
     return 'Gemini-Kontingent erschöpft (429). Bitte GEMINI_API_KEY/Billing in Railway prüfen.';
   }

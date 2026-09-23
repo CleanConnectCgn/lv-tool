@@ -23,8 +23,24 @@ describe('geminiErrorMessage (reine Übersetzungslogik, kein I/O)', () => {
     expect(geminiErrorMessage({ status: 404, message: 'models/gemini-falsch not found' })).toContain('Modell');
   });
 
-  it('lässt unbekannte Meldungen unverändert durch (z.B. Timeout)', () => {
+  it('übersetzt die Zeitüberschreitung in eine handlungsorientierte Meldung', () => {
+    // Bis 2026-09-23 wurde der technische Wortlaut durchgereicht.
     const raw = 'Gemini hat nicht innerhalb von 90s geantwortet';
+    expect(geminiErrorMessage(new Error(raw))).toBe(
+      'Gemini hat zu lange gebraucht und wurde abgebrochen. Bitte noch einmal versuchen.'
+    );
+  });
+
+  it('übersetzt die Überlastungsmeldung (503), die real auftrat', () => {
+    const raw =
+      '[GoogleGenerativeAI Error]: Error fetching from https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent: [503 Service Unavailable] This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.';
+    expect(geminiErrorMessage(new Error(raw))).toBe(
+      'Gemini ist gerade überlastet. Das ist vorübergehend - bitte in einer Minute noch einmal versuchen.'
+    );
+  });
+
+  it('lässt wirklich unbekannte Meldungen unverändert durch', () => {
+    const raw = 'Irgendein unerwarteter Fehler';
     expect(geminiErrorMessage(new Error(raw))).toBe(raw);
   });
 });

@@ -5,7 +5,7 @@
 // NIE automatisch ein Vertrag angelegt - das Ergebnis füllt nur das
 // Formular, ein Mensch prüft und bestätigt vor "Vertrag erstellen".
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { withTimeout } from '../withTimeout.js';
+import { geminiMitRetry } from '../geminiCall.js';
 import { geminiErrorMessage } from './geminiError.js';
 import { BRANCHEN, DSGVO_VARIANTEN } from '../render/contractFields.js';
 
@@ -53,10 +53,10 @@ export async function extract({ fileBuffer, mimeType }) {
 
   let result;
   try {
-    result = await withTimeout(
-      model.generateContent([buildPrompt(), { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
-      90000,
-      'Gemini'
+    result = await geminiMitRetry(
+      () =>
+        model.generateContent([buildPrompt(), { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
+      { timeoutMs: 90000 }
     );
   } catch (err) {
     throw new Error(geminiErrorMessage(err));
