@@ -6,10 +6,12 @@
 // Übergabemechanismus + Timeout wie gemini.js, aber einen eigenen, viel
 // kürzeren Prompt ohne Katalogbezug.
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { geminiMitRetry } from '../geminiCall.js';
+import { geminiMitRetry, GEMINI_MODELLE } from '../geminiCall.js';
 import { geminiErrorMessage } from './geminiError.js';
 
-export const modelName = 'gemini-flash-latest';
+// Erstes Modell der Kette; bei Überlastung weicht geminiMitRetry auf die
+// nächsten aus (siehe server/lib/geminiCall.js).
+export const modelName = GEMINI_MODELLE[0];
 
 const PROMPT = `Du liest ein beliebiges Geschäftsdokument (Foto oder PDF-Scan) einer Gebäudereinigungsfirma aus - z.B. ein Schlüsselübergabeprotokoll, einen unterschriebenen Vertrag, eine Rechnung oder eine sonstige Unterlage.
 
@@ -31,13 +33,14 @@ Wenn ein Feld nicht sicher erkennbar ist, setze null statt zu raten.`;
 export async function extractInboxDocument({ fileBuffer, mimeType }) {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY ist nicht konfiguriert');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: modelName });
 
   let result;
   try {
     result = await geminiMitRetry(
-      () =>
-        model.generateContent([PROMPT, { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
+      (modell) =>
+        genAI
+          .getGenerativeModel({ model: modell })
+          .generateContent([PROMPT, { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
       { timeoutMs: 90000 }
     );
   } catch (err) {

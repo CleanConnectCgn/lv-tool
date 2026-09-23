@@ -5,11 +5,13 @@
 // NIE automatisch ein Vertrag angelegt - das Ergebnis füllt nur das
 // Formular, ein Mensch prüft und bestätigt vor "Vertrag erstellen".
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { geminiMitRetry } from '../geminiCall.js';
+import { geminiMitRetry, GEMINI_MODELLE } from '../geminiCall.js';
 import { geminiErrorMessage } from './geminiError.js';
 import { BRANCHEN, DSGVO_VARIANTEN } from '../render/contractFields.js';
 
-export const modelName = 'gemini-flash-latest';
+// Erstes Modell der Kette; bei Überlastung weicht geminiMitRetry auf die
+// nächsten aus (siehe server/lib/geminiCall.js).
+export const modelName = GEMINI_MODELLE[0];
 
 const PRICE_PER_1M_INPUT_TOKENS = 0.075;
 const PRICE_PER_1M_OUTPUT_TOKENS = 0.3;
@@ -49,13 +51,14 @@ Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen, ex
 export async function extract({ fileBuffer, mimeType }) {
   if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY ist nicht konfiguriert');
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: modelName });
 
   let result;
   try {
     result = await geminiMitRetry(
-      () =>
-        model.generateContent([buildPrompt(), { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
+      (modell) =>
+        genAI
+          .getGenerativeModel({ model: modell })
+          .generateContent([buildPrompt(), { inlineData: { data: fileBuffer.toString('base64'), mimeType } }]),
       { timeoutMs: 90000 }
     );
   } catch (err) {

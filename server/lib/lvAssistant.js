@@ -17,8 +17,6 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { geminiMitRetry } from './geminiCall.js';
 import { geminiErrorMessage } from './extraction/geminiError.js';
 
-const MODEL = 'gemini-flash-latest';
-
 // Nur diese Aktionen darf der Assistent vorschlagen. Alles andere wird
 // verworfen, bevor es das Frontend erreicht.
 const ERLAUBTE_AKTIONEN = new Set([
@@ -169,9 +167,8 @@ export function registerLvAssistantRoutes(app, { rateLimiter } = {}) {
       }
       try {
         const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-        const model = genAI.getGenerativeModel({ model: MODEL });
-        const result = await geminiMitRetry(() =>
-          model.generateContent([
+        const result = await geminiMitRetry((modell) =>
+          genAI.getGenerativeModel({ model: modell }).generateContent([
             {
               text: `Schreibe wortgetreu auf, was in dieser Aufnahme gesagt wird. Es geht um die
 Besichtigung eines Objekts für ein Reinigungsangebot: Räume, Bereiche, Reinigungsintervalle,
@@ -202,7 +199,7 @@ Anführungszeichen. Wenn nichts Verständliches gesagt wird, gib einen leeren Te
     const typen = Array.isArray(typListe) ? typListe : [];
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: MODEL });
+
       const prompt = `Jemand beschreibt ein Objekt, für das ein Reinigungsangebot entstehen soll.
 Das kann eine Schilderung der Besichtigung sein ("Erdgeschoss, drei Büros, ein Bad") oder ein
 direkter Auftrag ("Erstelle mir ein Leistungsverzeichnis für eine Logopädiepraxis, Standard").
@@ -233,7 +230,10 @@ Regeln:
 - Nur keys aus den Listen oben, nichts erfinden.
 - Nur Bereiche, die in der Schilderung wirklich vorkommen.
 - Was nicht gesagt wurde, bleibt leer bzw. false - und kommt in "hinweis".`;
-      const result = await geminiMitRetry(() => model.generateContent(prompt), { timeoutMs: 60000 });
+      const result = await geminiMitRetry(
+        (modell) => genAI.getGenerativeModel({ model: modell }).generateContent(prompt),
+        { timeoutMs: 60000 }
+      );
       const parsed = extractJson(result?.response?.text() || '{}');
       res.json(
         validateSetup(parsed, {
@@ -261,7 +261,7 @@ Regeln:
     }
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: MODEL });
+
       const prompt = buildPrompt({
         nachricht: String(nachricht).slice(0, 2000),
         sections,
@@ -270,7 +270,10 @@ Regeln:
         katalogTexte: Array.isArray(katalogTexte) ? katalogTexte : [],
         areaListe: Array.isArray(areaListe) ? areaListe : [],
       });
-      const result = await geminiMitRetry(() => model.generateContent(prompt), { timeoutMs: 60000 });
+      const result = await geminiMitRetry(
+        (modell) => genAI.getGenerativeModel({ model: modell }).generateContent(prompt),
+        { timeoutMs: 60000 }
+      );
       const parsed = extractJson(result?.response?.text() || '{}');
       const aktionen = validateAktionen(parsed?.aktionen, {
         sections,

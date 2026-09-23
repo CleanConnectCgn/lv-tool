@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { geminiMitRetry, istVoruebergehend } from './geminiCall.js';
+import { geminiMitRetry, istVoruebergehend, istModellProblem } from './geminiCall.js';
 
 function fehlerMit(status, message = 'Fehler') {
   const err = new Error(message);
@@ -36,7 +36,7 @@ describe('istVoruebergehend', () => {
 describe('geminiMitRetry', () => {
   it('gibt das Ergebnis beim ersten Erfolg zurück, ohne zu wiederholen', async () => {
     const aufruf = vi.fn().mockResolvedValue('fertig');
-    await expect(geminiMitRetry(aufruf)).resolves.toBe('fertig');
+    await expect(geminiMitRetry(aufruf, { modelle: ['m1'] })).resolves.toBe('fertig');
     expect(aufruf).toHaveBeenCalledTimes(1);
   });
 
@@ -45,26 +45,26 @@ describe('geminiMitRetry', () => {
       .fn()
       .mockRejectedValueOnce(fehlerMit(503, 'This model is currently experiencing high demand'))
       .mockResolvedValue('beim zweiten Mal');
-    await expect(geminiMitRetry(aufruf, { pauseMs: 1 })).resolves.toBe('beim zweiten Mal');
+    await expect(geminiMitRetry(aufruf, { pauseMs: 1, modelle: ['m1'] })).resolves.toBe('beim zweiten Mal');
     expect(aufruf).toHaveBeenCalledTimes(2);
   });
 
   it('gibt nach allen Versuchen den letzten Fehler weiter', async () => {
     const aufruf = vi.fn().mockRejectedValue(fehlerMit(503, 'high demand'));
-    await expect(geminiMitRetry(aufruf, { versuche: 3, pauseMs: 1 })).rejects.toThrow('high demand');
+    await expect(geminiMitRetry(aufruf, { versuchePorModell: 3, pauseMs: 1, modelle: ['m1'] })).rejects.toThrow('high demand');
     expect(aufruf).toHaveBeenCalledTimes(3);
   });
 
   it('wiederholt einen dauerhaften Fehler nicht', async () => {
     const aufruf = vi.fn().mockRejectedValue(fehlerMit(401, 'API key not valid'));
-    await expect(geminiMitRetry(aufruf, { pauseMs: 1 })).rejects.toThrow('API key not valid');
+    await expect(geminiMitRetry(aufruf, { pauseMs: 1, modelle: ['m1'] })).rejects.toThrow('API key not valid');
     expect(aufruf).toHaveBeenCalledTimes(1);
   });
 
   it('bricht einen hängenden Aufruf nach dem Zeitlimit ab', async () => {
     const aufruf = vi.fn(() => new Promise(() => {}));
     await expect(
-      geminiMitRetry(aufruf, { timeoutMs: 20, versuche: 1, label: 'Gemini' })
+      geminiMitRetry(aufruf, { timeoutMs: 20, modelle: ['m1'], label: 'Gemini' })
     ).rejects.toThrow(/nicht innerhalb/);
   });
 
@@ -75,8 +75,67 @@ describe('geminiMitRetry', () => {
     // keine stille Wartezeit.
     const aufruf = vi.fn(() => new Promise(() => {}));
     await expect(
-      geminiMitRetry(aufruf, { timeoutMs: 20, versuche: 3, pauseMs: 1 })
+      geminiMitRetry(aufruf, { timeoutMs: 20, pauseMs: 1, modelle: ['m1', 'm2'] })
     ).rejects.toThrow(/nicht innerhalb/);
     expect(aufruf).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Modellwechsel', () => {
+  it('weicht auf das nächste Modell aus, wenn das erste überlastet bleibt', async () => {
+    // Genau der Fall vom 23.09.2026: gemini-flash-latest lieferte stundenlang
+    // 503, gemini-3.6-flash antwortete sofort.
+    const benutzt = [];
+    const aufruf = vi.fn(async (modell) => {
+      benutzt.push(modell);
+      if (modell === 'überlastet') throw fehlerMit(503, 'high demand');
+      return 'geht';
+    });
+    await expect(
+      geminiMitRetry(aufruf, { modelle: ['überlastet', 'frei'], versuchePorModell: 2, pauseMs: 1 })
+    ).resolves.toBe('geht');
+    // zweimal das erste, dann das zweite
+    expect(benutzt).toEqual(['überlastet', 'überlastet', 'frei']);
+  });
+
+  it('springt bei einem abgekündigten Modell sofort weiter, ohne zweiten Versuch', async () => {
+    const benutzt = [];
+    const aufruf = vi.fn(async (modell) => {
+      benutzt.push(modell);
+      if (modell === 'weg') throw fehlerMit(404, 'This model is no longer available to new users');
+      return 'geht';
+    });
+    await expect(
+      geminiMitRetry(aufruf, { modelle: ['weg', 'aktuell'], versuchePorModell: 3, pauseMs: 1 })
+    ).resolves.toBe('geht');
+    expect(benutzt).toEqual(['weg', 'aktuell']);
+  });
+
+  it('meldet den letzten Fehler, wenn alle Modelle überlastet sind', async () => {
+    const aufruf = vi.fn().mockRejectedValue(fehlerMit(503, 'high demand'));
+    await expect(
+      geminiMitRetry(aufruf, { modelle: ['a', 'b'], versuchePorModell: 2, pauseMs: 1 })
+    ).rejects.toThrow('high demand');
+    expect(aufruf).toHaveBeenCalledTimes(4);
+  });
+
+  it('wechselt bei einem dauerhaften Fehler NICHT das Modell', async () => {
+    // Ein ungültiger Key wird beim nächsten Modell genauso ungültig sein.
+    const aufruf = vi.fn().mockRejectedValue(fehlerMit(401, 'API key not valid'));
+    await expect(
+      geminiMitRetry(aufruf, { modelle: ['a', 'b'], pauseMs: 1 })
+    ).rejects.toThrow('API key not valid');
+    expect(aufruf).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('istModellProblem', () => {
+  it('erkennt ein abgekündigtes Modell', () => {
+    expect(istModellProblem(new Error('This model models/gemini-2.5-flash is no longer available to new users'))).toBe(true);
+    expect(istModellProblem(fehlerMit(404))).toBe(true);
+  });
+
+  it('hält eine Überlastung nicht für ein Modellproblem', () => {
+    expect(istModellProblem(fehlerMit(503, 'high demand'))).toBe(false);
   });
 });

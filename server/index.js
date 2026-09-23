@@ -267,7 +267,7 @@ app.post('/api/ai-check', aiRateLimiter, async (req, res) => {
   }
   try {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+
 
     const schonGemeldet = Array.isArray(bereitsGefunden) && bereitsGefunden.length
       ? `\n\nDiese Punkte sind bereits erkannt, melde sie NICHT erneut:\n${bereitsGefunden
@@ -309,7 +309,10 @@ Regeln:
 - Bereichsnamen und Zeilennummern exakt so, wie sie oben stehen.
 - Findest du nichts Belastbares, gib "issues": [] zurück.`;
 
-    const result = await geminiMitRetry(() => model.generateContent(prompt), { timeoutMs: 45000 });
+    const result = await geminiMitRetry(
+      (modell) => genAI.getGenerativeModel({ model: modell }).generateContent(prompt),
+      { timeoutMs: 45000 }
+    );
     const parsed = extractJson(result?.response?.text() || '{}');
     const issues = (Array.isArray(parsed?.issues) ? parsed.issues : []).slice(0, 8).map((i, idx) => ({
       ...i,
@@ -347,7 +350,6 @@ app.post(
     }
     try {
       const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
 
       const prompt = `Du analysierst ein Foto oder Scan eines bestehenden Leistungsverzeichnisses
 oder einer Reinigungsanforderung. Extrahiere alle Reinigungsleistungen und strukturiere
@@ -378,8 +380,8 @@ Formuliere alle Leistungen im Clean Connect Stil: professionell, präzise, mit B
 wenn erkennbar. Beispiel: "Hartböden feucht wischen (bis 180 cm Höhe alle Oberflächen abwischen)"`;
 
       const result = await geminiMitRetry(
-        () =>
-          model.generateContent([
+        (modell) =>
+          genAI.getGenerativeModel({ model: modell }).generateContent([
             prompt,
             { inlineData: { data: req.body.toString('base64'), mimeType } },
           ]),
