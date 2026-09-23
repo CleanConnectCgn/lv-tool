@@ -1,40 +1,32 @@
 import React from 'react';
 
-export default function AIStatusBadge({ status, issues, onClick }) {
-  if (status === 'idle') return null;
+// Zeigt dauerhaft an, ob am Leistungsverzeichnis etwas nicht stimmt.
+//
+// Die Anzeige hängt seit 2026-09-23 an den festen Regeln, nicht mehr am
+// KI-Ergebnis: Die Regeln laufen bei jeder Änderung sofort mit, also kann
+// das Ergebnis immer sichtbar sein, statt erst nach einem Aufruf zu
+// erscheinen und danach zu veralten.
+export default function AIStatusBadge({ regelBefunde = [], kiStatus = 'idle', onClick }) {
+  const fehler = regelBefunde.filter((b) => b.type === 'red').length;
+  const hinweise = regelBefunde.length - fehler;
 
-  let label = '';
+  let label;
   let className = 'ai-status-badge';
-  if (status === 'pending') {
-    label = 'KI analysiert...';
-    className += ' pending';
-  } else if (status === 'error') {
-    label = 'KI Check fehlgeschlagen';
-    className += ' error';
-  } else if (status === 'stale') {
-    // Das LV wurde nach der letzten Prüfung geändert - das alte Ergebnis
-    // stimmt also nicht mehr. Statt sofort erneut zu prüfen (und dabei
-    // Anfragen zu verbrennen), wird nur darauf hingewiesen.
-    label = 'LV geändert — erneut prüfen';
-    className += ' stale';
-  } else if (status === 'done') {
-    const redCount = issues.filter((i) => i.type === 'red').length;
-    const orangeCount = issues.filter((i) => i.type === 'orange').length;
-    if (redCount + orangeCount === 0) {
-      label = 'LV geprüft ✓';
-      className += ' clean';
-    } else if (redCount > 0) {
-      label = `${redCount + orangeCount} Probleme gefunden 🔴`;
-      className += ' issues-red';
-    } else {
-      label = `${orangeCount} Hinweise 🟠`;
-      className += ' issues-orange';
-    }
+
+  if (fehler > 0) {
+    label = `${fehler} ${fehler === 1 ? 'Fehler' : 'Fehler'}${hinweise > 0 ? `, ${hinweise} Hinweise` : ''}`;
+    className += ' issues-red';
+  } else if (hinweise > 0) {
+    label = `${hinweise} ${hinweise === 1 ? 'Hinweis' : 'Hinweise'}`;
+    className += ' issues-orange';
+  } else {
+    label = 'LV geprüft ✓';
+    className += ' clean';
   }
 
   return (
-    <button type="button" className={className} onClick={onClick}>
-      {status === 'pending' && <span className="ai-status-spinner" />}
+    <button type="button" className={className} onClick={onClick} title="Prüfung öffnen">
+      {kiStatus === 'pending' && <span className="ai-status-spinner" />}
       {label}
     </button>
   );

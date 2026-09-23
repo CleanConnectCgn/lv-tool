@@ -4,7 +4,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
 import { randomUUID } from 'crypto';
-import Anthropic from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { google } from 'googleapis';
 import rateLimit from 'express-rate-limit';
@@ -239,19 +238,29 @@ app.get('/api/sevdesk/offer-pdf/:id', async (req, res) => {
   }
 });
 
-// Schneller Qualitäts-Check des LV. Läuft seit 2026-09-22 auf Gemini Flash
-// statt Claude Sonnet: Der Check wird häufig ausgelöst (beim Öffnen des
-// Checkup-Fensters, vor dem PDF-Export, vor dem sevDesk-Versand), und dafür
-// ist Flash schnell und günstig genug. Der tiefe, zweistufige Dual-Checkup
-// unter /api/checkup/* nutzt weiterhin zusätzlich Claude.
+// Einziger KI-Aufruf für das Leistungsverzeichnis.
 //
-// Die Prüfregeln sind an den Fehlern ausgerichtet, die in den tatsächlich
-// ausgelieferten LVs vorkamen (siehe LEARNINGS-2026-09-22.md), nicht an
-// allgemeinen "Qualitätskriterien".
+// Bis 2026-09-23 liefen drei Prüfungen nebeneinander: dieser Check plus ein
+// zweistufiger "Dual-Checkup" (Gemini, danach Claude, der Geminis Ergebnis
+// bewertete). Das war für die Aufgabe deutlich überdimensioniert - ein LV
+// ist kurz, und die Befunde waren zu einem großen Teil ohnehin eindeutig
+// entscheidbar.
+//
+// Jetzt gilt die Arbeitsteilung:
+//   1. Feste Regeln im Browser (src/lib/lvRegelpruefung.js) finden alles,
+//      was eindeutig ist: Duplikate, Tippfehler, Desinfektionszusagen,
+//      fehlende Intervalle, Widersprüche. Sofort, kostenlos, immer gleich.
+//   2. Dieser Endpunkt bekommt das LV nur noch als kompakten Text (rund
+//      sieben Mal kleiner als das vorherige JSON) und beurteilt allein das,
+//      was sich nicht ausrechnen lässt: fehlende branchenübliche Leistungen
+//      und unklare Formulierungen.
+//
+// Was die Regeln schon gefunden haben, wird mitgeschickt, damit dasselbe
+// nicht doppelt gemeldet wird.
 app.post('/api/ai-check', aiRateLimiter, async (req, res) => {
-  const { sections, lvTitle } = req.body || {};
-  if (!sections) {
-    return res.status(400).json({ error: 'sections sind erforderlich' });
+  const { lvText, bereitsGefunden } = req.body || {};
+  if (!lvText || !String(lvText).trim()) {
+    return res.status(400).json({ error: 'lvText ist erforderlich' });
   }
   if (!process.env.GEMINI_API_KEY) {
     return res.status(500).json({ error: 'GEMINI_API_KEY ist nicht konfiguriert' });
@@ -260,77 +269,56 @@ app.post('/api/ai-check', aiRateLimiter, async (req, res) => {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
 
-    const prompt = `Du prüfst ein Leistungsverzeichnis einer Gebäudereinigung auf handwerkliche Fehler.
-Du bewertest ausschließlich die Texte. Du erfindest keine Leistungen und änderst keine Preise.
+    const schonGemeldet = Array.isArray(bereitsGefunden) && bereitsGefunden.length
+      ? `\n\nDiese Punkte sind bereits erkannt, melde sie NICHT erneut:\n${bereitsGefunden
+          .map((t) => `- ${t}`)
+          .join('\n')}`
+      : '';
 
-LV-Titel: ${lvTitle || '(leer)'}
+    const prompt = `Du prüfst das Leistungsverzeichnis einer Gebäudereinigung aus fachlicher Sicht.
+Formales (Duplikate, Tippfehler, fehlende Intervalle) ist bereits maschinell geprüft. Du beurteilst
+nur zwei Dinge:
 
-Bereiche und Zeilen:
-${JSON.stringify(sections, null, 2)}
+1. FEHLENDE LEISTUNG: Eine Leistung, die in diesem Bereich branchenüblich mit beauftragt wird und
+   hier fehlt. Nur melden, wenn sie in einem Objekt dieser Art praktisch immer dabei ist.
+2. UNKLARE FORMULIERUNG: Eine Zeile, die beim Kunden zu Rückfragen oder Streit über den Umfang
+   führen würde.
 
-Jede Zeile hat:
-- text: die kurze Leistungsbezeichnung
-- beschreibung: die ausformulierte Leistungsbeschreibung (optional)
-- bemerkung: objektspezifische Notiz (optional)
-- bedarf / intervalColumn / intervalValue: das Intervall
+Leistungsverzeichnis:
+${String(lvText).slice(0, 12000)}${schonGemeldet}
 
-MELDE NUR DIESE FÄLLE:
-
-Rot (type "red"), das sind echte Fehler:
-1. Das Wort "desinfizieren" oder "desinfizierend" kommt vor. Das wird in diesem
-   Betrieb nicht zugesichert. Schlage als fix denselben Text mit "feucht
-   reinigen" bzw. "feucht abwischen" statt der Desinfektionsformulierung vor,
-   fixType "replace_row".
-2. Rechtschreib- und Tippfehler im text, in der beschreibung oder in der
-   bemerkung, zum Beispiel "Ausstausch" statt "Austausch", "Hausringangstür"
-   statt "Hauseingangstür", "Bürorbereiche" statt "Bürobereiche",
-   "Gtiffspuren" statt "Griffspuren". fixType "replace_row" mit dem
-   korrigierten Text.
-3. Echte Duplikate: zwei Zeilen im SELBEN Bereich, die dieselbe Leistung
-   meinen. fixType "remove_row" für die zweite.
-4. Widersprüchliche Intervalle für dieselbe Leistung im selben Bereich.
-5. Der LV-Titel ist leer oder nennt keine Leistungsart (er sollte z.B.
-   "Leistungsverzeichnis Unterhaltsreinigung" oder
-   "Leistungsverzeichnis Glasreinigung" lauten). fixType "info".
-
-Orange (type "orange"), das sind Hinweise:
-6. Eine Zeile hat keine beschreibung, obwohl die anderen Zeilen im selben
-   Bereich eine haben. fixType "info".
-7. Eine Leistung fehlt, die in diesem Bereich üblicherweise mit beauftragt
-   wird. fixType "info".
-8. Eine Formulierung ist unklar oder wirft beim Kunden Rückfragen auf.
-   fixType "replace_row" mit der klareren Formulierung.
-
-MELDE AUSDRÜCKLICH NICHT:
-- Dieselbe Leistung in VERSCHIEDENEN Bereichen (z.B. "Abfallbehälter leeren"
-  in Büro und in Küche). Das ist gewollt und richtig.
-- Stilfragen, Geschmacksfragen, Vorschläge zur Umformulierung ohne inhaltlichen
-  Grund.
-- Fehlende Preise oder kaufmännische Angaben. Das LV enthält bewusst keine.
-- Bereiche, die im Objekt schlicht nicht vorkommen.
-
-Antworte AUSSCHLIESSLICH mit validem JSON, kein Markdown, keine Erklärung:
+Antworte AUSSCHLIESSLICH mit validem JSON, kein Markdown:
 {
   "issues": [
     {
-      "id": "eindeutige id",
-      "type": "red" oder "orange",
+      "type": "orange",
       "title": "kurzer Titel",
-      "description": "was genau das Problem ist",
-      "targetSection": "exakter Bereichstitel oder null",
-      "targetRowIndex": Index der Zeile innerhalb des Bereichs (0-basiert) oder null,
-      "fix": "der fertige Ersatztext oder null",
-      "fixType": "replace_row" oder "remove_row" oder "rename_section" oder "info"
+      "description": "was fehlt bzw. was unklar ist und warum",
+      "targetSection": "exakter Bereichsname aus dem LV",
+      "targetRowIndex": Zeilennummer aus dem LV oder null,
+      "fix": "bei unklarer Formulierung der bessere Text, sonst null",
+      "fixType": "replace_row" oder "info"
     }
   ]
 }
 
-Höchstens 15 Einträge. Lieber wenige echte Funde als viele unsichere.`;
+Regeln:
+- Höchstens 8 Einträge. Lieber zwei echte als acht mögliche.
+- Dieselbe Leistung in verschiedenen Bereichen ist gewollt und kein Fehler.
+- Keine Preise, keine Kalkulation, keine Stilfragen ohne inhaltlichen Grund.
+- Bereichsnamen und Zeilennummern exakt so, wie sie oben stehen.
+- Findest du nichts Belastbares, gib "issues": [] zurück.`;
 
-    const result = await withTimeout(model.generateContent(prompt), 60000, 'Gemini');
-    const raw = result?.response?.text() || '{}';
-    const parsed = extractJson(raw);
-    res.json({ issues: Array.isArray(parsed?.issues) ? parsed.issues : [] });
+    const result = await withTimeout(model.generateContent(prompt), 45000, 'Gemini');
+    const parsed = extractJson(result?.response?.text() || '{}');
+    const issues = (Array.isArray(parsed?.issues) ? parsed.issues : []).slice(0, 8).map((i, idx) => ({
+      ...i,
+      id: `ki-${idx}`,
+      // Die KI beurteilt nur Ermessensfragen - die sind nie "rot".
+      type: 'orange',
+      quelle: 'ki',
+    }));
+    res.json({ issues });
   } catch (err) {
     console.error('[ai-check] fehlgeschlagen:', err?.message || err);
     res.status(502).json({ error: geminiErrorMessage(err) });
@@ -342,128 +330,6 @@ function extractJson(raw) {
   const jsonMatch = (raw || '').match(/\{[\s\S]*\}/);
   return JSON.parse(jsonMatch ? jsonMatch[0] : raw || '{}');
 }
-
-// Dual AI checkup, step 1: Gemini analyzes the LV + Angebot independently.
-// Body: { sections, angebot, branche }
-app.post('/api/checkup/gemini', aiRateLimiter, async (req, res) => {
-  const { sections, angebot, branche } = req.body || {};
-  if (!sections) {
-    return res.status(400).json({ error: 'sections sind erforderlich' });
-  }
-  if (!process.env.GEMINI_API_KEY) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY ist nicht konfiguriert' });
-  }
-  try {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
-
-    const prompt = `Du bist ein Qualitätsprüfer für professionelle Gebäudereinigungsangebote.
-Prüfe das folgende Leistungsverzeichnis und Angebot (Branche: ${branche || 'unbekannt'}) auf:
-1. DUPLIKATE: Identisch oder nahezu identisch formulierte Positionen
-2. FEHLENDE POSITIONEN: Branchenübliche Standardleistungen die fehlen
-3. PROFESSIONALITÄT: Unprofessionelle oder unklare Formulierungen
-4. KONSISTENZ: Widersprüche zwischen LV-Leistungen und kalkuliertem Preis
-
-Leistungsverzeichnis:
-${JSON.stringify(sections, null, 2)}
-
-Angebot:
-${JSON.stringify(angebot || {}, null, 2)}
-
-Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
-{
-  "duplikate": [{"position_a": "...", "position_b": "...", "begruendung": "..."}],
-  "fehlende_positionen": [{"position": "...", "begruendung": "..."}],
-  "sprachliche_hinweise": [{"original": "...", "verbesserung": "...", "grund": "..."}],
-  "konsistenz_probleme": [{"beschreibung": "..."}],
-  "bewertung": 8,
-  "zusammenfassung": "..."
-}`;
-
-    // 30s war zu knapp - eine echte Testmessung mit einem realen LV-Dokument
-    // brauchte bereits ~19s (siehe 2026-07-31), größere/mehrseitige Scans
-    // hätten das leicht überschritten und wären fälschlich als Fehler
-    // erschienen statt einfach länger zu dauern.
-    const result = await withTimeout(model.generateContent(prompt), 90000, 'Gemini');
-    const raw = result?.response?.text() || '{}';
-    const parsed = extractJson(raw);
-    res.json(parsed);
-  } catch (err) {
-    console.error('[checkup/gemini] fehlgeschlagen:', err?.message || err);
-    res.status(502).json({ error: geminiErrorMessage(err) });
-  }
-});
-
-// Dual AI checkup, step 2: Claude reviews the LV + Angebot independently
-// AND critiques Gemini's result.
-// Body: { sections, angebot, branche, gemini_ergebnis }
-app.post('/api/checkup/claude', aiRateLimiter, async (req, res) => {
-  const { sections, angebot, branche, gemini_ergebnis } = req.body || {};
-  if (!sections) {
-    return res.status(400).json({ error: 'sections sind erforderlich' });
-  }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: 'ANTHROPIC_API_KEY ist nicht konfiguriert' });
-  }
-  try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const prompt = `Du bist ein erfahrener Qualitätsprüfer für gewerbliche Reinigungsverträge (Branche: ${branche || 'unbekannt'}).
-
-AUFGABE 1 — Eigene Prüfung:
-Analysiere dieses Leistungsverzeichnis und Angebot unabhängig auf Vollständigkeit, Professionalität und Duplikate.
-
-Leistungsverzeichnis:
-${JSON.stringify(sections, null, 2)}
-
-Angebot:
-${JSON.stringify(angebot || {}, null, 2)}
-
-AUFGABE 2 — Gemini-Review:
-Hier ist das Ergebnis einer vorherigen KI-Analyse (Gemini). Bewerte es kritisch:
-- Was stimmt in der Gemini-Analyse?
-- Was ist falsch oder übertrieben?
-- Was hat Gemini übersehen?
-
-Gemini-Ergebnis:
-${JSON.stringify(gemini_ergebnis || {}, null, 2)}
-
-Antworte AUSSCHLIESSLICH als valides JSON, kein Markdown, keine Erklärungen:
-{
-  "eigene_pruefung": {
-    "duplikate": [{"position_a": "...", "position_b": "...", "begruendung": "..."}],
-    "fehlende_positionen": [{"position": "...", "begruendung": "..."}],
-    "hinweise": [{"hinweis": "..."}]
-  },
-  "gemini_bewertung": {
-    "korrekte_punkte": ["..."],
-    "fehler_oder_uebertreibungen": ["..."],
-    "uebersehene_punkte": ["..."]
-  },
-  "top_prioritaeten": ["1. ...", "2. ...", "3. ..."],
-  "freigabe": "bereit",
-  "freigabe_begruendung": "...",
-  "gesamtresumee": "..."
-}
-Für "freigabe" gilt ausschließlich "bereit" oder "ueberarbeitung".`;
-
-    const response = await withTimeout(
-      client.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-      60000,
-      'Claude'
-    );
-
-    const textBlock = response?.content?.find((b) => b.type === 'text');
-    const parsed = extractJson(textBlock?.text || '{}');
-    res.json(parsed);
-  } catch (err) {
-    console.error('[checkup/claude] fehlgeschlagen:', err?.message || err);
-    res.status(502).json({ error: err?.message || err?.toString() || 'Claude Anfrage fehlgeschlagen' });
-  }
-});
 
 // LV aus Bild/PDF-Scan generieren (Gemini Vision). Body: raw image/pdf bytes,
 // mime type via query param since express.raw only sniffs one content-type.

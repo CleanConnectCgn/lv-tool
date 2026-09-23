@@ -1,95 +1,124 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+
+// Prüfung des Leistungsverzeichnisses.
+//
+// Bis 2026-09-23 liefen hier drei Prüfungen nebeneinander (ein Schnellcheck
+// plus ein "Dual-Checkup", bei dem Claude Geminis Ergebnis bewertete). Für
+// ein Dokument dieser Größe war das überdimensioniert und teuer, und die
+// beiden Modelle widersprachen sich regelmäßig, ohne dass daraus etwas
+// folgte.
+//
+// Jetzt gibt es zwei klar getrennte Quellen:
+//   Prüfung  - feste Regeln, laufen im Browser bei jeder Änderung mit,
+//              sofort und ohne Kosten. Alles, was eindeutig entscheidbar ist.
+//   Ergänzung - ein einziger Gemini-Aufruf für Ermessensfragen (fehlende
+//              branchenübliche Leistung, unklare Formulierung).
+
+const FIX_FELD = {
+  replace_row: 'text',
+  replace_beschreibung: 'beschreibung',
+  replace_bemerkung: 'bemerkung',
+};
 
 export default function AICheckupModal({
   status,
-  issues,
+  regelBefunde = [],
+  issues = [],
   error,
   setSections,
   onClose,
   onRecheck,
-  geminiStatus = 'idle',
-  geminiResult,
-  geminiError,
-  claudeStatus = 'idle',
-  claudeResult,
-  claudeError,
-  onRunDualCheckup,
 }) {
-  const [appliedIds, setAppliedIds] = useState({});
-  const [history, setHistory] = useState([]);
+  const [angewendet, setAngewendet] = useState({});
+  const [verlauf, setVerlauf] = useState([]);
 
-  function applyFix(issue) {
-    if (!issue.fix && issue.fixType !== 'remove_row') return;
+  // Findet die gemeinte Zeile über ihren Text, mit dem Index nur als
+  // Rückfallebene. Sonst greift der zweite angewandte Befund daneben,
+  // sobald der erste eine Zeile entfernt hat.
+  function findeZeile(rows, befund) {
+    if (befund.zeilenText) {
+      const i = rows.findIndex((r) => (r.text || '').trim() === befund.zeilenText.trim());
+      if (i >= 0) return i;
+    }
+    return typeof befund.targetRowIndex === 'number' ? befund.targetRowIndex : -1;
+  }
+
+  function anwenden(befund) {
+    const feld = FIX_FELD[befund.fixType];
+    if (!feld && befund.fixType !== 'remove_row') return;
+
     setSections((prev) => {
-      setHistory((h) => [...h, { snapshot: prev, issueId: issue.id }]);
+      setVerlauf((h) => [...h, { snapshot: prev, id: befund.id }]);
       return prev.map((s) => {
-        if (issue.targetSection && s.title !== issue.targetSection) return s;
-        if (issue.fixType === 'rename_section') {
-          return issue.targetSection && s.title === issue.targetSection ? { ...s, title: issue.fix } : s;
+        if (befund.targetSection && s.title !== befund.targetSection) return s;
+        const rows = s.rows || [];
+        const index = findeZeile(rows, befund);
+        if (index < 0 || index >= rows.length) return s;
+
+        if (befund.fixType === 'remove_row') {
+          return { ...s, rows: rows.filter((_, i) => i !== index) };
         }
-        if (issue.targetRowIndex == null) return s;
-        if (issue.fixType === 'remove_row') {
-          return { ...s, rows: s.rows.filter((_, idx) => idx !== issue.targetRowIndex) };
-        }
-        if (issue.fixType === 'replace_row') {
-          return {
-            ...s,
-            rows: s.rows.map((r, idx) => (idx === issue.targetRowIndex ? { ...r, text: issue.fix } : r)),
-          };
-        }
-        return s;
+        return {
+          ...s,
+          rows: rows.map((r, i) => (i === index ? { ...r, [feld]: befund.fix } : r)),
+        };
       });
     });
-    setAppliedIds((prev) => ({ ...prev, [issue.id]: true }));
+    setAngewendet((prev) => ({ ...prev, [befund.id]: true }));
   }
 
-  function applyAll(type) {
-    issues
-      .filter((i) => i.type === type && !appliedIds[i.id] && (i.fix || i.fixType === 'remove_row'))
-      .forEach((i) => applyFix(i));
+  function alleAnwenden(liste) {
+    liste.filter((b) => !angewendet[b.id] && istAnwendbar(b)).forEach(anwenden);
   }
 
-  function handleUndo() {
-    setHistory((h) => {
+  function rueckgaengig() {
+    setVerlauf((h) => {
       if (h.length === 0) return h;
-      const last = h[h.length - 1];
-      setSections(last.snapshot);
-      setAppliedIds((prev) => {
+      const letzter = h[h.length - 1];
+      setSections(letzter.snapshot);
+      setAngewendet((prev) => {
         const next = { ...prev };
-        delete next[last.issueId];
+        delete next[letzter.id];
         return next;
       });
       return h.slice(0, -1);
     });
   }
 
-  const redIssues = issues.filter((i) => i.type === 'red');
-  const orangeIssues = issues.filter((i) => i.type === 'orange');
+  function istAnwendbar(b) {
+    return b.fixType === 'remove_row' || (!!b.fix && !!FIX_FELD[b.fixType]);
+  }
 
-  function IssueCard({ issue }) {
-    const applied = appliedIds[issue.id];
+  const rot = useMemo(() => regelBefunde.filter((b) => b.type === 'red'), [regelBefunde]);
+  const orange = useMemo(() => regelBefunde.filter((b) => b.type !== 'red'), [regelBefunde]);
+  const anwendbarRot = rot.filter(istAnwendbar).length;
+
+  function Befund({ befund }) {
+    const fertig = angewendet[befund.id];
     return (
-      <div className={`ai-issue-card ai-issue-${issue.type}${applied ? ' applied' : ''}`}>
+      <div className={`ai-issue-card ai-issue-${befund.type}${fertig ? ' applied' : ''}`}>
         <div className="ai-issue-header">
-          <span className="ai-issue-icon">{issue.type === 'red' ? '🔴' : '🟠'}</span>
-          <span className="ai-issue-title">{issue.title}</span>
+          <span className="ai-issue-icon">{befund.type === 'red' ? '🔴' : '🟠'}</span>
+          <span className="ai-issue-title">{befund.title}</span>
+          {befund.targetSection && <span className="ai-issue-ort">{befund.targetSection}</span>}
         </div>
-        <p className="ai-issue-desc">{issue.description}</p>
-        {applied ? (
+        <p className="ai-issue-desc">{befund.description}</p>
+        {befund.fix && FIX_FELD[befund.fixType] && !fertig && (
+          <p className="ai-issue-fix">Neu: „{befund.fix}"</p>
+        )}
+        {fertig ? (
           <span className="ai-issue-applied-label">✓ Übernommen</span>
         ) : (
-          <div className="ai-issue-actions">
-            {issue.fix && issue.fixType !== 'remove_row' && (
-              <button className="ai-btn-apply" onClick={() => applyFix(issue)}>
-                Übernehmen
+          istAnwendbar(befund) && (
+            <div className="ai-issue-actions">
+              <button
+                className={befund.fixType === 'remove_row' ? 'ai-btn-remove' : 'ai-btn-apply'}
+                onClick={() => anwenden(befund)}
+              >
+                {befund.fixType === 'remove_row' ? 'Zeile entfernen' : 'Übernehmen'}
               </button>
-            )}
-            {issue.fixType === 'remove_row' && (
-              <button className="ai-btn-remove" onClick={() => applyFix(issue)}>
-                Entfernen
-              </button>
-            )}
-          </div>
+            </div>
+          )
         )}
       </div>
     );
@@ -99,204 +128,74 @@ export default function AICheckupModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal ai-checkup-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ai-modal-header">
-          <h2>KI Qualitätsprüfung</h2>
+          <h2>Prüfung</h2>
           <div className="ai-modal-header-actions">
-            {history.length > 0 && (
-              <button type="button" className="ai-undo-btn" onClick={handleUndo}>
-                ↺ Rückgängig ({history.length})
+            {verlauf.length > 0 && (
+              <button type="button" className="ai-undo-btn" onClick={rueckgaengig}>
+                ↺ Rückgängig ({verlauf.length})
               </button>
             )}
-            <button type="button" className="ai-recheck-btn" onClick={onRecheck} disabled={status === 'pending'}>
-              {status === 'pending' ? 'Prüft...' : 'Neu prüfen'}
-            </button>
           </div>
         </div>
 
-        {status === 'pending' && (
-          <div className="ai-loading">
-            <div className="ai-spinner" />
-            <p>KI analysiert Ihr Leistungsverzeichnis...</p>
-          </div>
-        )}
-
-        {status === 'error' && <div className="modal-message error">{error}</div>}
-
-        {status === 'done' && issues.length === 0 && (
-          <div className="modal-message success">✓ Ihr LV ist fehlerfrei</div>
-        )}
-
-        {status === 'done' && issues.length > 0 && (
+        {/* --- Feste Regeln: immer da, ohne Warten --- */}
+        {regelBefunde.length === 0 ? (
+          <div className="modal-message success">✓ Keine formalen Fehler gefunden</div>
+        ) : (
           <>
-            <div className="ai-bulk-actions">
-              {redIssues.length > 0 && (
-                <button className="ai-btn-remove" onClick={() => applyAll('red')}>
-                  Alle roten übernehmen
-                </button>
-              )}
-              {orangeIssues.length > 0 && (
-                <button className="ai-btn-apply" onClick={() => applyAll('orange')}>
-                  Alle orangenen übernehmen
+            <div className="ai-abschnitt-kopf">
+              <span>
+                {rot.length} Fehler, {orange.length} Hinweise
+              </span>
+              {anwendbarRot > 1 && (
+                <button className="ai-btn-apply" onClick={() => alleAnwenden(rot)}>
+                  Alle {anwendbarRot} Korrekturen übernehmen
                 </button>
               )}
             </div>
-            {redIssues.map((issue) => (
-              <IssueCard key={issue.id} issue={issue} />
+            {rot.map((b) => (
+              <Befund key={b.id} befund={b} />
             ))}
-            {orangeIssues.map((issue) => (
-              <IssueCard key={issue.id} issue={issue} />
+            {orange.map((b) => (
+              <Befund key={b.id} befund={b} />
             ))}
           </>
         )}
 
-        <div className="ai-dual-checkup">
-          <div className="ai-dual-header">
-            <h3>Vollständiger Checkup (Gemini + Claude)</h3>
+        {/* --- Fachliche Ergänzung: ein KI-Aufruf --- */}
+        <div className="ai-ergaenzung">
+          <div className="ai-abschnitt-kopf">
+            <span className="ai-abschnitt-titel">Fachliche Ergänzung</span>
             <button
               type="button"
               className="ai-btn-apply"
-              onClick={onRunDualCheckup}
-              disabled={geminiStatus === 'running' || claudeStatus === 'running'}
+              onClick={onRecheck}
+              disabled={status === 'pending'}
             >
-              {geminiStatus === 'idle' ? 'Checkup starten' : 'Erneut prüfen'}
+              {status === 'pending' ? 'Prüft…' : status === 'done' ? 'Erneut prüfen' : 'Prüfen'}
             </button>
           </div>
+          <p className="modal-hint">
+            Sucht nach Leistungen, die in einem Objekt dieser Art üblicherweise dazugehören, und nach
+            Formulierungen, die beim Kunden Rückfragen auslösen könnten.
+          </p>
 
-          {geminiStatus !== 'idle' && (
-            <div className="ai-dual-status-row">
-              <span className={`ai-dual-status ai-dual-status-${geminiStatus}`}>
-                Gemini{' '}
-                {geminiStatus === 'running' && 'läuft...'}
-                {geminiStatus === 'done' && '✓ fertig'}
-                {geminiStatus === 'error' && '✗ Fehler'}
-              </span>
-              <span className={`ai-dual-status ai-dual-status-${claudeStatus}`}>
-                Claude{' '}
-                {claudeStatus === 'idle' && 'wartet'}
-                {claudeStatus === 'running' && 'läuft...'}
-                {claudeStatus === 'done' && '✓ fertig'}
-                {claudeStatus === 'error' && '✗ Fehler'}
-              </span>
+          {status === 'pending' && (
+            <div className="ai-loading">
+              <div className="ai-spinner" />
+              <p>Wird geprüft…</p>
             </div>
           )}
-
-          {geminiStatus === 'error' && <div className="modal-message error">Gemini: {geminiError}</div>}
-          {claudeStatus === 'error' && <div className="modal-message error">Claude: {claudeError}</div>}
-
-          {geminiResult && (
-            <div className="ai-dual-result">
-              <h4>Gemini-Analyse</h4>
-              {geminiResult.duplikate?.length > 0 && (
-                <div>
-                  <strong>Duplikate:</strong>
-                  <ul>
-                    {geminiResult.duplikate.map((d, i) => (
-                      <li key={i}>
-                        {d.position_a} ↔ {d.position_b} — {d.begruendung}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {geminiResult.fehlende_positionen?.length > 0 && (
-                <div>
-                  <strong>Fehlende Positionen:</strong>
-                  <ul>
-                    {geminiResult.fehlende_positionen.map((f, i) => (
-                      <li key={i}>
-                        {f.position} — {f.begruendung}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {geminiResult.sprachliche_hinweise?.length > 0 && (
-                <div>
-                  <strong>Sprachliche Hinweise:</strong>
-                  <ul>
-                    {geminiResult.sprachliche_hinweise.map((s, i) => (
-                      <li key={i}>
-                        „{s.original}" → „{s.verbesserung}" ({s.grund})
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {geminiResult.konsistenz_probleme?.length > 0 && (
-                <div>
-                  <strong>Konsistenzprobleme:</strong>
-                  <ul>
-                    {geminiResult.konsistenz_probleme.map((k, i) => (
-                      <li key={i}>{k.beschreibung}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <p>
-                <strong>Bewertung:</strong> {geminiResult.bewertung}/10
-              </p>
-              {geminiResult.zusammenfassung && <p>{geminiResult.zusammenfassung}</p>}
-            </div>
+          {status === 'error' && <div className="modal-message error">{error}</div>}
+          {status === 'stale' && (
+            <div className="modal-message">Das LV wurde seit der letzten Prüfung geändert.</div>
           )}
-
-          {claudeResult && (
-            <div className="ai-dual-result">
-              <h4>Claude-Review</h4>
-              {claudeResult.eigene_pruefung?.duplikate?.length > 0 && (
-                <div>
-                  <strong>Eigene Duplikat-Funde:</strong>
-                  <ul>
-                    {claudeResult.eigene_pruefung.duplikate.map((d, i) => (
-                      <li key={i}>
-                        {d.position_a} ↔ {d.position_b} — {d.begruendung}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {claudeResult.eigene_pruefung?.fehlende_positionen?.length > 0 && (
-                <div>
-                  <strong>Eigene fehlende Positionen:</strong>
-                  <ul>
-                    {claudeResult.eigene_pruefung.fehlende_positionen.map((f, i) => (
-                      <li key={i}>
-                        {f.position} — {f.begruendung}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {claudeResult.gemini_bewertung && (
-                <div>
-                  <strong>Abweichung zu Gemini:</strong>
-                  {claudeResult.gemini_bewertung.korrekte_punkte?.length > 0 && (
-                    <p>Korrekt: {claudeResult.gemini_bewertung.korrekte_punkte.join('; ')}</p>
-                  )}
-                  {claudeResult.gemini_bewertung.fehler_oder_uebertreibungen?.length > 0 && (
-                    <p>Fehler/übertrieben: {claudeResult.gemini_bewertung.fehler_oder_uebertreibungen.join('; ')}</p>
-                  )}
-                  {claudeResult.gemini_bewertung.uebersehene_punkte?.length > 0 && (
-                    <p>Übersehen: {claudeResult.gemini_bewertung.uebersehene_punkte.join('; ')}</p>
-                  )}
-                </div>
-              )}
-              {claudeResult.top_prioritaeten?.length > 0 && (
-                <div>
-                  <strong>Top 3 Prioritäten:</strong>
-                  <ul>
-                    {claudeResult.top_prioritaeten.map((p, i) => (
-                      <li key={i}>{p}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              <p>
-                <strong>Freigabeempfehlung:</strong>{' '}
-                {claudeResult.freigabe === 'bereit' ? '✓ Bereit' : '⚠ Überarbeitung empfohlen'}
-                {claudeResult.freigabe_begruendung && ` — ${claudeResult.freigabe_begruendung}`}
-              </p>
-              {claudeResult.gesamtresumee && <p>{claudeResult.gesamtresumee}</p>}
-            </div>
+          {status === 'done' && issues.length === 0 && (
+            <div className="modal-message success">✓ Fachlich nichts zu beanstanden</div>
           )}
+          {issues.map((b, i) => (
+            <Befund key={b.id || `ki-${i}`} befund={b} />
+          ))}
         </div>
 
         <div className="modal-actions">

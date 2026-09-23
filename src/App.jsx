@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Header from './components/Header.jsx';
 import LVEditor from './components/LVEditor.jsx';
 import PrintView from './components/PrintView.jsx';
@@ -7,6 +7,7 @@ import CustomerModal from './components/CustomerModal.jsx';
 import InspectionMode from './components/InspectionMode.jsx';
 import AICheckupModal from './components/AICheckupModal.jsx';
 import LvAssistant from './components/LvAssistant.jsx';
+import { pruefeRegeln, alsPruefText } from './lib/lvRegelpruefung.js';
 import AIStatusBadge from './components/AIStatusBadge.jsx';
 import Overview from './components/Overview.jsx';
 import QuickSetup from './components/QuickSetup.jsx';
@@ -68,14 +69,6 @@ export default function App() {
   const [aiStatus, setAiStatus] = useState('idle');
   const [aiIssues, setAiIssues] = useState([]);
   const [aiError, setAiError] = useState('');
-
-  // Dualer KI-Checkup (Gemini zuerst, dann Claude review von Geminis Ergebnis).
-  const [geminiStatus, setGeminiStatus] = useState('idle'); // idle | running | done | error
-  const [geminiResult, setGeminiResult] = useState(null);
-  const [geminiError, setGeminiError] = useState('');
-  const [claudeStatus, setClaudeStatus] = useState('idle'); // idle | waiting | running | done | error
-  const [claudeResult, setClaudeResult] = useState(null);
-  const [claudeError, setClaudeError] = useState('');
 
   const [saveStatus, setSaveStatus] = useState('idle');
   const [pendingInspection, setPendingInspection] = useState(false);
@@ -259,7 +252,13 @@ export default function App() {
     setView('setup');
   }
 
-  const runAICheckRef = useRef(null);
+  // Die festen Regeln laufen bei jeder Änderung mit: sofort, ohne Netz,
+  // ohne Kosten. Sie sind die eigentliche Prüfung; die KI kommt nur für
+  // Ermessensfragen dazu (siehe runAICheck).
+  const regelBefunde = useMemo(
+    () => pruefeRegeln(sections, { lvTitle, objekt }),
+    [sections, lvTitle, objekt]
+  );
 
   async function runAICheck() {
     setAiStatus('pending');
@@ -268,7 +267,13 @@ export default function App() {
       const res = await fetch('/api/ai-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections, lvTitle }),
+        body: JSON.stringify({
+          // Kompakter Text statt vollständigem JSON - rund sieben Mal
+          // kleiner und damit entsprechend günstiger.
+          lvText: alsPruefText(sections, { lvTitle, objekt }),
+          // Damit die KI nicht wiederholt, was die Regeln schon gefunden haben.
+          bereitsGefunden: regelBefunde.map((b) => b.title),
+        }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || data?.error) {
@@ -282,65 +287,11 @@ export default function App() {
     }
   }
 
-  // Dualer Checkup: Gemini startet sofort, Claude startet automatisch mit
-  // Geminis Ergebnis sobald Gemini fertig ist (kein zweiter Klick nötig).
-  async function runDualCheckup() {
-    setGeminiStatus('running');
-    setGeminiError('');
-    setGeminiResult(null);
-    setClaudeStatus('idle');
-    setClaudeError('');
-    setClaudeResult(null);
-
-    let gemini = null;
-    try {
-      const res = await fetch('/api/checkup/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sections, angebot: mainDoc.offer || null, branche: lvTitle }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(data?.error || 'Unbekannter Fehler');
-      gemini = data;
-      setGeminiResult(data);
-      setGeminiStatus('done');
-    } catch (err) {
-      setGeminiError(err?.message || err?.toString() || 'Unbekannter Fehler');
-      setGeminiStatus('error');
-    }
-
-    setClaudeStatus('running');
-    try {
-      const res = await fetch('/api/checkup/claude', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sections,
-          angebot: mainDoc.offer || null,
-          branche: lvTitle,
-          gemini_ergebnis: gemini,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.error) throw new Error(data?.error || 'Unbekannter Fehler');
-      setClaudeResult(data);
-      setClaudeStatus('done');
-    } catch (err) {
-      setClaudeError(err?.message || err?.toString() || 'Unbekannter Fehler');
-      setClaudeStatus('error');
-    }
-  }
-
-  // Bis 2026-09-22 lief der Check 3 Sekunden nach JEDER Änderung an
-  // `sections` - bei einer Stunde Arbeit am LV also dutzendfach, meist ohne
-  // dass jemand das Ergebnis angesehen hat, und regelmäßig gegen das
-  // Rate-Limit von 20 Anfragen / 5 Minuten. Der Check läuft jetzt nur noch
-  // an den drei Stellen, an denen das Ergebnis auch wirklich gebraucht wird:
-  // beim Öffnen des Checkup-Fensters, vor dem PDF-Export und vor dem
-  // sevDesk-Versand. Eine Änderung danach markiert das Ergebnis nur als
-  // veraltet, statt sofort neu zu prüfen.
-  runAICheckRef.current = runAICheck;
-
+  // Die festen Regeln laufen ohnehin bei jeder Änderung mit und zeigen alle
+  // harten Fehler sofort im Badge an. Der KI-Aufruf für die fachliche
+  // Ergänzung läuft deshalb nur noch auf ausdrücklichen Klick im
+  // Prüfungs-Fenster - nicht beim Öffnen, nicht vor dem Export, nicht vor
+  // dem Versand. Eine Änderung danach markiert das KI-Ergebnis als veraltet.
   useEffect(() => {
     setAiStatus((prev) => (prev === 'done' ? 'stale' : prev));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -348,9 +299,6 @@ export default function App() {
 
   useEffect(() => {
     async function exportPdf() {
-      // Vor dem Export einmal prüfen lassen. Der Export wartet bewusst nicht
-      // darauf - das Ergebnis erscheint gleich danach im Status-Badge.
-      runAICheckRef.current?.();
       const { generateLvPdfBlob } = await import('./lib/lvPdfExport.js');
       const safeObjekt = (objekt || 'Objekt').replace(/[^a-zA-Z0-9äöüÄÖÜß_-]+/g, '_');
       // Ein Titel mit Leerzeichen am Ende erzeugte bisher Dateinamen wie
@@ -563,24 +511,13 @@ export default function App() {
           <button onClick={() => window.dispatchEvent(new CustomEvent('lv-export-pdf'))}>
             Als PDF exportieren
           </button>
-          <button
-            onClick={() => {
-              setShowAICheckup(true);
-              runAICheck();
-            }}
-          >
-            ✨ KI Checkup
-          </button>
           <button onClick={() => setShowAssistant(true)}>🎤 Assistent</button>
-          <AIStatusBadge status={aiStatus} issues={aiIssues} onClick={() => setShowAICheckup(true)} />
-          <button
-            onClick={() => {
-              runAICheck();
-              setShowSevDesk(true);
-            }}
-          >
-            An sevDesk senden
-          </button>
+          <AIStatusBadge
+            regelBefunde={regelBefunde}
+            kiStatus={aiStatus}
+            onClick={() => setShowAICheckup(true)}
+          />
+          <button onClick={() => setShowSevDesk(true)}>An sevDesk senden</button>
           <button onClick={() => setShowInspection(true)}>Besichtigungsmodus</button>
           <button onClick={handleSave} disabled={saveStatus === 'saving'}>
             {saveStatus === 'saving' ? 'Speichert...' : saveStatus === 'saved' ? '✓ Gespeichert' : 'Speichern'}
@@ -712,18 +649,12 @@ export default function App() {
       {showAICheckup && (
         <AICheckupModal
           status={aiStatus}
+          regelBefunde={regelBefunde}
           issues={aiIssues}
           error={aiError}
           setSections={setSections}
           onClose={() => setShowAICheckup(false)}
           onRecheck={runAICheck}
-          geminiStatus={geminiStatus}
-          geminiResult={geminiResult}
-          geminiError={geminiError}
-          claudeStatus={claudeStatus}
-          claudeResult={claudeResult}
-          claudeError={claudeError}
-          onRunDualCheckup={runDualCheckup}
         />
       )}
     </div>

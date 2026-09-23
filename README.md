@@ -43,7 +43,15 @@ Läuft live unter https://lv-tool-production.up.railway.app
 - Besichtigungsmodus: Leistungen vor Ort per Klick erfassen, Bereichs-Tiles,
   globale Wochentags-Sync
 - LV aus Foto/PDF erstellen (Gemini Vision)
-- Dualer KI-Checkup (Gemini + Claude) für LV/Angebot
+- **Prüfung des LV**: feste Regeln im Browser (`src/lib/lvRegelpruefung.js`)
+  finden alles eindeutig Entscheidbare sofort und ohne Kosten - Duplikate im
+  selben Bereich, Schreibfehler, Desinfektionszusagen, fehlende Intervalle,
+  widersprüchliche Intervalle, fehlender Titel/Objekt. Das Ergebnis steht
+  dauerhaft im Status-Badge. Dazu **ein einziger** Gemini-Aufruf
+  (`/api/ai-check`) auf ausdrücklichen Klick, der nur Ermessensfragen
+  beurteilt (fehlende branchenübliche Leistung, unklare Formulierung) und
+  dafür das LV als kompakten Text statt als JSON bekommt. Der frühere
+  zweistufige Dual-Checkup (Gemini + Claude) ist entfallen
 - PDF-Export (jsPDF + autoTable)
 - sevDesk-Integration: Kontakte suchen/anlegen, Angebot erstellen (Server-Proxy
   vermeidet CORS; **nur GET/POST erlaubt** - der Server lehnt DELETE/PUT/PATCH
@@ -113,7 +121,8 @@ Siehe `.env.example`. Wichtig:
 
 - `DATABASE_URL` - Postgres-Verbindung (Prisma). Auf Railway per
   Referenzvariable an den Postgres-Service gebunden.
-- `ANTHROPIC_API_KEY`, `GEMINI_API_KEY` - für KI-Checkup und LV-aus-Bild
+- `GEMINI_API_KEY` - LV-Prüfung, LV-aus-Bild, Sprachassistent
+- `ANTHROPIC_API_KEY` - nur noch für die KI-Gegenkontrolle beim Vertrag
 - `SEVDESK_TOKEN` - optional, sonst manuell im Formular eintragbar
 - `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` - EIN OAuth-Client in der
   Google Cloud Console mit ZWEI Redirect-URIs: `<domain>/api/auth/google/callback`
