@@ -3,7 +3,17 @@ import RowEditor from './RowEditor.jsx';
 import { newEmptyRow } from '../templates/templates.js';
 import { getMissingRowsForSection } from '../templates/checklistAreas.js';
 
-export default function SectionBlock({ section, index, onChange, onRemove, onMove }) {
+export default function SectionBlock({
+  section,
+  index,
+  onChange,
+  onRemove,
+  onMove,
+  sectionSelected = false,
+  onToggleSection,
+  selectedRowIds,
+  onToggleRow,
+}) {
   const [dragOver, setDragOver] = useState(false);
 
   function setRows(rows) {
@@ -66,6 +76,14 @@ export default function SectionBlock({ section, index, onChange, onRemove, onMov
           if (!Number.isNaN(from) && from !== index) onMove(from, index);
         }}
       >
+        <td className="col-select no-print">
+          <input
+            type="checkbox"
+            checked={sectionSelected}
+            onChange={onToggleSection}
+            aria-label="Bereich markieren"
+          />
+        </td>
         <td colSpan={7}>
           <span className="drag-handle no-print" title="Bereich verschieben">
             ⠿
@@ -88,10 +106,12 @@ export default function SectionBlock({ section, index, onChange, onRemove, onMov
           onChange={(patch) => updateRow(row.id, patch)}
           onRemove={() => removeRow(row.id)}
           onMove={moveRow}
+          selected={selectedRowIds?.has(row.id) || false}
+          onToggleSelect={() => onToggleRow?.(row.id)}
         />
       ))}
       <tr className="no-print">
-        <td colSpan={7} className="add-row-cell">
+        <td colSpan={8} className="add-row-cell">
           <button className="add-row-btn" onClick={addRow}>
             + Zeile hinzufügen
           </button>
@@ -110,7 +130,7 @@ export default function SectionBlock({ section, index, onChange, onRemove, onMov
       </tr>
       {vorschlaegeOffen && fehlende.length > 0 && (
         <tr className="no-print">
-          <td colSpan={7} className="section-suggest-cell">
+          <td colSpan={8} className="section-suggest-cell">
             <div className="section-suggest-head">
               <span>Bei vergleichbaren Objekten steht hier üblicherweise auch:</span>
               <button type="button" className="section-suggest-all" onClick={addAllSuggested}>

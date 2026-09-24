@@ -56,6 +56,34 @@ export function computeIntervalSummary(sections) {
   return '';
 }
 
+const COLUMN_LABELS = { woechentlich: 'Wöchentlich', monatlich: 'Monatlich', jaehrlich: 'Jährlich' };
+
+// Baut die Optionsliste für eine kombinierte Intervall-Auswahl (Spalte+Wert
+// als ein Wert-String, z.B. "woechentlich:2x"). Wird sowohl vom
+// Zeileneditor als auch vom Bulk-Edit (mehrere Zeilen auf einmal) genutzt,
+// damit beide immer dieselben Optionen anbieten.
+export function buildIntervalSelectOptions({ includeBedarf = false } = {}) {
+  const opts = [{ value: '', label: 'kein Intervall' }];
+  if (includeBedarf) opts.push({ value: 'bedarf', label: 'Bei Bedarf' });
+  INTERVAL_COLUMNS.forEach((col) => {
+    INTERVAL_VALUES.forEach((val) => {
+      opts.push({ value: `${col}:${val}`, label: `${COLUMN_LABELS[col]} ${val}` });
+    });
+  });
+  opts.push({ value: 'aufAnfrage:Ja', label: 'Auf Anfrage' });
+  opts.push({ value: 'einmalig:Ja', label: 'Einmalig' });
+  return opts;
+}
+
+// Wandelt den Wert einer solchen Auswahl in ein Zeilen-Patch um - die
+// Gegenrichtung zu buildIntervalSelectOptions().
+export function intervalPatchFromSelectValue(value) {
+  if (!value) return { bedarf: false, intervalColumn: '', intervalValue: '' };
+  if (value === 'bedarf') return { bedarf: true, intervalColumn: '', intervalValue: '' };
+  const [col, val] = value.split(':');
+  return { bedarf: false, intervalColumn: col, intervalValue: val };
+}
+
 // ---- Winterdienst ----
 // Einziges hier noch aktiv genutztes Branchen-Template (via cloneTemplate('winterdienst')
 // in checklistAreas.js). Die früheren Templates für Büro/Arztpraxis/Treppenhaus/

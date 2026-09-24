@@ -496,6 +496,48 @@ a.icon-btn:hover {
   text-align: center;
 }
 
+.col-select {
+  width: 26px;
+  text-align: center;
+}
+
+/* Markierte Zeile im Editor optisch hervorheben - Bemerkungen/Beschreibung
+   liegen als Textareas darüber, deshalb reicht ein Zellenhintergrund statt
+   der ganzen Zeile. */
+tr.row-selected > td {
+  background: var(--teal-bg);
+}
+
+/* Erscheint nur, wenn mindestens eine Zeile oder ein Bereich markiert ist -
+   fasst die Bulk-Aktionen (Intervall setzen, löschen) zusammen. */
+.lv-bulk-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--teal-bg);
+  border: 1px solid var(--teal);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.lv-bulk-count {
+  font-weight: 600;
+  color: var(--teal-dark);
+  white-space: nowrap;
+}
+
+.lv-bulk-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .lv-table input[type='text'] {
   width: 100%;
   border: 1px solid transparent;

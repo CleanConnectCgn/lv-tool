@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { cloneTemplate, newEmptyRow, newSection, cloneOptionalSection, computeIntervalSummary } from './templates.js';
+import {
+  cloneTemplate,
+  newEmptyRow,
+  newSection,
+  cloneOptionalSection,
+  computeIntervalSummary,
+  buildIntervalSelectOptions,
+  intervalPatchFromSelectValue,
+} from './templates.js';
 
 describe('templates.js', () => {
   it('clones the winterdienst template with fresh row/section ids', () => {
@@ -70,6 +78,43 @@ describe('templates.js', () => {
     it('gibt einen leeren String zurück, wenn kein Intervall bestimmbar ist', () => {
       expect(computeIntervalSummary([])).toBe('');
       expect(computeIntervalSummary([{ rows: [{ text: 'X', bedarf: true }] }])).toBe('');
+    });
+  });
+
+  describe('buildIntervalSelectOptions / intervalPatchFromSelectValue', () => {
+    it('bilden sich gegenseitig ab: jeder Options-Wert lässt sich zurück in ein Patch wandeln', () => {
+      buildIntervalSelectOptions({ includeBedarf: true }).forEach((o) => {
+        const patch = intervalPatchFromSelectValue(o.value);
+        expect(patch).toHaveProperty('bedarf');
+        expect(patch).toHaveProperty('intervalColumn');
+        expect(patch).toHaveProperty('intervalValue');
+      });
+    });
+
+    it('lässt "Bei Bedarf" standardmäßig weg, nur mit includeBedarf dabei', () => {
+      expect(buildIntervalSelectOptions().some((o) => o.value === 'bedarf')).toBe(false);
+      expect(buildIntervalSelectOptions({ includeBedarf: true }).some((o) => o.value === 'bedarf')).toBe(true);
+    });
+
+    it('leerer Wert löscht Intervall und Bedarf', () => {
+      expect(intervalPatchFromSelectValue('')).toEqual({ bedarf: false, intervalColumn: '', intervalValue: '' });
+    });
+
+    it('"bedarf" setzt Bei Bedarf und löscht das Intervall', () => {
+      expect(intervalPatchFromSelectValue('bedarf')).toEqual({ bedarf: true, intervalColumn: '', intervalValue: '' });
+    });
+
+    it('"spalte:wert" setzt Spalte und Wert, Bedarf aus', () => {
+      expect(intervalPatchFromSelectValue('woechentlich:3x')).toEqual({
+        bedarf: false,
+        intervalColumn: 'woechentlich',
+        intervalValue: '3x',
+      });
+      expect(intervalPatchFromSelectValue('aufAnfrage:Ja')).toEqual({
+        bedarf: false,
+        intervalColumn: 'aufAnfrage',
+        intervalValue: 'Ja',
+      });
     });
   });
 });

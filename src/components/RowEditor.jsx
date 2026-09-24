@@ -1,29 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { INTERVAL_COLUMNS, INTERVAL_VALUES } from '../templates/templates.js';
+import { buildIntervalSelectOptions, intervalPatchFromSelectValue } from '../templates/templates.js';
 import { getSuggestions, getRemarkSuggestions, getDescriptionFor } from '../templates/suggestions.js';
 import WeekdaySelector from './WeekdaySelector.jsx';
 
-const COLUMN_LABELS = {
-  woechentlich: 'Wöchentlich',
-  monatlich: 'Monatlich',
-  jaehrlich: 'Jährlich',
-};
+const INTERVAL_OPTIONS = buildIntervalSelectOptions();
 
-// Combined "column + value" choice, e.g. "woechentlich:2x", plus a "Bei Bedarf" option.
-function buildIntervalOptions() {
-  const opts = [{ value: '', label: 'kein Intervall' }];
-  INTERVAL_COLUMNS.forEach((col) => {
-    INTERVAL_VALUES.forEach((val) => {
-      opts.push({ value: `${col}:${val}`, label: `${COLUMN_LABELS[col]} ${val}` });
-    });
-  });
-  opts.push({ value: 'aufAnfrage:Ja', label: 'Auf Anfrage' });
-  opts.push({ value: 'einmalig:Ja', label: 'Einmalig' });
-  return opts;
-}
-const INTERVAL_OPTIONS = buildIntervalOptions();
-
-export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
+export default function RowEditor({ row, index, onChange, onRemove, onMove, selected = false, onToggleSelect }) {
   const [dragOver, setDragOver] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -63,12 +45,7 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
   }
 
   function handleIntervalChange(value) {
-    if (!value) {
-      onChange({ intervalColumn: '', intervalValue: '', bedarf: false });
-      return;
-    }
-    const [col, val] = value.split(':');
-    onChange({ intervalColumn: col, intervalValue: val, bedarf: false });
+    onChange(intervalPatchFromSelectValue(value));
   }
 
   function handleTextChange(value) {
@@ -95,7 +72,7 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
 
   return (
     <tr
-      className={dragOver ? 'drag-over' : ''}
+      className={`${dragOver ? 'drag-over' : ''}${selected ? ' row-selected' : ''}`}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('text/row-index', String(index));
@@ -115,6 +92,14 @@ export default function RowEditor({ row, index, onChange, onRemove, onMove }) {
         if (!Number.isNaN(from) && from !== index) onMove(from, index);
       }}
     >
+      <td className="col-select no-print">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggleSelect}
+          aria-label="Zeile markieren"
+        />
+      </td>
       <td className="col-desc">
         <span className="drag-handle no-print" title="Zeile verschieben">
           ⠿
