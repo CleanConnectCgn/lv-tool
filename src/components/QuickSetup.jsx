@@ -11,6 +11,7 @@ import {
 } from '../templates/checklistAreas.js';
 import WeekdaySelector from './WeekdaySelector.jsx';
 import DiktatButton from './DiktatButton.jsx';
+import { guessSingleService } from '../lib/einzelleistungHeuristik.js';
 
 const TOKEN_KEY = 'lv-tool:sevdesk-token';
 const FREQUENCIES = ['1x', '2x', '3x', '4x', '5x', '6x', '7x'];
@@ -44,6 +45,13 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
   const [mode, setMode] = useState('unterhalt');
   const [singleService, setSingleService] = useState('glasreinigung');
   const [singleServiceTitle, setSingleServiceTitle] = useState('');
+
+  // Beschreibung einsprechen/eintippen -> Leistung + Titel vorbelegen.
+  // Bewusst ohne KI-Aufruf: bei nur drei möglichen Leistungen reicht eine
+  // Stichwortsuche im Browser (src/lib/einzelleistungHeuristik.js) - sofort,
+  // kostenlos und unabhängig davon, ob Gemini gerade erreichbar ist.
+  const [einzelBeschreibung, setEinzelBeschreibung] = useState('');
+  const [einzelHinweis, setEinzelHinweis] = useState('');
 
   // Besichtigung einsprechen oder eintippen -> Vorbelegung der Schritte 1-3
   const [besichtigung, setBesichtigung] = useState('');
@@ -108,6 +116,22 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
     setAreas(areasForObjektTyp(key));
     setFrequency(typ.frequency);
     setWochentage([]);
+  }
+
+  // Wertet die Beschreibung für den Einzelleistungs-Modus lokal aus (keine
+  // Netzwerkanfrage). Übernimmt Leistung und ggf. Titel als Vorschlag - die
+  // Auswahl darunter bleibt normal änderbar.
+  function einzelBeschreibungUebernehmen() {
+    const text = einzelBeschreibung.trim();
+    if (!text) return;
+    const { serviceKey, customTitle, erkannt } = guessSingleService(text);
+    setSingleService(serviceKey);
+    if (customTitle) setSingleServiceTitle(customTitle);
+    setEinzelHinweis(
+      erkannt
+        ? ''
+        : 'Keine bekannte Leistung erkannt - bitte unten auswählen und einen Titel eintragen.'
+    );
   }
 
   // Schickt die geschilderte Besichtigung an den Assistenten und übernimmt
@@ -327,6 +351,34 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
 
         {mode === 'einzelleistung' ? (
           <>
+            <hr className="modal-section-divider" />
+            <div className="modal-subheading">Beschreibung einsprechen (optional)</div>
+            <p className="modal-hint">
+              Kurz sagen oder tippen, worum es geht („Glasreinigung im Erdgeschoss" oder
+              „Teppichreinigung im Flur"). Leistung und Titel unten werden daraus vorbelegt.
+            </p>
+            <div className="quick-setup-besichtigung">
+              <textarea
+                rows={2}
+                value={einzelBeschreibung}
+                onChange={(e) => setEinzelBeschreibung(e.target.value)}
+                placeholder="Aufnahme oder Text der Leistung…"
+              />
+              <div className="quick-setup-besichtigung-actions">
+                <DiktatButton
+                  onFehler={(m) => setEinzelHinweis(m)}
+                  onTranskript={(text) => {
+                    setEinzelHinweis('');
+                    setEinzelBeschreibung((v) => (v.trim() ? `${v.trim()} ${text}` : text));
+                  }}
+                />
+                <button type="button" onClick={einzelBeschreibungUebernehmen} disabled={!einzelBeschreibung.trim()}>
+                  Übernehmen
+                </button>
+              </div>
+              {einzelHinweis && <div className="modal-message">{einzelHinweis}</div>}
+            </div>
+
             <hr className="modal-section-divider" />
             <div className="modal-subheading">Welche Leistung?</div>
             <label className="modal-field">
