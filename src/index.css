@@ -983,6 +983,52 @@ tr.drag-over td {
   font-weight: 600;
 }
 
+.quick-setup-termine {
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--brand-line, var(--line-strong));
+  border-radius: 10px;
+  background: var(--brand-surface-soft, rgba(255, 255, 255, 0.03));
+}
+.quick-setup-termine-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.quick-setup-termin-btn {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--brand-line, var(--line-strong));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--brand-text, var(--ink));
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.quick-setup-termin-btn:hover {
+  border-color: var(--teal);
+}
+.quick-setup-termin-btn.active {
+  border-color: var(--teal);
+  background: var(--brand-surface, rgba(20, 184, 166, 0.08));
+}
+.quick-setup-termin-zeit {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--brand-text-dim, var(--ink-dim));
+  font-size: 12px;
+}
+.quick-setup-termin-titel {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .quick-setup-checkbox-list {
   display: flex;
   flex-direction: column;
@@ -1147,6 +1193,15 @@ tr.drag-over td {
 
 .modal-field-row .modal-field {
   flex: 1;
+}
+
+.modal-field-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.modal-field-checkbox input[type='checkbox'] {
+  width: auto;
 }
 
 .modal-field input,

@@ -60,6 +60,10 @@ export default function App() {
   const [datum, setDatum] = useState(todayISO());
   const [intervallInfo, setIntervallInfo] = useState('');
   const [internalNotes, setInternalNotes] = useState('');
+  // Google-Kalender-Termin, aus dem dieses LV per Klick in QuickSetup
+  // entstanden ist (siehe terminUebernehmen dort) - nur zur Nachvollziehbarkeit,
+  // damit zwei Besichtigungen am selben Tag nicht durcheinanderkommen.
+  const [besichtigungKalenderId, setBesichtigungKalenderId] = useState(null);
   const [customer, setCustomer] = useState(null);
   const [showSevDesk, setShowSevDesk] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -105,7 +109,7 @@ export default function App() {
     setIntervallInfo(computeIntervalSummary(mainDoc.sections));
   }, [mainDoc.sections]);
 
-  function handleSetupGenerated({ sections: mainSections, children, customer: newCustomer, lvTitle }) {
+  function handleSetupGenerated({ sections: mainSections, children, customer: newCustomer, lvTitle, besichtigungKalenderId: terminId }) {
     setMainDoc({ id: null, lvTitle: lvTitle || 'Leistungsverzeichnis Unterhaltsreinigung', sections: mainSections });
     setChildDocs(
       (children || []).map((c) => ({ id: null, docType: c.docType, lvTitle: c.lvTitle, sections: c.sections }))
@@ -115,6 +119,7 @@ export default function App() {
     setObjekt(addressLine(newCustomer) || newCustomer?.name || '');
     setDatum(todayISO());
     setInternalNotes('');
+    setBesichtigungKalenderId(terminId || null);
     setView('editor');
     if (pendingInspection) {
       setPendingInspection(false);
@@ -143,6 +148,7 @@ export default function App() {
         sections: mainDoc.sections,
         customer,
         docType: 'main',
+        besichtigungKalenderId,
       };
       let mainId = mainDoc.id;
       if (mainId) {
@@ -233,6 +239,7 @@ export default function App() {
       setInternalNotes(main.internalNotes || '');
       setDatum(main.datum);
       setCustomer(main.customer || null);
+      setBesichtigungKalenderId(main.besichtigungKalenderId || null);
       setActiveIndex(doc.parentId ? children.findIndex((c) => c.id === doc.id) : -1);
       setView('editor');
     } catch (err) {

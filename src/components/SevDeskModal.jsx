@@ -116,6 +116,12 @@ export default function SevDeskModal({
   const [hinweis, setHinweis] = useState(startTexte.hinweis);
   const [zusatzhinweis, setZusatzhinweis] = useState('');
   const [kuendigungsfristMonate, setKuendigungsfristMonate] = useState('3');
+  // Bei einmaligen Auftraegen (Grund-/Sonderreinigung) gibt es keinen
+  // laufenden Vertrag, der gekuendigt werden koennte - dort startet der
+  // Schalter aus. Ueberschreibbar, falls doch ein Abo daraus wird.
+  const [zeigeKuendigungsfrist, setZeigeKuendigungsfrist] = useState(
+    () => startTexte.kuendigungsfristStandard !== false
+  );
   const [vertragstext, setVertragstext] = useState(startTexte.vertragstext);
   const [dankText, setDankText] = useState(startTexte.dankText);
   const [grussformel, setGrussformel] = useState(startTexte.grussformel);
@@ -129,6 +135,7 @@ export default function SevDeskModal({
     setAnrede(v.anrede);
     setEinleitung(v.einleitung);
     setHinweis(v.hinweis);
+    setZeigeKuendigungsfrist(v.kuendigungsfristStandard !== false);
     setVertragstext(v.vertragstext);
     setDankText(v.dankText);
     setGrussformel(v.grussformel);
@@ -281,7 +288,9 @@ export default function SevDeskModal({
         hinweis,
         zusatzhinweis.trim(),
         `Gültigkeit: Dieses Angebot ist bis zum ${formatDateDE(gueltigBis)} gültig.`,
-        `Kündigungsfrist: Der Vertrag ist mit einer Frist von ${kuendigungsfristMonate} Monaten zum Monatsende kündbar.`,
+        zeigeKuendigungsfrist
+          ? `Kündigungsfrist: Der Vertrag ist mit einer Frist von ${kuendigungsfristMonate} Monaten zum Monatsende kündbar.`
+          : '',
         vertragstext,
         dankText,
         grussformel,
@@ -327,6 +336,7 @@ export default function SevDeskModal({
         gueltigBis,
         zahlungsziel,
         kuendigungsfristMonate,
+        zeigeKuendigungsfrist,
         amounts,
         texts: { anrede, einleitung, hinweis, zusatzhinweis, vertragstext, dankText, grussformel },
         resultLink: `https://my.sevdesk.de/om/detail/type/AN/id/${newOfferId}`,
@@ -630,14 +640,24 @@ export default function SevDeskModal({
                     onChange={(e) => setZusatzhinweis(e.target.value)}
                   />
                 </label>
-                <label className="modal-field">
-                  Kündigungsfrist (Monate)
+                <label className="modal-field modal-field-checkbox">
                   <input
-                    type="number"
-                    value={kuendigungsfristMonate}
-                    onChange={(e) => setKuendigungsfristMonate(e.target.value)}
+                    type="checkbox"
+                    checked={zeigeKuendigungsfrist}
+                    onChange={(e) => setZeigeKuendigungsfrist(e.target.checked)}
                   />
+                  Kündigungsfrist ins Angebot aufnehmen
                 </label>
+                {zeigeKuendigungsfrist && (
+                  <label className="modal-field">
+                    Kündigungsfrist (Monate)
+                    <input
+                      type="number"
+                      value={kuendigungsfristMonate}
+                      onChange={(e) => setKuendigungsfristMonate(e.target.value)}
+                    />
+                  </label>
+                )}
                 <label className="modal-field">
                   Vertragsunterzeichnung
                   <textarea rows={2} value={vertragstext} onChange={(e) => setVertragstext(e.target.value)} />

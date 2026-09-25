@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { searchContacts, createContact, getContactAddress } from '../lib/sevdesk.js';
+import { getCalendarStatus, listCalendarEvents } from '../lib/crm.js';
 import {
   AREA_DEFINITIONS,
   AREA_ORDER,
@@ -58,6 +59,80 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
   const [besichtigungStatus, setBesichtigungStatus] = useState('idle'); // idle | denkt | fehler
   const [besichtigungFehler, setBesichtigungFehler] = useState('');
   const [besichtigungHinweis, setBesichtigungHinweis] = useState('');
+
+  // Termine aus dem Google-Kalender, deren Betreff "Besichtigung" enthaelt,
+  // aus den letzten und naechsten 14 Tagen. Ein Klick uebernimmt Adresse und
+  // einen Namensvorschlag und speichert die Termin-ID am Dokument - so bleibt
+  // nachvollziehbar, aus welcher Besichtigung dieses LV entstanden ist, und
+  // man verwechselt nicht zwei Termine am selben Tag.
+  const [kalenderTermine, setKalenderTermine] = useState([]);
+  const [kalenderVerbunden, setKalenderVerbunden] = useState(true);
+  const [gewaehlterTerminId, setGewaehlterTerminId] = useState(null);
+
+  useEffect(() => {
+    let abgebrochen = false;
+    getCalendarStatus()
+      .then((s) => {
+        if (abgebrochen) return;
+        if (!s?.connected) {
+          setKalenderVerbunden(false);
+          return;
+        }
+        const jetzt = Date.now();
+        const timeMin = new Date(jetzt - 14 * 86400000).toISOString();
+        const timeMax = new Date(jetzt + 14 * 86400000).toISOString();
+        return listCalendarEvents({ timeMin, timeMax }).then((events) => {
+          if (abgebrochen) return;
+          const termine = (events || [])
+            .filter((e) => /besichtigung/i.test(e.summary || ''))
+            .sort((a, b) => new Date(b.start?.dateTime || b.start?.date || 0) - new Date(a.start?.dateTime || a.start?.date || 0));
+          setKalenderTermine(termine);
+        });
+      })
+      .catch(() => setKalenderVerbunden(false));
+    return () => {
+      abgebrochen = true;
+    };
+  }, []);
+
+  // Grobe, aber ausreichende Heuristik: "Vorname Nachname" oder Firmenname
+  // steht meist vor dem Wort "Besichtigung", eine Adresse erkennt man am
+  // 5-stelligen PLZ-Muster. Beides bleibt danach normal aenderbar - nichts
+  // wird stillschweigend uebernommen, ohne dass man es sieht.
+  function parseTerminText(text) {
+    const adresseMatch = text.match(
+      /([A-ZÄÖÜ][\wäöüßÄÖÜ.\-' ]{2,40}?\s\d{1,4}\s?[a-zA-Z]?)[,\s]+(\d{5})\s+([A-ZÄÖÜ][\wäöüß\-]+(?:[\s-][A-ZÄÖÜ][\wäöüß\-]+)?)/
+    );
+    const strasse = adresseMatch ? adresseMatch[1].trim() : '';
+    const plz = adresseMatch ? adresseMatch[2] : '';
+    const stadt = adresseMatch ? adresseMatch[3].trim() : '';
+
+    let firma = '';
+    const vorBesichtigung = text.split(/besichtigung/i)[0];
+    if (vorBesichtigung) {
+      const kandidat = vorBesichtigung
+        .replace(/^\d{1,2}[:.]\d{2}(\s*uhr)?/i, '')
+        .replace(/^\d{1,2}\s*uhr\b/i, '')
+        .replace(/^(herr|frau|dr\.?)\s+/i, '')
+        .replace(/[-–:]\s*$/, '')
+        .trim();
+      if (kandidat && kandidat.length < 40 && !/\d{5}/.test(kandidat)) firma = kandidat;
+    }
+    return { strasse, plz, stadt, firma };
+  }
+
+  function terminUebernehmen(ev) {
+    const text = [ev.summary, ev.description].filter(Boolean).join('\n');
+    const { strasse, plz, stadt, firma } = parseTerminText(text);
+    setGewaehlterTerminId(ev.id);
+    setBesichtigung(text);
+    setShowNewContact(true);
+    setSelectedContact(null);
+    if (firma) { setNcFirma(firma); setKunde(firma); }
+    if (strasse) setNcStrasse(strasse);
+    if (plz) setNcPlz(plz);
+    if (stadt) setNcStadt(stadt);
+  }
 
   // Schritt 1-4
   const [objektTyp, setObjektTyp] = useState('');
@@ -241,7 +316,7 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
       };
     }
 
-    onGenerate({ sections: main, children, customer, lvTitle });
+    onGenerate({ sections: main, children, customer, lvTitle, besichtigungKalenderId: gewaehlterTerminId });
   }
 
   return (
@@ -256,6 +331,36 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
           <button type="button" className="lv-from-file-btn" onClick={onGenerateFromFile}>
             📎 LV aus Datei erstellen
           </button>
+        )}
+
+        {kalenderVerbunden && kalenderTermine.length > 0 && (
+          <div className="quick-setup-termine">
+            <div className="modal-subheading">Aus einer Besichtigung übernehmen</div>
+            <div className="quick-setup-termine-liste">
+              {kalenderTermine.map((ev) => {
+                const start = ev.start?.dateTime || ev.start?.date;
+                const label = start
+                  ? new Date(start).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+                  : '';
+                return (
+                  <button
+                    type="button"
+                    key={ev.id}
+                    className={`quick-setup-termin-btn${gewaehlterTerminId === ev.id ? ' active' : ''}`}
+                    onClick={() => terminUebernehmen(ev)}
+                  >
+                    <span className="quick-setup-termin-zeit">{label}</span>
+                    <span className="quick-setup-termin-titel">{ev.summary}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {gewaehlterTerminId && (
+              <p className="modal-hint">
+                Adresse und Name unten wurden aus dem Termin geraten — bitte prüfen, alles bleibt änderbar.
+              </p>
+            )}
+          </div>
         )}
 
         <div className="modal-subheading">Kundendaten</div>
