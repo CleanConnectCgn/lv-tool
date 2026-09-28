@@ -18,6 +18,15 @@
 // Auftraege (Grund-/Sonderreinigung) - dort gibt es keinen laufenden
 // Vertrag, der gekuendigt werden koennte. Bleibt im Modal ueberschreibbar.
 
+// Zwei Grussformeln zur Wahl im Modal (Umschalter direkt ueber dem Feld):
+// persoenlich (Julian) oder Firma (Clean Connect Team). Zentral hier statt
+// nur als String in STANDARD, damit beide Bausteine an einer Stelle stehen
+// und der Umschalter im Modal nicht den Text selbst kennen muss.
+export const SIGNATURES = {
+  julian: 'Mit freundlichen Grüßen\n\nJulian Mühlhoff',
+  firma: 'Mit freundlichen Grüßen\n\nIhr Clean Connect Team',
+};
+
 const STANDARD = {
   label: 'Standard (Büro, Gewerbe)',
   kuendigungsfristStandard: true,
@@ -30,7 +39,7 @@ const STANDARD = {
     'Vertragsunterzeichnung: Nach Auftragserteilung erhalten Sie den Vertrag separat zur Prüfung und Unterzeichnung.',
   dankText:
     'Wir danken Ihnen für Ihr Vertrauen und freuen uns auf eine erfolgreiche Zusammenarbeit.\n\nFür Rückfragen stehen wir Ihnen jederzeit gerne zur Verfügung.',
-  grussformel: 'Mit freundlichen Grüßen\n\nIhr Clean Connect Team',
+  grussformel: SIGNATURES.firma,
 };
 
 export const OFFER_TEXT_VARIANTS = {

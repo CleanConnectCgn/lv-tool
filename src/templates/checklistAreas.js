@@ -634,7 +634,14 @@ export const AREA_ORDER = [
 export const OBJEKT_TYPEN = {
   buero: {
     label: 'Büro',
-    frequency: '2x',
+    // War lange '2x' - LEARNINGS-2026-09-22.md hatte schon anhand von 142
+    // historischen LVs "1x wöchentlich" als häufigste Einzelfrequenz
+    // gefunden (625 vs. 560 fuer 2x), ohne dass der Default je angepasst
+    // wurde. Eigene Stichprobe der 30 aktuell im Tool liegenden LVs
+    // (28.09.2026) bestaetigt das (1x: 154, 2x: 95) - siehe auch den
+    // QuickSetup-Fallback in QuickSetup.jsx, der aus demselben Grund
+    // ebenfalls auf '1x' steht.
+    frequency: '1x',
     areas: ['flur', 'buero', 'sanitaer', 'kueche'],
   },
   praxis: {

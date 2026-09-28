@@ -7,7 +7,7 @@ import {
   listSevUsers,
   getContactAddress,
 } from '../lib/sevdesk.js';
-import { OFFER_TEXT_VARIANTS, OFFER_TEXT_ORDER, guessOfferVariant } from '../templates/offerTexts.js';
+import { OFFER_TEXT_VARIANTS, OFFER_TEXT_ORDER, guessOfferVariant, SIGNATURES } from '../templates/offerTexts.js';
 
 const DEFAULT_SEV_USER = { id: '1361306', fullname: 'Julian Mühlhoff' };
 
@@ -275,21 +275,33 @@ export default function SevDeskModal({
       const header = `Angebot ${offerNumber}`;
       // sevDesk speichert Kopf-/Fußtext als HTML: jeder Absatz braucht ein
       // eigenes <p>, sonst werden Zeilenumbrüche beim Rendern verschluckt
-      // und Sätze laufen ohne Leerzeichen ineinander.
+      // und Sätze laufen ohne Leerzeichen ineinander. Ein Block kann statt
+      // eines reinen Strings auch { text, bold: true } sein -- dann wird der
+      // ganze Absatz in <strong> gesetzt. Genutzt fuer die Angebotsfrist-
+      // und Kuendigungsfrist-Zeile, die im Angebot nicht untergehen sollen.
       const asParagraphs = (blocks) =>
         blocks
-          .filter(Boolean)
-          .flatMap((b) => b.split(/\n\s*\n/))
-          .filter((p) => p.trim())
-          .map((p) => `<p>${escapeHtml(p.trim()).replace(/\n/g, '<br>')}</p>`)
+          .filter((b) => b && (typeof b === 'string' ? true : b.text))
+          .flatMap((b) =>
+            typeof b === 'string'
+              ? b.split(/\n\s*\n/).filter((p) => p.trim()).map((text) => ({ text }))
+              : [b]
+          )
+          .map(({ text, bold }) => {
+            const inner = escapeHtml(text.trim()).replace(/\n/g, '<br>');
+            return `<p>${bold ? `<strong>${inner}</strong>` : inner}</p>`;
+          })
           .join('');
       const headText = asParagraphs([anrede, einleitung]);
       const footText = asParagraphs([
         hinweis,
         zusatzhinweis.trim(),
-        `Gültigkeit: Dieses Angebot ist bis zum ${formatDateDE(gueltigBis)} gültig.`,
+        { text: `Angebotsfrist: Dieses Angebot ist bis zum ${formatDateDE(gueltigBis)} gültig.`, bold: true },
         zeigeKuendigungsfrist
-          ? `Kündigungsfrist: Der Vertrag ist mit einer Frist von ${kuendigungsfristMonate} Monaten zum Monatsende kündbar.`
+          ? {
+              text: `Kündigungsfrist: Der Vertrag ist mit einer Frist von ${kuendigungsfristMonate} Monaten zum Monatsende kündbar.`,
+              bold: true,
+            }
           : '',
         vertragstext,
         dankText,
@@ -668,6 +680,22 @@ export default function SevDeskModal({
                 </label>
                 <label className="modal-field">
                   Grußformel
+                  <div className="quick-setup-typ-list">
+                    <button
+                      type="button"
+                      className={`quick-setup-typ-btn${grussformel === SIGNATURES.julian ? ' active' : ''}`}
+                      onClick={() => setGrussformel(SIGNATURES.julian)}
+                    >
+                      Julian Mühlhoff
+                    </button>
+                    <button
+                      type="button"
+                      className={`quick-setup-typ-btn${grussformel === SIGNATURES.firma ? ' active' : ''}`}
+                      onClick={() => setGrussformel(SIGNATURES.firma)}
+                    >
+                      Clean Connect
+                    </button>
+                  </div>
                   <textarea rows={3} value={grussformel} onChange={(e) => setGrussformel(e.target.value)} />
                 </label>
               </>

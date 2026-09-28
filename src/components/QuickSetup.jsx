@@ -136,7 +136,11 @@ export default function QuickSetup({ onGenerate, onCancel, onGenerateFromFile, h
 
   // Schritt 1-4
   const [objektTyp, setObjektTyp] = useState('');
-  const [frequency, setFrequency] = useState('2x');
+  // '1x' statt vormals '2x': haeufigste tatsaechliche Frequenz ueber die
+  // bisher erstellten LVs, siehe Kommentar bei OBJEKT_TYPEN.buero in
+  // checklistAreas.js. Gilt nur, solange kein Objekttyp gewaehlt ist -
+  // pickObjektTyp() ueberschreibt das sofort mit dem typspezifischen Wert.
+  const [frequency, setFrequency] = useState('1x');
   const [wochentage, setWochentage] = useState([]);
   const [areas, setAreas] = useState(() =>
     Object.fromEntries(AREA_ORDER.map((k) => [k, false]))
