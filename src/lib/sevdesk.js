@@ -121,9 +121,33 @@ export async function listSevUsers(token) {
 }
 
 // Real, sequential sevDesk offer number, e.g. "AN-1275".
+//
+// Der sevDesk-Zähler (getNextOrderNumber) zählt nur weiter, wenn ein Angebot
+// in der sevDesk-Oberfläche angelegt wird - nicht bei Angeboten, die per API
+// mit eigener Nummer angelegt werden. Am 02.10.2026 lieferte er noch
+// "AN-1363", obwohl AN-1363 und AN-1364 schon existierten. Deshalb zusätzlich
+// die zuletzt angelegten Angebote lesen und die höhere Nummer nehmen.
+export function pickNextOfferNumber(counterValue, existingNumbers) {
+  const num = (s) => {
+    const m = /^AN-(\d+)$/.exec(String(s || '').trim());
+    return m ? Number(m[1]) : null;
+  };
+  const fromCounter = num(counterValue);
+  const maxExisting = Math.max(0, ...(existingNumbers || []).map(num).filter((n) => n !== null));
+  const next = Math.max(fromCounter || 0, maxExisting + 1);
+  if (!next || (!fromCounter && !maxExisting)) return counterValue || null;
+  return `AN-${next}`;
+}
+
 export async function getNextOfferNumber(token) {
-  const data = await sevRequest(token, 'GET', '/Order/Factory/getNextOrderNumber?orderType=AN');
-  return data?.objects || null;
+  const [counter, recent] = await Promise.all([
+    sevRequest(token, 'GET', '/Order/Factory/getNextOrderNumber?orderType=AN').catch(() => null),
+    sevRequest(token, 'GET', '/Order?orderType=AN&limit=50').catch(() => null),
+  ]);
+  return pickNextOfferNumber(
+    counter?.objects,
+    (recent?.objects ?? []).map((o) => o.orderNumber)
+  );
 }
 
 // Bereits erstellte Angebote (sevDesk-Orders, orderType "AN") eines Kunden -
@@ -280,6 +304,65 @@ export async function createOffer(token, {
     orderPosDelete: null,
   };
 
+  const data = await sevFormRequest(token, '/Order/Factory/saveOrder', orderParams);
+  return data?.objects?.order || data?.objects || data;
+}
+
+// Winterdienst-Angebot zum Unterschreiben (siehe src/templates/
+// winterdienstOffer.js). Texte und Positionen kommen fertig aus
+// buildWinterdienstOffer - hier wird nur noch der sevDesk-Order daraus.
+// Status 100 = Entwurf: versendet wird bewusst aus sevDesk heraus.
+export async function createWinterdienstOffer(token, {
+  contactId,
+  contactPersonId,
+  offerNumber,
+  offerDate,
+  built,
+}) {
+  const userId = contactPersonId || (await getSevUserId(token).catch(() => null));
+  const orderDate = Math.floor((offerDate ? new Date(offerDate) : new Date()).getTime() / 1000);
+  const orderPosSave = built.positions.map((pos, i) => ({
+    objectName: 'OrderPos',
+    mapAll: 'true',
+    name: pos.name,
+    text: pos.text,
+    quantity: pos.quantity,
+    price: pos.price,
+    priceNet: pos.price,
+    unity: { id: pos.unity, objectName: 'Unity' },
+    taxRate: 19,
+    positionNumber: i + 1,
+    discount: 0,
+    ...(pos.optional ? { optional: true } : {}),
+  }));
+  const orderParams = {
+    order: {
+      objectName: 'Order',
+      mapAll: 'true',
+      orderType: 'AN',
+      orderNumber: offerNumber,
+      orderDate,
+      contact: { id: contactId, objectName: 'Contact' },
+      status: 100,
+      header: built.header,
+      headText: built.headText,
+      footText: built.footText,
+      version: 0,
+      smallSettlement: false,
+      taxRate: 0,
+      taxText: '0',
+      currency: 'EUR',
+      showNet: true,
+      taxRule: { id: '1', objectName: 'TaxRule' },
+      propertyUseNewCalculation: 1,
+      addressName: built.addressName,
+      address: built.address,
+      addressCountry: { id: '1', objectName: 'StaticCountry' },
+      ...(userId ? { contactPerson: { id: userId, objectName: 'SevUser' } } : {}),
+    },
+    orderPosSave,
+    orderPosDelete: null,
+  };
   const data = await sevFormRequest(token, '/Order/Factory/saveOrder', orderParams);
   return data?.objects?.order || data?.objects || data;
 }

@@ -983,6 +983,13 @@ tr.drag-over td {
   font-weight: 600;
 }
 
+/* In den weissen Modals (sevDesk-/Winterdienst-Angebot) waren die nicht
+   gewaehlten Buttons mit der hellen Brand-Textfarbe kaum lesbar. */
+.modal .quick-setup-typ-btn:not(.active) {
+  color: var(--ink);
+  border-color: var(--line-strong);
+}
+
 .quick-setup-termine {
   margin-bottom: 16px;
   padding: 10px 12px;

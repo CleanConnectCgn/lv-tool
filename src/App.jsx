@@ -3,6 +3,7 @@ import Header from './components/Header.jsx';
 import LVEditor from './components/LVEditor.jsx';
 import PrintView from './components/PrintView.jsx';
 import SevDeskModal from './components/SevDeskModal.jsx';
+import WinterdienstOfferModal from './components/WinterdienstOfferModal.jsx';
 import CustomerModal from './components/CustomerModal.jsx';
 import InspectionMode from './components/InspectionMode.jsx';
 import AICheckupModal from './components/AICheckupModal.jsx';
@@ -66,6 +67,7 @@ export default function App() {
   const [besichtigungKalenderId, setBesichtigungKalenderId] = useState(null);
   const [customer, setCustomer] = useState(null);
   const [showSevDesk, setShowSevDesk] = useState(false);
+  const [showWinterdienst, setShowWinterdienst] = useState(false);
   const [showCustomerModal, setShowCustomerModal] = useState(false);
   const [showInspection, setShowInspection] = useState(false);
   const [showAICheckup, setShowAICheckup] = useState(false);
@@ -337,14 +339,18 @@ export default function App() {
 
   if (view === 'overview') {
     return (
-      <Overview
-        variant="page"
-        onOpen={handleOpenDocument}
-        onNew={handleNewDocument}
-        onInspect={handleStartInspection}
-        onOpenCrm={() => setView('crm')}
-        onOpenDbCrm={() => setView('db-crm')}
-      />
+      <>
+        <Overview
+          variant="page"
+          onOpen={handleOpenDocument}
+          onNew={handleNewDocument}
+          onInspect={handleStartInspection}
+          onOpenCrm={() => setView('crm')}
+          onOpenDbCrm={() => setView('db-crm')}
+          onWinterdienst={() => setShowWinterdienst(true)}
+        />
+        {showWinterdienst && <WinterdienstOfferModal onClose={() => setShowWinterdienst(false)} />}
+      </>
     );
   }
 

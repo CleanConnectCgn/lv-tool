@@ -56,6 +56,13 @@ Läuft live unter https://lv-tool-production.up.railway.app
 - sevDesk-Integration: Kontakte suchen/anlegen, Angebot erstellen (Server-Proxy
   vermeidet CORS; **nur GET/POST erlaubt** - der Server lehnt DELETE/PUT/PATCH
   gegen sevDesk hart ab, das Tool kann dort nie etwas löschen oder ändern)
+- **Winterdienst-Angebot zum Unterschreiben** (Übersicht → „❄️ Winterdienst-Angebot“):
+  eigenes Formular ohne LV - Kunde, Objekt, Fläche, drei Preise. Legt in
+  sevDesk einen Entwurf an mit Preisen auf Seite 1 und je einer eigenen Seite
+  für Leistungsbeschreibung, Vertragsbedingungen, Auftragserteilung (nur der
+  Kunde unterschreibt) und - bei Privat-Eigentümern/WEG - Widerrufsbelehrung
+  mit Muster-Formular. Texte in `src/templates/winterdienstOffer.js`
+  (Vorlage: AN-1363/AN-1364)
 - **CRM**: Kundenprofile (aus LV/Angebot-Dokumenten aggregiert), Aufträge mit
   Status-Tracking, Mitarbeiter-Verwaltung, Objekte (Liegenschaften mit
   Adresse) inkl. Mitarbeiter-Zuweisung, Google-Kalender-Anbindung

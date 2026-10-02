@@ -18,7 +18,7 @@ function formatUpdatedAt(iso) {
   return d.toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm, onOpenDbCrm, variant = 'modal' }) {
+export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm, onOpenDbCrm, onWinterdienst, variant = 'modal' }) {
   const [docs, setDocs] = useState([]);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -119,6 +119,7 @@ export default function Overview({ onClose, onOpen, onNew, onInspect, onOpenCrm,
           </button>
           {onInspect && <button onClick={onInspect}>Besichtigungsmodus</button>}
           {onOpenCrm && <button onClick={onOpenCrm}>👥 Kunden (CRM)</button>}
+          {onWinterdienst && <button onClick={onWinterdienst}>❄️ Winterdienst-Angebot</button>}
           {onOpenDbCrm && (
             <button onClick={onOpenDbCrm} title="Neuer Bereich auf Basis der neuen Datenbank (Block 5)">
               🗃️ Kunden (Postgres, neu)

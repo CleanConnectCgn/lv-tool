@@ -222,6 +222,15 @@ app.get('/api/sevdesk/offer-pdf/:id', async (req, res) => {
     return res.status(500).json({ error: 'SEVDESK_TOKEN ist nicht konfiguriert' });
   }
   try {
+    // sevDesk liefert sonst das beim ersten Abruf zwischengespeicherte PDF
+    // aus, auch nachdem das Angebot geändert wurde (am 02.10.2026 bei AN-1363
+    // beobachtet). render mit forceReload erzeugt es neu; schlägt das fehl,
+    // gibt es eben das gecachte PDF.
+    await fetch(`https://my.sevdesk.de/api/v1/Order/${req.params.id}/render`, {
+      method: 'POST',
+      headers: { Authorization: token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ forceReload: true }),
+    }).catch(() => {});
     const sevRes = await fetch(`https://my.sevdesk.de/api/v1/Order/${req.params.id}/getPdf?download=1`, {
       headers: { Authorization: token },
     });
