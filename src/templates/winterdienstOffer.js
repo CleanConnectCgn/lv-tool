@@ -129,7 +129,7 @@ export function buildWinterdienstOffer(input) {
       `vielen Dank für Ihre Anfrage. Gerne bieten wir Ihnen den Winterdienst für die Liegenschaft <b>${esc(objekt)}</b> für die Saison vom <b>${saison}</b> an.`
     ),
     p(
-      `<b>So beauftragen Sie uns:</b> Unterschreiben Sie die <b>Auftragserteilung</b> am Ende dieses Angebots und senden Sie das vollständige Angebot bis zum <b>${formatDateDE(gueltigBis)}</b> per E-Mail (Scan oder Foto genügt) an service@reinigungsdienst-cleanconnect.de oder per Post an uns zurück. Mit Ihrer Unterschrift kommt der Vertrag zustande, ein gesonderter Vertrag ist nicht erforderlich. Sie erhalten anschließend eine Auftragsbestätigung.`
+      `<b>So beauftragen Sie uns:</b> Unterschreiben Sie die <b>Auftragserteilung</b> am Ende dieses Angebots und senden Sie das vollständige Angebot bis zum <b>${formatDateDE(gueltigBis)}</b> per E-Mail (Scan oder Foto genügt) an cleanconnect.reinigungsdienst@gmail.com oder per Post an uns zurück. Mit Ihrer Unterschrift kommt der Vertrag zustande, ein gesonderter Vertrag ist nicht erforderlich. Sie erhalten anschließend eine Auftragsbestätigung.`
     ),
   ].join('');
 
@@ -237,7 +237,7 @@ export function buildWinterdienstOffer(input) {
         'Sie haben das Recht, binnen vierzehn Tagen ohne Angabe von Gründen diesen Vertrag zu widerrufen. Die Widerrufsfrist beträgt vierzehn Tage ab dem Tag des Vertragsabschlusses.'
       ),
       p(
-        'Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (Clean Connect Gebäudereinigung UG (haftungsbeschränkt), Berliner Straße 957, 51069 Köln, Telefon +49 221 95490625, E-Mail service@reinigungsdienst-cleanconnect.de) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren. Sie können dafür das beigefügte Muster-Widerrufsformular verwenden, das jedoch nicht vorgeschrieben ist.'
+        'Um Ihr Widerrufsrecht auszuüben, müssen Sie uns (Clean Connect Gebäudereinigung UG (haftungsbeschränkt), Berliner Straße 957, 51069 Köln, Telefon +49 221 95490625, E-Mail cleanconnect.reinigungsdienst@gmail.com) mittels einer eindeutigen Erklärung (z. B. ein mit der Post versandter Brief oder E-Mail) über Ihren Entschluss, diesen Vertrag zu widerrufen, informieren. Sie können dafür das beigefügte Muster-Widerrufsformular verwenden, das jedoch nicht vorgeschrieben ist.'
       ),
       p(
         'Zur Wahrung der Widerrufsfrist reicht es aus, dass Sie die Mitteilung über die Ausübung des Widerrufsrechts vor Ablauf der Widerrufsfrist absenden.'
@@ -252,7 +252,7 @@ export function buildWinterdienstOffer(input) {
       h3('Muster-Widerrufsformular'),
       p('(Wenn Sie den Vertrag widerrufen wollen, dann füllen Sie bitte dieses Formular aus und senden Sie es zurück.)'),
       p(
-        'An Clean Connect Gebäudereinigung UG (haftungsbeschränkt), Berliner Straße 957, 51069 Köln, E-Mail service@reinigungsdienst-cleanconnect.de:'
+        'An Clean Connect Gebäudereinigung UG (haftungsbeschränkt), Berliner Straße 957, 51069 Köln, E-Mail cleanconnect.reinigungsdienst@gmail.com:'
       ),
       p(
         'Hiermit widerrufe(n) ich/wir (*) den von mir/uns (*) abgeschlossenen Vertrag über den Kauf der folgenden Waren (*)/die Erbringung der folgenden Dienstleistung (*)'
